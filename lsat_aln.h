@@ -19,6 +19,7 @@
 
 #define adjest(dis) (dis>THRSHOLD?THRSHOLD:dis)
 
+#define SOAP2_DP_DIR "./soap2-dp"
 
 typedef struct {	//全部read包含seed数目信息
     int n_read;		//获取的read总数目			XXX contig_all -> n_read

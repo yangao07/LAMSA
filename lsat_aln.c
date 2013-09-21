@@ -2,14 +2,15 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <zlib.h>
+#include <unistd.h>
 #include "lsat_aln.h"
 #include "kseq.h"
 KSEQ_INIT(gzFile, gzread)
 
-char FLAG[4][10] = {"MATCH", "INSERT", "DELETION", "CHR_DIF"};
+//char FLAG[4][10] = {"MATCH", "INSERT", "DELETION", "CHR_DIF"};
 
-int price[SEED_INIT_MAX][PER_ALN_N];    //p[i] = max{p[i-1][j] + cost[j,k]}
-path_msg path[SEED_INIT_MAX][PER_ALN_N];
+//int price[SEED_INIT_MAX][PER_ALN_N];    //p[i] = max{p[i-1][j] + cost[j,k]}
+//path_msg path[SEED_INIT_MAX][PER_ALN_N];
 
 int usage(void )		//aln usage
 {
@@ -52,7 +53,7 @@ int split_seed(char *prefix, seed_msg *s_msg, int seed_len)
 
 	if ((infp = gzopen(prefix, "r")) == NULL)
 	{
-		fprintf(stderr, "[lsat_aln] Can't open %s\n", prefix);
+		fprintf(stderr, "[lsat_aln] Can't open read file %s\n", prefix);
 		exit(-1);
 	}
 	seq = kseq_init(infp);
@@ -60,17 +61,10 @@ int split_seed(char *prefix, seed_msg *s_msg, int seed_len)
 	strcpy(out_f, prefix); strcat(out_f, ".seed");
 	if ((outfp = fopen(out_f, "w")) == NULL)
 	{
-		fprintf(stderr, "[lsat_aln] Can't open %s\n", out_f);
+		fprintf(stderr, "[lsat_aln] Can't open seed file %s\n", out_f);
 		exit(-1);
 	}
 	
-	/*
-		typedef struct {	//全部read包含seed数目信息
-		int n_read; //获取的read总数目			XXX contig_all -> n_read
-		int *n_seed;	//存放每条read的seed数目	XXX READ_NUM -> n_seed
-		int seed_max;   //contig中分割成短read的数目最大值	//XXX read_max -> seed_max
-		} seed_msg;
-	 */
 	seed_seq[seed_len] = '\n';
 	m_read = READ_INIT_MAX;
 	while (kseq_read(seq) >= 0)
@@ -99,7 +93,6 @@ int split_seed(char *prefix, seed_msg *s_msg, int seed_len)
 			fputs(seed_seq, outfp);
 		}
 	}
-
 	gzclose(infp);
 	fclose(outfp);
 	kseq_destroy(seq);
@@ -137,7 +130,7 @@ void aln_free_msg(aln_msg *a_msg, int seed_max)	//a_msg大小为read_max个
 	free(a_msg);
 }
 
-void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int32_t read_id, int32_t chr, int32_t offset, int8_t srand, int8_t edit_dis)
+void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, int offset, int srand, int edit_dis)
 {   //read_x: (除去unmap和repeat的)read序号, aln_y: read对应的比对结果序号(从1开始)
 	if (aln_y > PER_ALN_N)
 	{
@@ -182,7 +175,7 @@ int get_min_dis(aln_msg *a_msg, int i, int j, int k, int* flag)    //(i,j)对应
     return adjest(dis);
 }
 
-int path_dp(aln_msg *a_msg, int n_seed)
+int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price)
 {
     int i,j,k;
     int tmp, min;
@@ -218,7 +211,7 @@ int path_dp(aln_msg *a_msg, int n_seed)
     return 0;
 }
 
-int backtrack(aln_msg* a_msg, path_msg path[][PER_ALN_N], int n_seed)  //from end to start, find every fragment's postion
+int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price)  //from end to start, find every fragment's postion
 {
     if (n_seed == -1)
     {
@@ -241,7 +234,7 @@ int backtrack(aln_msg* a_msg, path_msg path[][PER_ALN_N], int n_seed)  //from en
     int pos = min_pos;
     int flag = 0;
     //first end
-    fprintf(stdout, "%d\t%c\t%d\t%d\t", a_msg[n_seed].chr[pos], a_msg[n_seed].nsrand[pos], a_msg[n_seed].offset[pos], a_msg[n_seed].read_id);    
+    fprintf(stdout, "%d\t%d\t%d\t%d\t", a_msg[n_seed].chr[pos], a_msg[n_seed].nsrand[pos], a_msg[n_seed].offset[pos], a_msg[n_seed].read_id);    
     for (i = n_seed; i >=0; i--)
     {
         if (path[i][pos].flag != MATCH)
@@ -255,7 +248,7 @@ int backtrack(aln_msg* a_msg, path_msg path[][PER_ALN_N], int n_seed)  //from en
         if (flag == 1 && i > 0)  //获取一个fragment
         {
             //上一个fragment的end
-            fprintf(stdout, "%d\t%c\t%d\t%d\t", a_msg[i-1].chr[pos], a_msg[i-1].nsrand[pos], a_msg[i-1].offset[pos], a_msg[i-1].read_id);
+            fprintf(stdout, "%d\t%d\t%d\t%d\t", a_msg[i-1].chr[pos], a_msg[i-1].nsrand[pos], a_msg[i-1].offset[pos], a_msg[i-1].read_id);
             flag = 0;
         }
     } 
@@ -267,20 +260,29 @@ int frag_cluster(char *seed_result, seed_msg *s_msg, int seed_len)
 {
 	FILE *result_p;
 	char line[1024];
-	int n_read/*from 1*/, n_seed;
-	int32_t read_id, chr, offset;
-	int8_t srand, edit_dis;
+	int n_read/*from 1*/, n_seed, read_id, i;
+	int read_id, chr, offset, srand, edit_dis;
+	
 	aln_msg *a_msg;
+	int **price;
+	path_msg **path;
 
 	a_msg = aln_init_msg(s_msg->seed_max);
-
+	price = (int**)malloc(s_msg->seed_max * sizeof(int*));
+	path = (path_msg**)malloc(s_msg->seed_max * sizeof(path_msg*));
+	for (i = 0; i < s_msg->seed_max; i++) 
+	{
+		price[i] = (int*)malloc(PER_ALN_N * sizeof(int));
+		path[i] = (int*)malloc(PER_ALN_N * sizeof(path_msg));
+	}
 	if ((result_p = fopen(seed_result, "r")) == NULL)
 	{
-		fprintf(stderr, "[lsat_aln] Can't open file %s.\n", seed_result);
+		fprintf(stderr, "[lsat_aln] Can't open seed result file %s.\n", seed_result);
 		exit(-1);
 	}
 
 	n_read = 0;
+	n_seed = 0;
 	int multi_aln = 1, last_id = 0, REPEAT = 0, FLAG=0;
 
 	while (fgets(line, 1024, result_p) != NULL)
@@ -299,8 +301,8 @@ int frag_cluster(char *seed_result, seed_msg *s_msg, int seed_len)
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
 					fprintf(stdout, "read %d n_seed %d\n", n_read, n_seed);
-					path_dp(a_msg, n_seed);
-					backtrack(a_msg, path, n_seed-1);
+					path_dp(a_msg, n_seed, path, price);
+					backtrack(a_msg, path, n_seed-1, price);
 				}
 				n_seed = 0;
 				while (s_msg->n_seed[n_read] < read_id) {
@@ -310,31 +312,96 @@ int frag_cluster(char *seed_result, seed_msg *s_msg, int seed_len)
 				}
 				FLAG = 0;
 			}
+			multi_aln = 1;
+			last_id = read_id;
+			if (n_seed >= s_msg->seed_max)	{
+				fprintf(stderr, "bug: n_seed > seed_max\n");
+				exit(-1);
+			}
+			n_seed++;
+			setAmsg(a_msg, n_seed, multi_aln, read_id-s_msg->n_seed[n_read-1], chr, offset, srand, edit_dis);
 		}
-		multi_aln = 1;
-		last_id = read_id;
-		if (n_seed >= s_msg->seed_max)	{
-			fprintf(stderr, "bug: n_seed > seed_max\n");
-			exit(-1);
-		}
-		n_seed++;
-		setAmsg(a_msg, n_seed, multi_aln, read_id-s_msg->n_seed[n_read-1], chr, offset, srand, edit_dis);
 	}
 	fprintf(stdout, "n_read %d n_seed %d\n", n_read, n_seed);
-	path_dp(a_msg, n_seed);
-	backtrack(a_msg, path, n_seed-1);
+	path_dp(a_msg, n_seed, path, price);
+	backtrack(a_msg, path, n_seed-1, price);
 
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);
+	for (i = 0; i < s_msg->seed_max; i++)
+	{ free(price[i]); free(path[i]); }
+	free(price); free(path);
+
+	return 0;
+}
+
+/* relative path convert for soap2-dp */
+void relat_path(char *ref_path, char *soap_dir, char *relat_ref_path)	
+{
+	int i;
+	char lsat_dir[1024], abs_soap_dir[1024], abs_ref_path[1024], ref_dir[1024], ref_file[1024];
+
+	if (getcwd(lsat_dir, 1024) == NULL) { perror("getcwd error"); exit(-1); } 
+	if (chdir(soap_dir) != 0) { perror("Wrong soap2-dp path"); exit(-1); }
+	if (getcwd(abs_soap_dir, 1024) == NULL) { perror("getcwd error"); exit(-1); }
+
+	if (ref_path[0] == '.')
+	{
+		if (chdir(lsat_dir) != 0) { perror("Wrong soap2-dp path"); exit(-1); }
+		strcpy(ref_dir, ref_path);
+		for (i = strlen(ref_path)-1; i >= 0; i--)
+			if (ref_path[i] == '/') { ref_dir[i] = '\0'; strncpy(ref_file, ref_path+i, 1024); }
+		if (chdir(ref_dir) != 0) { perror("Wrong soap2-dp path"); exit(-1); }
+		if (getcwd(abs_ref_path, 1024) == NULL) { perror("getcwd error"); exit(-1); }
+		strcat(abs_ref_path, ref_file);
+	}
+
+	if (chdir(lsat_dir) != 0) { perror("chdir error"); exit(-1); }
+	int dif=-1;
+	for (i = 0; i < strlen(abs_soap_dir); i++)
+	{
+		if (abs_soap_dir[i] != abs_ref_path[i]) break;
+		if (abs_soap_dir[i] == '/') dif = i;
+	}
+	//printf("i: %d dif: %d\n", i, dif);
+	if(dif == -1)
+	{
+		printf("dir bug\n");
+		exit(-1);
+	}
+	strcpy(relat_ref_path, "./");
+	for (i = dif; i < strlen(abs_soap_dir); i++)
+	{
+		if (abs_soap_dir[i] == '/')
+			strcat(relat_ref_path, "../");
+	}
+	strcat(relat_ref_path, abs_ref_path+dif+1);
+}
+
+int lsat_soap2_dp(char *ref_prefix, char *read_prefix, char *opt_m)
+{
+	char relat_ref_path[1024], relat_read_path[1024];
+	char lsat_dir[1024];
+
+	if (getcwd(lsat_dir, 1024) == NULL) { perror("getcwd error"); exit(-1); } 
+	relat_path(ref_prefix, SOAP2_DP_DIR, relat_ref_path);
+	relat_path(read_prefix, SOAP2_DP_DIR, relat_read_path);
+	if (chdir(SOAP2_DP_DIR) != 0) { perror("Wrong soap2-dp dir"); exit(-1); }
+
+	char soap2_dp_cmd[1024];
+	sprintf(soap2_dp_cmd, "./soap2-dp single %s.index %s.seed -h 2 %s > %s.seed.aln", relat_ref_path, relat_read_path, opt_m, relat_read_path);
+	if (system (soap2_dp_cmd) != 0)
+		exit(-1);
+
+	if (chdir(lsat_dir) != 0) { perror("chdir error"); exit(-1); }
 	return 0;
 }
 
 int lsat_aln_core(char *ref_prefix, char *read_prefix, int no_soap2_dp, char *seed_result, char *opt_m, int opt_l)
 {
 	seed_msg *s_msg;
-	char soap2_dp_cmd[1024];
-	char path[1024];
 
+	/* split-seeding */
 	s_msg = seed_init_msg();
 	split_seed(read_prefix, s_msg, opt_l);
 
@@ -343,21 +410,13 @@ int lsat_aln_core(char *ref_prefix, char *read_prefix, int no_soap2_dp, char *se
 		strcpy(seed_result, read_prefix);
 		strcat(seed_result, ".seed.out.0");
 	}
+	//excute soap2-dp program
+	if (!no_soap2_dp) lsat_soap2_dp(ref_prefix, read_prefix, opt_m);
 
-	if (!no_soap2_dp)	//excute soap2-dp program
-	{
-		if (getcwd(path, sizeof(path)) == NULL)
-		{
-			perror("getcwd error");
-			exit(-1);
-		}
-		sprintf(soap2_dp_cmd, "%s/soap-dp single %s.index %s.seed %s -h 2 ", path, ref_prefix, read_prefix, opt_m);
-		printf("%s\n",soap2_dp_cmd);
-		if (system(soap2_dp_cmd) != 0)
-			exit(-1);
-	}
-	
+	/* frag-clustering */
 	frag_cluster(seed_result, s_msg, opt_l);
+
+	/* SW-extending */
 
 	seed_free_msg(s_msg);
 	return 0;
@@ -367,7 +426,7 @@ int lsat_aln(int argc, char *argv[])
 {
 	int c;
 	int no_soap2_dp=0, opt_l=0;
-	char result_f[1024], opt_m[100];
+	char result_f[1024]="", opt_m[100];
 	char *ref, *read;
 	
 	opt_l = SEED_LEN;
