@@ -1,6 +1,6 @@
 CC=			gcc
 CFLAGS=		-g -Wall -O0
-OBJS=		main.o build_ref.o	bntseq.o lsat_aln.o
+OBJS=		main.o build_ref.o	bntseq.o lsat_aln.o frag_check.o extend_ssw.o ssw.o
 PROG=		lsat
 LIB=		-lm -lz
 .SUFFIXES:.c .o
