@@ -24,6 +24,7 @@
 typedef struct {	//全部read包含seed数目信息
     int n_read;		//获取的read总数目			XXX contig_all -> n_read
     int *n_seed;	//存放每条read的seed数目	XXX READ_NUM -> n_seed
+					//XXX last_len
     int seed_max;   //contig中分割成短read的数目最大值	//XXX read_max -> seed_max
 } seed_msg;
 

@@ -7,12 +7,12 @@
  * Created by Yan Gao on 08/29/2013
  */
 
-#include "frag_check.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <zlib.h>
 #include <time.h>
+#include "frag_check.h"
+#include "bntseq.h"
 #include "ssw.h"
 #include "kseq.h"
 
@@ -20,11 +20,12 @@
 
 KSEQ_INIT(gzFile, gzread)
 
+
 /*
  * parameter: frag.msg
  */
 
-int extend_ssw(char* ref_seq, char* read_seq, int ref_len, int read_len, int* ref_l_os, int* read_l_os, int* ref_r_os, int* read_r_os);
+int extend_ssw(int8_t* ref_seq, int8_t* read_seq, int ref_len, int read_len, int* ref_l_os, int* read_l_os, int* ref_r_os, int* read_r_os);
 
 frag_msg* frag_init_msg(int frag_max)
 {
@@ -33,13 +34,9 @@ frag_msg* frag_init_msg(int frag_max)
 	f_msg->frag_max = frag_max; 
 	f_msg->frag_num = 0;
 	f_msg->last_len = PER_LEN;	//XXX
-	f_msg->read_num = 500;		//XXX
+	f_msg->seed_num = 500;		//XXX
 	f_msg->chr= (int *)malloc(frag_max * sizeof(int));
 	f_msg->srand = (int *)malloc(frag_max * sizeof(int));
-	f_msg->read_1 = (int *)malloc(frag_max * sizeof(int));
-	f_msg->read_2 = (int *)malloc(frag_max * sizeof(int));
-	f_msg->ref_1 = (int *)malloc(frag_max * sizeof(int));
-	f_msg->ref_2 = (int *)malloc(frag_max * sizeof(int));
 
 	f_msg->read_begin = (int *)malloc(frag_max * sizeof(int));
 	f_msg->read_end = (int *)malloc(frag_max * sizeof(int));
@@ -63,10 +60,6 @@ void frag_free_msg(frag_msg *f_msg)
 {
 	free(f_msg->chr);
 	free(f_msg->srand);
-	free(f_msg->read_1);
-	free(f_msg->read_2);
-	free(f_msg->ref_1);
-	free(f_msg->ref_2);
 	free(f_msg->ref_begin);
 	free(f_msg->ref_end);
 	free(f_msg->read_begin);
@@ -82,42 +75,63 @@ void frag_free_msg(frag_msg *f_msg)
 	free(f_msg);
 }
 
+int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len)//FLAG 0: start/1:end
+{
+	if (FLAG == 1)	//end
+	{
+		f_msg->chr[frag_i] = a_msg[seed_i].chr[aln_i];		//chr#
+		f_msg->srand[frag_i] = a_msg[seed_i].nsrand[aln_i];	//+:1/-:-1
+		//f_msg->ref_2[frag_i] = a_msg[seed_i].offset[aln_i];
+		//f_msg->read_2[frag_i] = a_msg[seed_i].read_id;
+		if (f_msg->srand[frag_i] == 1)	//+ srand
+			f_msg->ex_ref_end[frag_i] = f_msg->ref_end[frag_i] = a_msg[seed_i].offset[aln_i] + seed_len - 1;
+		else							//- srand
+			f_msg->ex_ref_end[frag_i] = f_msg->ref_end[frag_i] = a_msg[seed_i].offset[aln_i];
+		f_msg->ex_read_end[frag_i] = f_msg->read_end[frag_i] = 2*seed_len*(a_msg[seed_i].read_id-1)+seed_len;
+		f_msg->per_n[frag_i] = a_msg[seed_i].read_id - a_msg[seed_i].read_id + 1;
+	}
+	else	//start
+	{
+		//f_msg->ref_1[frag_i] = a_msg[seed_i].offset[aln_i];
+		//f_msg->read_1[frag_i] = a_msg[seed_i].read_id;
+		f_msg->frag_num = frag_i + 1;
+		f_msg->ex_read_begin[frag_i] = f_msg->read_begin[frag_i] = 2*seed_len*(a_msg[seed_i].read_id-1)+1;
+		if (f_msg->srand[frag_i] == 1)	//+ srand
+		{
+			f_msg->ex_ref_begin[frag_i] = f_msg->ref_begin[frag_i] = a_msg[seed_i].offset[aln_i];
+		}
+		else							//- srand
+		{
+			f_msg->ex_ref_begin[frag_i] = f_msg->ref_begin[frag_i] = a_msg[seed_i].offset[aln_i] + seed_len -1;
+		}
+	}
+	return 0;
+}
+
 int frag_refresh(frag_msg* f_msg, int f_i, int ref_offset, int read_offset, int FLAG)
 {
 	if (FLAG == RIGHT)	//right offset
 	{
 		f_msg->ex_read_end[f_i] += read_offset;
-		f_msg->ex_ref_end[f_i] += ref_offset;
+		if (f_msg->srand[f_i] == 1)	//+ srand
+			f_msg->ex_ref_end[f_i] += ref_offset;
+		else						//- srand
+			f_msg->ex_ref_end[f_i] -= ref_offset;
 //		f_msg->per_n[f_i] += read_offset / PER_LEN;
 	}
 	else				//left offset
 	{
 		f_msg->ex_read_begin[f_i] -= read_offset;
-		f_msg->ex_ref_begin[f_i] -= ref_offset;
+		if (f_msg->srand[f_i] == 1)	//+ srand
+			f_msg->ex_ref_begin[f_i] -= ref_offset;
+		else
+			f_msg->ex_ref_begin[f_i] += ref_offset;
 //		f_msg->per_n[f_i] += read_offset / PER_LEN;
 	}
 	printf("Refresh: %d %d %d %d\n", f_i, ref_offset, read_offset, FLAG);
 	return 0;
 }
-/*
-int frag_refresh(frag_msg* f_msg, int f_i, int ref_offset, int read_offset, int FLAG)
-{
-	if (FLAG == RIGHT)	//right offset
-	{
-		f_msg->read_end[f_msg->c_i[f_i]] += read_offset;
-		f_msg->ref_end[f_msg->c_i[f_i]] += ref_offset;
-		f_msg->per_n[f_msg->c_i[f_i]] += read_offset / PER_LEN;
-	}
-	else				//left offset
-	{
-		f_msg->read_begin[f_msg->c_i[f_i]] -= read_offset;
-		f_msg->ref_begin[f_msg->c_i[f_i]] -= ref_offset;
-		f_msg->per_n[f_msg->c_i[f_i]] += read_offset / PER_LEN;
-	}
-	printf("Refresh: %d %d %d %d\n", f_msg->c_i[f_i], ref_offset, read_offset, FLAG);
-	return 0;
-}
-*/
+
 int frag_covered(frag_msg *f_msg, int f_i, int b_f)
 {
 	f_msg->flag[b_f] = COVERED;
@@ -167,12 +181,14 @@ int ls_frag(frag_msg* f_msg, int f_i, int* ref_len, int* read_len)
 	return ret;
 }*/
 
-int unsoap2dp_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t* read_seq, char* seq1, char* seq2)
+int unsoap2dp_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *pac, char *read_seq, int8_t *seq1, int8_t *seq2)
 {
 	int ret;
 	int ref_len, read_len;
 	int ref_l_os, read_l_os, ref_r_os, read_r_os;
 	int b_f = f_msg->b_f[f_i];
+	int ff, m;
+	char *seq_s2 = malloc(16385*sizeof(char));
 
 	// XXX Is it necessary to take a 'COVERED frag' as an individaul frag in the next reverse extend?
 	//	   Here is YES.
@@ -189,8 +205,13 @@ int unsoap2dp_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t
 			read_len = f_msg->read_begin[b_f-1] - f_msg->read_end[b_f] - 1;
 			ref_len = read_len;
 		}
-		strncpy(seq1, ref_seq->seq.s+f_msg->ref_end[b_f], ref_len);
-		strncpy(seq2, read_seq->seq.s+f_msg->read_end[b_f], read_len);
+		//XXX pac2fa: left -> OR right ->
+		if (f_msg->srand[b_f] == -1)	//- srand
+			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_end[b_f]-1-ref_len, &ref_len, f_msg->srand[b_f], &ff, seq1);
+		else
+			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_end[b_f], &ref_len, f_msg->srand[b_f], &ff, seq1);
+		strncpy(seq_s2, read_seq+f_msg->read_end[b_f], read_len);
+		for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 		ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
 		frag_refresh(f_msg, f_i, ref_r_os, read_r_os, RIGHT);
 	}
@@ -211,8 +232,12 @@ int unsoap2dp_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t
 			read_len = f_msg->read_begin[b_f] - f_msg->read_end[b_f+1] - 1;
 			ref_len = read_len;
 		}
-		strncpy(seq1, ref_seq->seq.s+(f_msg->ref_begin[b_f] - ref_len - 1), ref_len);
-		strncpy(seq2, read_seq->seq.s+(f_msg->read_begin[b_f] - read_len -1), read_len);
+		if (f_msg->srand[b_f] == -1)
+			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_begin[b_f], &ref_len, f_msg->srand[b_f], &ff, seq1);
+		else
+			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_begin[b_f]-ref_len-1, &ref_len, f_msg->srand[b_f], &ff, seq1);
+		strncpy(seq_s2, read_seq+(f_msg->read_begin[b_f] - read_len -1), read_len);
+		for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 		ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
 		frag_refresh(f_msg, f_i, ref_l_os, read_l_os, LEFT);
 	}
@@ -223,12 +248,14 @@ int unsoap2dp_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t
 //Extend PER_LEN in a while cycle, stop when get a BAD_ALIGN
 //XXX If it's SHORT, extend the whole frag
 //XXX Else, extend PER_LEN in a while cycle, stop when get a BAD_ALIGN
-int frag_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t* read_seq, char* seq1, char* seq2)
+int frag_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *pac, char *read_seq, int8_t *seq1, int8_t *seq2, int seed_len)
 {
 	int ret, i;
 	int ref_len, read_len;
 	int ref_l_os, read_l_os, ref_r_os, read_r_os;
 	int b_f = f_msg->b_f[f_i];
+	int ff, m;
+	char *seq_s2 = malloc(16385*sizeof(char));
 
 	if (FLAG == RIGHT)
 	{
@@ -237,11 +264,15 @@ int frag_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t* rea
 			printf("BAD\n");
 			return BAD_ALIGN;
 		}
-		ref_len = read_len = PER_LEN;
+		ref_len = read_len = seed_len;
 		for (i = 0; i < f_msg->per_n[b_f-1]; i++)
 		{
-			strncpy(seq1, ref_seq->seq.s + f_msg->ex_ref_end[f_i], ref_len);
-			strncpy(seq2, read_seq->seq.s + (f_msg->read_begin[b_f-1] - 1 + i * PER_LEN), read_len);
+			if (f_msg->srand[f_i] == -1)
+				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_end[f_i]-1-ref_len, &ref_len, f_msg->srand[f_i], &ff, seq1);
+			else
+				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_end[f_i], &ref_len, f_msg->srand[f_i], &ff, seq1);
+			strncpy(seq_s2, read_seq + (f_msg->read_begin[b_f-1] - 1 + i * seed_len), read_len);
+			for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 			ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
 			frag_refresh(f_msg, f_i, ref_r_os, read_r_os, RIGHT);
 			if (ret == BAD_ALIGN)
@@ -261,11 +292,15 @@ int frag_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t* rea
 	{
 		if (b_f == f_msg->frag_num-1)
 			return BAD_ALIGN;
-		ref_len = read_len = PER_LEN;
+		ref_len = read_len = seed_len;
 		for (i = 1; i <= f_msg->per_n[b_f+1]; i++)
 		{
-			strncpy(seq1, ref_seq->seq.s + f_msg->ex_ref_begin[f_i] - 1 - ref_len, ref_len);
-			strncpy(seq2, read_seq->seq.s + (f_msg->read_end[b_f+1] - i * PER_LEN), read_len);
+			if (f_msg->srand[f_i] == -1)
+				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_begin[f_i], &ref_len, f_msg->srand[f_i], &ff, seq1);
+			else
+				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_begin[f_i]-1-ref_len, &ref_len, f_msg->srand[f_i], &ff, seq1);
+			strncpy(seq_s2, read_seq + (f_msg->read_end[b_f+1] - i * seed_len), read_len);
+			for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 			ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
 			frag_refresh(f_msg, f_i, ref_l_os, read_l_os, LEFT);
 			if (ret == BAD_ALIGN)
@@ -285,211 +320,48 @@ int frag_extend(frag_msg* f_msg, int f_i, int FLAG, kseq_t* ref_seq, kseq_t* rea
 	return GOOD_ALIGN;
 }
 
-int frag_check(char *frag_f)
+int frag_check(bntseq_t *bns, int8_t *pac, char *read_prefix, char *read_seq, frag_msg *f_msg, int seed_len)
 {
-	FILE *fp = fopen(frag_f, "r");
-	if (fp == NULL)
-	{
-		fprintf(stderr, "ERROR, can't open %s.", frag_f);
-		return 1;
-	}
-	frag_msg *f_msg = frag_init_msg(MAX_FRAG);
-	char line[MAX_LINE_LEN+1];
-	int n = 0;	//frag num
-	//
-	//get ref and contig seq
-	char ref[100] = "../data/chr1_hg18.fa";
-	char read[100]= "../data/venter_chr1_100000_0.01_het.fq";
-
-	//get frag msg
-	while (fgets(line, MAX_LINE_LEN, fp) != NULL)
-	{
-		sscanf(line, "%d\t%d\t%d\t%d\t%d\t%d", f_msg->chr+n, f_msg->srand+n, f_msg->ref_2+n, f_msg->read_2+n, f_msg->ref_1+n, f_msg->read_1+n);
-		f_msg->frag_num++;
-		f_msg->ex_read_begin[n] = f_msg->read_begin[n] = 2 * PER_LEN * (f_msg->read_1[n] - 1) + 1;
-		f_msg->ex_read_end[n] = f_msg->read_end[n] = 2 * PER_LEN * (f_msg->read_2[n] - 1) + PER_LEN;
-		f_msg->ex_ref_begin[n] = f_msg->ref_begin[n] =  f_msg->ref_1[n];
-		f_msg->ex_ref_end[n] = f_msg->ref_end[n] = f_msg->ref_2[n] + PER_LEN - 1;
-		f_msg->per_n[n] = f_msg->read_2[n] - f_msg->read_1[n] + 1;
-		printf("%d %d %d %d %d %d %d\n", f_msg->frag_num, f_msg->chr[n], f_msg->srand[n], f_msg->ref_2[n], f_msg->read_2[n], f_msg->ref_1[n], f_msg->read_1[n]);
-		n++;
-		//		if (f_msg->frag_num == f_msg->frag_max)
-		//		frag_realloc(f_msg);	//double mem
-	}
-	fclose(fp);
-
-
-	int max_len = 16384 ;
-	char *seq1 = (char*)malloc((max_len+1) * sizeof(char));
-	char *seq2 = (char*)malloc((max_len+1) * sizeof(char));
-	gzFile reffp, readfp;
-	kseq_t *ref_seq, *read_seq;
-
-	int chr=0, ctg=0;
-
-	reffp = gzopen(ref, "r");
-	readfp = gzopen(read, "r");
-	ref_seq = kseq_init(reffp);
-	read_seq = kseq_init(readfp);
-
-	while (kseq_read(ref_seq) > 0)
-	{
-		chr++;	//get one chromosome
-		break;
-	}
-	
-
-	while(kseq_read(read_seq) > 0)
-	{
-		ctg++;
-		if (ctg == 1620)
-			break;
-	}
-
-	//strncpy(seq2, read_seq->seq.s+20600, read_len);
-	
-	/*
 	int i;
-	int ret, ref_l_os=0, read_l_os=0, ref_r_os=0, read_r_os=0;	//left_os right_os : offset of align result 
-
-	for (i = f_msg->frag_num; i >= 0; i--)
+//	fprintf(stdout, "read: %s\n", read_seq);
+	fprintf(stdout, "frag:\n");
+	for (i = f_msg->frag_num-1; i>= 0; i--)
 	{
-		//long & short || long & long, short & short
-		
-		printf("%d ", i);
-		ret = ls_frag(f_msg, i, &ref_len, &read_len);
-		printf("%d %d %d\n", ret, ref_len, read_len);
-
-		if (ret == -3)	//
-			continue;
-		if (ret >= 0)	// long : short	| both
-		{
-			//extend un-soap2dp PER_LEN
-			strncpy(seq1, ref_seq->seq.s + f_msg->ref_end[f_msg->c_i[i]], ref_len);
-			strncpy(seq2, read_seq->seq.s + f_msg->read_end[f_msg->c_i[i]], read_len);
-
-			if (extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os) == GOOD_ALIGN)	//extend the frag behind
-			{
-				frag_refresh(f_msg, i, ref_r_os, read_r_os, RIGHT);	//refresh frag with un-soap2dp region
-				if (ret == 1)			//next frag is SHORT, extend all the frag
-				{
-					read_len = f_msg->read_end[f_msg->c_i[i-1]] - f_msg->read_begin[f_msg->c_i[i-1]] + 1;
-					ref_len = read_len;
-					strncpy(seq1, ref_seq->seq.s + f_msg->ref_end[f_msg->c_i[i]], ref_len);
-					strncpy(seq2, read_seq->seq.s + f_msg->read_end[f_msg->c_i[i]], read_len);
-					if (extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os) == GOOD_ALIGN)	
-					//refresh frag with all the next frag, mark this short frag as 'covered'
-					{
-						frag_refresh(f_msg, i, ref_r_os, read_r_os, RIGHT);
-						frag_covered(f_msg, i-1);
-					}
-					else	//
-					{
-						frag_refresh(f_msg, i, ref_r_os, read_r_os, RIGHT);	
-					}
-				}
-				else if (ret == 0)		//next frag is LONG, extend one PER_LEN
-				{
-					ref_len = read_len = PER_LEN;
-					strncpy(seq1, ref_seq->seq.s + f_msg->ref_end[f_msg->c_i[i]], ref_len);
-					strncpy(seq2, read_seq->seq.s + f_msg->read_end[f_msg->c_i[i]], read_len);
-
-					while (extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os) == GOOD_ALIGN)
-					{
-						frag_refresh(f_msg, i, ref_r_os, read_r_os, RIGHT);
-						strncpy(seq1, ref_seq->seq.s + f_msg->ref_end[f_msg->c_i[i]], ref_len);
-						strncpy(seq2, read_seq->seq.s + f_msg->read_end[f_msg->c_i[i]], read_len);
-					}
-					frag_refresh(f_msg, i, ref_r_os, read_r_os, RIGHT);
-				}
-				//else					//ret == 2, no next frag
-				//{
-				//	frag_refresh(f_msg, i, ref_r_os, read_r_os, RIGHT);
-				//}
-			}
-			else																				//Bad align
-				frag_refresh(f_msg, i, ref_r_os, read_r_os, RIGHT);
-		}
-		if (ret <= 0)	// short : long | both
-		{
-			strncpy(seq1, ref_seq->seq.s + f_msg->ref_begin[f_msg->c_i[i-1]] - ref_len - 1, ref_len);
-			strncpy(seq2, read_seq->seq.s + f_msg->read_begin[f_msg->c_i[i-1]] - read_len - 1, read_len);
-
-			if (extend_ssw(seq1, seq2, ref_len , read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os) == GOOD_ALIGN)	//extend the frag before
-			{
-				frag_refresh(f_msg, i-1, ref_l_os, read_l_os, LEFT);	//refresh frag with un-soap2dp region
-				if (ret == -1)	//previous frag is SHORT, extend all the frag
-				{
-					read_len = f_msg->read_end[f_msg->c_i[i]] - f_msg->read_begin[f_msg->c_i[i]] + 1;
-					ref_len = read_len;
-					strncpy(seq1, ref_seq->seq.s + f_msg->ref_begin[f_msg->c_i[i-1]] - ref_len -1, ref_len);
-					strncpy(seq2, read_seq->seq.s + f_msg->read_begin[f_msg->c_i[i]], read_len);
-					if (extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os) == GOOD_ALIGN)
-					//refresh frag with the whole previous frag, mark this short frag as 'covered'
-					{
-						frag_refresh(f_msg, i-1, ref_l_os, read_l_os, LEFT);
-						frag_covered(f_msg, i);
-
-					}
-					else
-						frag_refresh(f_msg, i-1, ref_l_os, read_l_os, LEFT);
-				}
-				else if (ret == 0)			//previous frag is LONG, extend one PER_LEN
-				{
-					ref_len = read_len = PER_LEN;
-					strncpy(seq1, ref_seq->seq.s + f_msg->ref_begin[f_msg->c_i[i-1]] - ref_len - 1, ref_len);
-					strncpy(seq2, read_seq->seq.s + f_msg->read_begin[f_msg->c_i[i-1]] - read_len -1, read_len);
-
-					while (extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os) == GOOD_ALIGN)
-					{
-						frag_refresh(f_msg, i-1, ref_l_os, read_l_os, LEFT);
-						strncpy(seq1, ref_seq->seq.s + f_msg->ref_begin[f_msg->c_i[i-1]] - ref_len - 1, ref_len);
-						strncpy(seq2, read_seq->seq.s + f_msg->read_begin[f_msg->c_i[i-1]] - read_len -1, read_len);
-					}
-					frag_refresh(f_msg, i-1, ref_l_os, read_l_os, LEFT);
-				}
-				//else						//ret == -2, no previous frag
-				//{
-				//	frag_refresh(f_msg, i, ref_l_os, read_l_os, LEFT);
-				//}
-			}
-			else															//Bad align
-				frag_refresh(f_msg, i-1, ref_l_os, read_l_os, LEFT);
-		}
+		fprintf(stdout, "ref %d %d %d read %d %d\n", f_msg->chr[i], f_msg->ref_begin[i], f_msg->ref_end[i], f_msg->read_begin[i], f_msg->read_end[i]);
 	}
-	*/
-
+//	int max_len = 16384 ;
+//	char *seq1 = (char*)malloc((max_len+1) * sizeof(char));
+//	char *seq2 = (char*)malloc((max_len+1) * sizeof(char));
+//
+	int max_len = 16384 ;
+	int8_t *seq1 = (int8_t*)malloc((max_len+1)*sizeof(int8_t));
+	int8_t *seq2 = (int8_t*)malloc((max_len+1)*sizeof(int8_t));
 	/*
 	 * extend twice
 	 */
 	//extend right side of every frag
-	//
-	int i;
 	for (i = f_msg->frag_num-1; i >= 0; i--)
 	{
-		//if (f_msg->flag[i] == COVERED)
-		//	continue;
+		//if (f_msg->flag[i] == COVERED) continue;
 		f_msg->b_f[i] = i;
 		while (1)
 		{
-			if (unsoap2dp_extend(f_msg, i, RIGHT, ref_seq, read_seq, seq1, seq2) == BAD_ALIGN)
+			if (unsoap2dp_extend(f_msg, i, RIGHT, bns, pac, read_seq, seq1, seq2) == BAD_ALIGN)
 				break;
-			if (frag_extend(f_msg, i, RIGHT, ref_seq, read_seq, seq1, seq2) == BAD_ALIGN)
+			if (frag_extend(f_msg, i, RIGHT, bns, pac, read_seq, seq1, seq2, seed_len) == BAD_ALIGN)
 				break;
 		}
 	}
-	
 	//extend left side of every frag
 	for (i = 0; i < f_msg->frag_num; i++)
 	{
-		//if (f_msg->frag[i] == COVERED)
-		//	continue;
+		//if (f_msg->frag[i] == COVERED) continue;
 		f_msg->b_f[i] = i;
 		while (1)
 		{
-			if (unsoap2dp_extend(f_msg, i, LEFT, ref_seq, read_seq, seq1, seq2) == BAD_ALIGN)
+			if (unsoap2dp_extend(f_msg, i, LEFT, bns, pac, read_seq, seq1, seq2) == BAD_ALIGN)
 				break;
-			if (frag_extend(f_msg, i, LEFT, ref_seq, read_seq, seq1, seq2) == BAD_ALIGN)
+			if (frag_extend(f_msg, i, LEFT, bns, pac, read_seq, seq1, seq2, seed_len) == BAD_ALIGN)
 				break;
 		}
 	}
@@ -499,12 +371,7 @@ int frag_check(char *frag_f)
 		if (f_msg->flag[i] == UNCOVERED)
 			printf("ref: %d %d  read: %d %d\n", f_msg->ex_ref_begin[i], f_msg->ex_ref_end[i], f_msg->ex_read_begin[i], f_msg->ex_read_end[i]);
 	}
-
-//	frag_free(f_msg);
 	free(seq1);
 	free(seq2);
-	gzclose(reffp);
-	gzclose(readfp);
-
 	return 0;
 }

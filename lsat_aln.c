@@ -213,7 +213,7 @@ int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_l
     return 0;
 }
 
-int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, frag_msg *f_msg)  //from end to start, find every fragment's postion
+int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed_len, frag_msg *f_msg)  //from end to start, find every fragment's postion
 {
     if (n_seed == -1)
     {
@@ -232,17 +232,18 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, frag_msg
         }
     }
     //回溯，确定fragment
-    int frag_num = 1;
-    int pos = min_pos;
-    int flag = 0;
+    int frag_num=0, pos = min_pos, flag = 0;
     //first end
-    fprintf(stdout, "%d\t%d\t%d\t%d\t", a_msg[n_seed].chr[pos], a_msg[n_seed].nsrand[pos], a_msg[n_seed].offset[pos], a_msg[n_seed].read_id);    
+    //fprintf(stdout, "%d\t%d\t%d\t%d\t", a_msg[n_seed].chr[pos], a_msg[n_seed].nsrand[pos], a_msg[n_seed].offset[pos], a_msg[n_seed].read_id);    
+	
+	frag_set_msg(a_msg, n_seed, pos, 1, f_msg, frag_num, seed_len);
     for (i = n_seed; i >=0; i--)
     {
         if (path[i][pos].flag != MATCH)
         {
             //start
-            fprintf(stdout, "%d\t%d\n", a_msg[i].offset[pos], a_msg[i].read_id);    
+            //fprintf(stdout, "%d\t%d\n", a_msg[i].offset[pos], a_msg[i].read_id);    
+			frag_set_msg(a_msg, i, pos, 0, f_msg, frag_num, seed_len);
             flag = 1;
             frag_num++;
         }
@@ -250,30 +251,38 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, frag_msg
         if (flag == 1 && i > 0)  //获取一个fragment
         {
             //上一个fragment的end
-            fprintf(stdout, "%d\t%d\t%d\t%d\t", a_msg[i-1].chr[pos], a_msg[i-1].nsrand[pos], a_msg[i-1].offset[pos], a_msg[i-1].read_id);
+            //fprintf(stdout, "%d\t%d\t%d\t%d\t", a_msg[i-1].chr[pos], a_msg[i-1].nsrand[pos], a_msg[i-1].offset[pos], a_msg[i-1].read_id);
+			frag_set_msg(a_msg, i-1, pos, 1, f_msg, frag_num, seed_len);
             flag = 0;
         }
     } 
     //last start
-	fprintf(stdout, "%d\t%d\n", a_msg[0].offset[pos], a_msg[0].read_id);
+	//fprintf(stdout, "%d\t%d\n", a_msg[0].offset[pos], a_msg[0].read_id);
+	frag_set_msg(a_msg, 0, pos, 0, f_msg, frag_num, seed_len);
 	return 0;
 }
-int frag_cluster(char *seed_result, seed_msg *s_msg, int seed_len)
+int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, int8_t *pac)
 {
 	FILE *result_p;
 	char line[1024];
-	int n_read/*from 1*/, n_seed, i;
+	int n_read/*start from 1*/, n_seed, i;
 	int read_id, chr, offset, srand, edit_dis;
 	
 	aln_msg *a_msg;
 	int **price;
 	path_msg **path;
 	frag_msg *f_msg;
+	gzFile readfp;
+	kseq_t *read_seq_t;
+	char *read_seq;
 
 	a_msg = aln_init_msg(s_msg->seed_max);
 	price = (int**)malloc(s_msg->seed_max * sizeof(int*));
 	path = (path_msg**)malloc(s_msg->seed_max * sizeof(path_msg*));
 	f_msg = frag_init_msg(s_msg->seed_max);
+	readfp = gzopen(read_prefix, "r");
+	read_seq_t = kseq_init(readfp);
+	read_seq = calloc(100001, sizeof(char));
 
 	for (i = 0; i < s_msg->seed_max; i++) 
 	{
@@ -307,15 +316,21 @@ int frag_cluster(char *seed_result, seed_msg *s_msg, int seed_len)
 				if (last_id != 0) {
 					fprintf(stdout, "read %d n_seed %d\n", n_read, n_seed);
 					path_dp(a_msg, n_seed, path, price, seed_len);
-					backtrack(a_msg, path, n_seed-1, price, f_msg);
+					backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg);
 					/* SW-extenging */
-
+					frag_check(bns, pac, read_prefix, read_seq, f_msg, seed_len);
 				}
 				n_seed = 0;
 				while (s_msg->n_seed[n_read] < read_id) {
 					if (FLAG == 0) FLAG = 1;
 					else fprintf(stdout, "read %d n_seed 0\nfrag: 0\n\n", n_read);
 					n_read++;
+					if (kseq_read(read_seq_t) < 0)
+					{
+						fprintf(stderr, "[lsat_aln] Read file ERROR.\n");
+						exit(-1);
+					}
+					read_seq = read_seq_t->seq.s;
 				}
 				FLAG = 0;
 			}
@@ -331,8 +346,9 @@ int frag_cluster(char *seed_result, seed_msg *s_msg, int seed_len)
 	}
 	fprintf(stdout, "n_read %d n_seed %d\n", n_read, n_seed);
 	path_dp(a_msg, n_seed, path, price, seed_len);
-	backtrack(a_msg, path, n_seed-1, price, f_msg);
+	backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg);
 	/* SW-extenging */
+	frag_check(bns, pac, read_prefix, read_seq, f_msg, seed_len);
 
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);
@@ -340,6 +356,9 @@ int frag_cluster(char *seed_result, seed_msg *s_msg, int seed_len)
 	{ free(price[i]); free(path[i]); }
 	free(price); free(path);
 	frag_free_msg(f_msg);
+	gzclose(readfp);
+	kseq_destroy(read_seq_t);
+	//free(read_seq);
 
 	return 0;
 }
@@ -409,6 +428,7 @@ int lsat_soap2_dp(const char *ref_prefix, const char *read_prefix, char *opt_m)
 int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int no_soap2_dp, char *seed_result, char *opt_m, int opt_l)
 {
 	seed_msg *s_msg;
+	bntseq_t *bns;
 
 	/* split-seeding */
 	s_msg = seed_init_msg();
@@ -424,9 +444,17 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int no_soap2_
 
 	/* frag-clustering */
 	/* SW-extending for per-frag */
-	frag_cluster(seed_result, s_msg, opt_l);
+	bns = bns_restore(ref_prefix);
+	int8_t *pac;
+
+	pac = (int8_t*)calloc(bns->l_pac/4+1, 1);
+	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
+	fprintf(stdout, "[lsat_aln] frag-clustering ...\n");
+	frag_cluster(ref_prefix, read_prefix, seed_result, s_msg, opt_l, bns, pac);
 
 	seed_free_msg(s_msg);
+	free(pac);
+	bns_destroy(bns);
 	return 0;
 }
 

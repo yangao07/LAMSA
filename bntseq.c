@@ -1,7 +1,7 @@
 /*
  * bntseq.c
  * Transform fa files to binary files.
- * Output: prefix.pac ... XXX.
+ * Output: prefix.lsat.pac. 
  * Use '00'/'01'/'10'/'11' to represent 'A'/'G'/'C'/'T'.
  * For short 'N's(<= 10bp), replaced by 'G'(same as 'soap2-dp').
  * For long 'N's(> 10bp), just throw them away when mapping.
@@ -24,7 +24,7 @@ KSEQ_INIT(gzFile, gzread)
 char nst_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 5 /*'-'*/, 4, 4,
+	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4 /*'-'*/, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
@@ -243,13 +243,13 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 bntseq_t *bns_restore(const char *prefix)
 {  
 	char ann_filename[1024], amb_filename[1024], pac_filename[1024];
-	strcat(strcpy(ann_filename, prefix), ".ann");
-	strcat(strcpy(amb_filename, prefix), ".amb");
-	strcat(strcpy(pac_filename, prefix), ".pac");
+	strcat(strcpy(ann_filename, prefix), ".lsat.ann");
+	strcat(strcpy(amb_filename, prefix), ".lsat.amb");
+	strcat(strcpy(pac_filename, prefix), ".lsat.pac");
 	return bns_restore_core(ann_filename, amb_filename, pac_filename);
 }
 
-int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_coor, const int64_t len, int8_t *seq, const int rev)
+int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_coor, const int64_t len, int8_t *seq, const int srand)
 {
 	int i;
 	int32_t offset = bns->anns[seq_n-1].ambs_offset;
@@ -302,7 +302,7 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 		s = pac_coor > bns->ambs[i+offset].offset ? pac_coor : bns->ambs[i+offset].offset;
 		e = pac_coor + len > (bns->ambs[i+offset].offset + bns->ambs[i+offset].len) ? 
 				bns->ambs[i+offset].offset + bns->ambs[i+offset].len : pac_coor+len;
-		if (rev)
+		if (srand == -1)	//rev
 		{
 			for (j = len-e; j < len-s; j++)
 				seq[j-pac_coor] <<= 2;
@@ -318,7 +318,7 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 
 #define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
 //convert binary file to ACGT sequence
-int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int rev, int *FLAG, int8_t *seq)
+int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int srand, int *FLAG, int8_t *seq)
 {
 	int64_t pac_coor;
 	int i,k;
@@ -337,7 +337,7 @@ int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, con
 		*FLAG |= 1;	
 	}
 
-	if (rev)
+	if (srand == -1)	//rev
 	{
 		for (i = *len-1, k = pac_coor; i >= 0; i--, k++)
 			seq[i] = 3-(pac[k>>2] >> ((~k&3) << 1) & 0x3);
@@ -348,7 +348,7 @@ int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, con
 			seq[i] = (pac[k>>2] >> ((~k&3) << 1) & 0x3);
 	}
 
-	*FLAG |= n_recover(bns, seq_n, pac_coor, *len, seq, rev);	//0 : no 'N', or 2.
+	*FLAG |= n_recover(bns, seq_n, pac_coor, *len, seq, srand);	//0 : no 'N', or 2.
 	return 0;
 }
 
