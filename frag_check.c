@@ -31,79 +31,72 @@ frag_msg* frag_init_msg(int frag_max)
 {
 	frag_msg *f_msg = (frag_msg*)malloc(sizeof(frag_msg));
 
+	//XXX set frag_max as a constant value, then double
 	f_msg->frag_max = frag_max; 
 	f_msg->frag_num = 0;
 	f_msg->last_len = PER_LEN;	//XXX
-	f_msg->seed_num = 500;		//XXX
-	f_msg->chr= (int *)malloc(frag_max * sizeof(int));
-	f_msg->srand = (int *)malloc(frag_max * sizeof(int));
+	f_msg->per_seed_max = 500;		//XXX
+	f_msg->seed_num = 0;
 
-	f_msg->read_begin = (int *)malloc(frag_max * sizeof(int));
-	f_msg->read_end = (int *)malloc(frag_max * sizeof(int));
-	f_msg->ref_begin = (int *)malloc(frag_max * sizeof(int));
-	f_msg->ref_end = (int *)malloc(frag_max * sizeof(int));
-
-	f_msg->ex_read_begin = (int *)malloc(frag_max * sizeof(int));
-	f_msg->ex_read_end = (int *)malloc(frag_max * sizeof(int));
-	f_msg->ex_ref_begin = (int *)malloc(frag_max * sizeof(int));
-	f_msg->ex_ref_end = (int *)malloc(frag_max * sizeof(int));
-
-	f_msg->per_n = (int *)malloc(frag_max * sizeof(int));
-
-	f_msg->flag = (int *)malloc(frag_max * sizeof(int));
-	f_msg->b_f = (int *)malloc(frag_max * sizeof(int));
+	f_msg->fa_msg = (frag_aln_msg*)malloc(frag_max*sizeof(frag_aln_msg));
+	int i;
+	for (i = 0; i < frag_max; i++)
+	{
+		f_msg->fa_msg[i].seed_i = (int*)malloc(f_msg->per_seed_max*sizeof(int));
+		f_msg->fa_msg[i].seed_aln_i = (int*)malloc(f_msg->per_seed_max*sizeof(int));
+		f_msg->fa_msg[i].seed_num = 0;
+	}
 
 	return f_msg;
 }
 
 void frag_free_msg(frag_msg *f_msg)
 {
-	free(f_msg->chr);
-	free(f_msg->srand);
-	free(f_msg->ref_begin);
-	free(f_msg->ref_end);
-	free(f_msg->read_begin);
-	free(f_msg->read_end);
-	free(f_msg->ex_ref_begin);
-	free(f_msg->ex_ref_end);
-	free(f_msg->ex_read_end);
-	free(f_msg->ex_read_begin);
-	free(f_msg->per_n);
-	free(f_msg->flag);
-	free(f_msg->b_f);
-
+	int i;
+	for (i = 0; i < f_msg->frag_max; i++)
+	{
+		free(f_msg->fa_msg[i].seed_i);
+		free(f_msg->fa_msg[i].seed_aln_i);
+	}
+	free(f_msg->fa_msg);
 	free(f_msg);
 }
 
-int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len)//FLAG 0: start/1:end
+int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len)//FLAG 0:start / 1:end / 2:seed
 {
+	if (frag_i == 0)
+		f_msg->seed_num=0;
 	if (FLAG == 1)	//end
 	{
-		f_msg->chr[frag_i] = a_msg[seed_i].chr[aln_i];		//chr#
-		f_msg->srand[frag_i] = a_msg[seed_i].nsrand[aln_i];	//+:1/-:-1
-		//f_msg->ref_2[frag_i] = a_msg[seed_i].offset[aln_i];
-		//f_msg->read_2[frag_i] = a_msg[seed_i].read_id;
-		if (f_msg->srand[frag_i] == 1)	//+ srand
-			f_msg->ex_ref_end[frag_i] = f_msg->ref_end[frag_i] = a_msg[seed_i].offset[aln_i] + seed_len - 1;
+		f_msg->fa_msg[frag_i].chr = a_msg[seed_i].at[aln_i].chr;
+		f_msg->fa_msg[frag_i].srand = a_msg[seed_i].at[aln_i].nsrand;	//+:1/-:-1
+		f_msg->fa_msg[frag_i].seed_i[0] = seed_i;
+		f_msg->fa_msg[frag_i].seed_aln_i[0] = aln_i;
+		f_msg->fa_msg[frag_i].seed_num = 1;
+		f_msg->seed_num++;
+		f_msg->fa_msg[frag_i].flag = UNCOVERED;
+		if (f_msg->fa_msg[frag_i].srand == 1)	//+ srand
+			f_msg->fa_msg[frag_i].ex_ref_end = f_msg->fa_msg[frag_i].ref_end = a_msg[seed_i].at[aln_i].offset + seed_len - 1;
 		else							//- srand
-			f_msg->ex_ref_end[frag_i] = f_msg->ref_end[frag_i] = a_msg[seed_i].offset[aln_i];
-		f_msg->ex_read_end[frag_i] = f_msg->read_end[frag_i] = 2*seed_len*(a_msg[seed_i].read_id-1)+seed_len;
-		f_msg->per_n[frag_i] = a_msg[seed_i].read_id - a_msg[seed_i].read_id + 1;
+			f_msg->fa_msg[frag_i].ex_ref_end = f_msg->fa_msg[frag_i].ref_end = a_msg[seed_i].at[aln_i].offset;
+		f_msg->fa_msg[frag_i].ex_read_end = f_msg->fa_msg[frag_i].read_end = 2*seed_len*(a_msg[seed_i].read_id-1)+seed_len;
 	}
-	else	//start
+	else if(FLAG==0)	//start
 	{
-		//f_msg->ref_1[frag_i] = a_msg[seed_i].offset[aln_i];
-		//f_msg->read_1[frag_i] = a_msg[seed_i].read_id;
 		f_msg->frag_num = frag_i + 1;
-		f_msg->ex_read_begin[frag_i] = f_msg->read_begin[frag_i] = 2*seed_len*(a_msg[seed_i].read_id-1)+1;
-		if (f_msg->srand[frag_i] == 1)	//+ srand
-		{
-			f_msg->ex_ref_begin[frag_i] = f_msg->ref_begin[frag_i] = a_msg[seed_i].offset[aln_i];
-		}
+		f_msg->fa_msg[frag_i].ex_read_begin = f_msg->fa_msg[frag_i].read_begin = 2*seed_len*(a_msg[seed_i].read_id-1)+1;
+		if (f_msg->fa_msg[frag_i].srand == 1)	//+ srand
+			f_msg->fa_msg[frag_i].ex_ref_begin = f_msg->fa_msg[frag_i].ref_begin = a_msg[seed_i].at[aln_i].offset;
 		else							//- srand
-		{
-			f_msg->ex_ref_begin[frag_i] = f_msg->ref_begin[frag_i] = a_msg[seed_i].offset[aln_i] + seed_len -1;
-		}
+			f_msg->fa_msg[frag_i].ex_ref_begin = f_msg->fa_msg[frag_i].ref_begin = a_msg[seed_i].at[aln_i].offset + seed_len-1;
+		f_msg->fa_msg[frag_i].per_n = (f_msg->fa_msg[frag_i].read_end - seed_len - f_msg->fa_msg[frag_i].read_begin) / 2 / seed_len + 1;
+	}
+	else			//seed
+	{
+		f_msg->fa_msg[frag_i].seed_i[f_msg->fa_msg[frag_i].seed_num] = seed_i;
+		f_msg->fa_msg[frag_i].seed_aln_i[f_msg->fa_msg[frag_i].seed_num] = aln_i;
+		f_msg->seed_num++;
+		f_msg->fa_msg[frag_i].seed_num++;
 	}
 	return 0;
 }
@@ -112,32 +105,31 @@ int frag_refresh(frag_msg* f_msg, int f_i, int ref_offset, int read_offset, int 
 {
 	if (FLAG == RIGHT)	//right offset
 	{
-		f_msg->ex_read_end[f_i] += read_offset;
-		if (f_msg->srand[f_i] == 1)	//+ srand
-			f_msg->ex_ref_end[f_i] += ref_offset;
+		f_msg->fa_msg[f_i].ex_read_end += read_offset;
+		if (f_msg->fa_msg[f_i].srand == 1)	//+ srand
+			f_msg->fa_msg[f_i].ex_ref_end += ref_offset;
 		else						//- srand
-			f_msg->ex_ref_end[f_i] -= ref_offset;
-//		f_msg->per_n[f_i] += read_offset / PER_LEN;
+			f_msg->fa_msg[f_i].ex_ref_end -= ref_offset;
+//		f_msg->fa_msg[f_i].per_n += read_offset / PER_LEN;
 	}
 	else				//left offset
 	{
-		f_msg->ex_read_begin[f_i] -= read_offset;
-		if (f_msg->srand[f_i] == 1)	//+ srand
-			f_msg->ex_ref_begin[f_i] -= ref_offset;
+		f_msg->fa_msg[f_i].ex_read_begin -= read_offset;
+		if (f_msg->fa_msg[f_i].srand == 1)	//+ srand
+			f_msg->fa_msg[f_i].ex_ref_begin -= ref_offset;
 		else
-			f_msg->ex_ref_begin[f_i] += ref_offset;
-//		f_msg->per_n[f_i] += read_offset / PER_LEN;
+			f_msg->fa_msg[f_i].ex_ref_begin += ref_offset;
+//		f_msg->fa_msg[f_i].per_n += read_offset / PER_LEN;
 	}
-	printf("Refresh: %d %d %d %d\n", f_i, ref_offset, read_offset, FLAG);
+	//printf("Refresh: %d %d %d %d\n", f_i, ref_offset, read_offset, FLAG);
 	return 0;
 }
 
 int frag_covered(frag_msg *f_msg, int f_i, int b_f)
 {
-	f_msg->flag[b_f] = COVERED;
-	f_msg->b_f[f_i] = b_f;
-
-	printf("Covered: %d C %d\n", f_i, b_f);
+	f_msg->fa_msg[b_f].flag = COVERED;
+	f_msg->fa_msg[f_i].b_f = b_f;
+	//	printf("Covered: %d C %d\n", f_i, b_f);
 	return 0;
 }
 
@@ -186,12 +178,12 @@ int unsoap2dp_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *
 	int ret;
 	int ref_len, read_len;
 	int ref_l_os, read_l_os, ref_r_os, read_r_os;
-	int b_f = f_msg->b_f[f_i];
+	int b_f = f_msg->fa_msg[f_i].b_f;
 	int ff, m;
 	char *seq_s2 = malloc(16385*sizeof(char));
 
 	// XXX Is it necessary to take a 'COVERED frag' as an individaul frag in the next reverse extend?
-	//	   Here is YES.
+	//	   Here is 'IS'.
 	
 	if (FLAG == RIGHT)
 	{
@@ -202,15 +194,15 @@ int unsoap2dp_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *
 		}
 		else
 		{
-			read_len = f_msg->read_begin[b_f-1] - f_msg->read_end[b_f] - 1;
+			read_len = f_msg->fa_msg[b_f-1].read_begin - f_msg->fa_msg[b_f].read_end - 1;
 			ref_len = read_len;
 		}
 		//XXX pac2fa: left -> OR right ->
-		if (f_msg->srand[b_f] == -1)	//- srand
-			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_end[b_f]-1-ref_len, &ref_len, f_msg->srand[b_f], &ff, seq1);
+		if (f_msg->fa_msg[b_f].srand == -1)	//- srand
+			pac2fa_core(bns, pac, f_msg->fa_msg[b_f].chr, f_msg->fa_msg[b_f].ref_end-1-ref_len, &ref_len, f_msg->fa_msg[b_f].srand, &ff, seq1);
 		else
-			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_end[b_f], &ref_len, f_msg->srand[b_f], &ff, seq1);
-		strncpy(seq_s2, read_seq+f_msg->read_end[b_f], read_len);
+			pac2fa_core(bns, pac, f_msg->fa_msg[b_f].chr, f_msg->fa_msg[b_f].ref_end, &ref_len, f_msg->fa_msg[b_f].srand, &ff, seq1);
+		strncpy(seq_s2, read_seq+f_msg->fa_msg[b_f].read_end, read_len);
 		for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 		ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
 		frag_refresh(f_msg, f_i, ref_r_os, read_r_os, RIGHT);
@@ -219,9 +211,9 @@ int unsoap2dp_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *
 	{
 		if (b_f == f_msg->frag_num - 1)
 		{
-			if (f_msg->read_begin[b_f] != 1)	//Un-soap2dp HEAD
+			if (f_msg->fa_msg[b_f].read_begin != 1)	//Un-soap2dp HEAD
 			{
-				read_len = f_msg->read_begin[b_f] - 1;
+				read_len = f_msg->fa_msg[b_f].read_begin - 1;
 				ref_len =read_len;
 			}
 			else
@@ -229,14 +221,14 @@ int unsoap2dp_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *
 		}
 		else
 		{
-			read_len = f_msg->read_begin[b_f] - f_msg->read_end[b_f+1] - 1;
+			read_len = f_msg->fa_msg[b_f].read_begin - f_msg->fa_msg[b_f+1].read_end - 1;
 			ref_len = read_len;
 		}
-		if (f_msg->srand[b_f] == -1)
-			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_begin[b_f], &ref_len, f_msg->srand[b_f], &ff, seq1);
+		if (f_msg->fa_msg[b_f].srand == -1)
+			pac2fa_core(bns, pac, f_msg->fa_msg[b_f].chr, f_msg->fa_msg[b_f].ref_begin, &ref_len, f_msg->fa_msg[b_f].srand, &ff, seq1);
 		else
-			pac2fa_core(bns, pac, f_msg->chr[b_f], f_msg->ref_begin[b_f]-ref_len-1, &ref_len, f_msg->srand[b_f], &ff, seq1);
-		strncpy(seq_s2, read_seq+(f_msg->read_begin[b_f] - read_len -1), read_len);
+			pac2fa_core(bns, pac, f_msg->fa_msg[b_f].chr, f_msg->fa_msg[b_f].ref_begin-ref_len-1, &ref_len, f_msg->fa_msg[b_f].srand, &ff, seq1);
+		strncpy(seq_s2, read_seq+(f_msg->fa_msg[b_f].read_begin - read_len -1), read_len);
 		for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 		ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
 		frag_refresh(f_msg, f_i, ref_l_os, read_l_os, LEFT);
@@ -248,30 +240,30 @@ int unsoap2dp_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *
 //Extend PER_LEN in a while cycle, stop when get a BAD_ALIGN
 //XXX If it's SHORT, extend the whole frag
 //XXX Else, extend PER_LEN in a while cycle, stop when get a BAD_ALIGN
+/*
 int frag_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *pac, char *read_seq, int8_t *seq1, int8_t *seq2, int seed_len)
 {
 	int ret, i;
 	int ref_len, read_len;
 	int ref_l_os, read_l_os, ref_r_os, read_r_os;
-	int b_f = f_msg->b_f[f_i];
+	int b_f = f_msg->fa_msg[f_i].b_f;
 	int ff, m;
 	char *seq_s2 = malloc(16385*sizeof(char));
-
 	if (FLAG == RIGHT)
 	{
 		if (b_f == 0)
 		{
-			printf("BAD\n");
+			//printf("BAD\n");
 			return BAD_ALIGN;
 		}
 		ref_len = read_len = seed_len;
-		for (i = 0; i < f_msg->per_n[b_f-1]; i++)
+		for (i = 0; i < f_msg->fa_msg[b_f-1].per_n; i++)
 		{
-			if (f_msg->srand[f_i] == -1)
-				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_end[f_i]-1-ref_len, &ref_len, f_msg->srand[f_i], &ff, seq1);
+			if (f_msg->fa_msg[f_i].srand == -1)
+				pac2fa_core(bns, pac, f_msg->fa_msg[f_i].chr, f_msg->fa_msg[f_i].ex_ref_end-1-ref_len, &ref_len, f_msg->fa_msg[f_i].srand, &ff, seq1);
 			else
-				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_end[f_i], &ref_len, f_msg->srand[f_i], &ff, seq1);
-			strncpy(seq_s2, read_seq + (f_msg->read_begin[b_f-1] - 1 + i * seed_len), read_len);
+				pac2fa_core(bns, pac, f_msg->fa_msg[f_i].chr, f_msg->fa_msg[f_i].ex_ref_end, &ref_len, f_msg->fa_msg[f_i].srand, &ff, seq1);
+			strncpy(seq_s2, read_seq + (f_msg->fa_msg[b_f-1].read_begin - 1 + i * seed_len), read_len);
 			for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 			ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
 			frag_refresh(f_msg, f_i, ref_r_os, read_r_os, RIGHT);
@@ -279,45 +271,45 @@ int frag_extend(frag_msg *f_msg, int f_i, int FLAG, bntseq_t *bns, int8_t *pac, 
 				return BAD_ALIGN;
 		}
 		frag_covered(f_msg, f_i, b_f-1);
-		/*read_len = f_msg->read_end[b_f-1] - f_msg->read_begin[b_f-1] + 1;
-		ref_len = read_len;
-		strncpy(seq1, ref_seq->seq.s + f_msg->ex_ref_end[f_i], ref_len);
-		strncpy(seq2, read_seq->seq.s + f_msg->ex_read_end[f_i], read_len);
-		ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
-		frag_refresh(f_msg, f_i, ref_r_os, read_r_os, RIGHT);
-		if (ret == GOOD_ALIGN)
-			frag_covered(f_msg, f_i, b_f-1);*/
 	}
 	else	//LEFT
 	{
 		if (b_f == f_msg->frag_num-1)
 			return BAD_ALIGN;
 		ref_len = read_len = seed_len;
-		for (i = 1; i <= f_msg->per_n[b_f+1]; i++)
+		for (i = 1; i <= f_msg->fa_msg[b_f+1].per_n; i++)
 		{
-			if (f_msg->srand[f_i] == -1)
-				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_begin[f_i], &ref_len, f_msg->srand[f_i], &ff, seq1);
+			if (f_msg->fa_msg[f_i].srand == -1)
+				pac2fa_core(bns, pac, f_msg->fa_msg[f_i].chr, f_msg->fa_msg[f_i].ex_ref_begin, &ref_len, f_msg->fa_msg[f_i].srand, &ff, seq1);
 			else
-				pac2fa_core(bns, pac, f_msg->chr[f_i], f_msg->ex_ref_begin[f_i]-1-ref_len, &ref_len, f_msg->srand[f_i], &ff, seq1);
-			strncpy(seq_s2, read_seq + (f_msg->read_end[b_f+1] - i * seed_len), read_len);
+				pac2fa_core(bns, pac, f_msg->fa_msg[f_i].chr, f_msg->fa_msg[f_i].ex_ref_begin-1-ref_len, &ref_len, f_msg->fa_msg[f_i].srand, &ff, seq1);
+			strncpy(seq_s2, read_seq + (f_msg->fa_msg[b_f+1].read_end - i * seed_len), read_len);
 			for (m = 0; m < read_len; ++m) seq2[m] = nst_nt4_table[(int)seq_s2[m]];
 			ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
+
 			frag_refresh(f_msg, f_i, ref_l_os, read_l_os, LEFT);
 			if (ret == BAD_ALIGN)
 				return BAD_ALIGN;
 		}
 		frag_covered(f_msg, f_i, b_f+1);
-		/*read_len = f_msg->read_end[b_f+1] - f_msg->read_begin[b_f+1] + 1;
-		ref_len = read_len;
-		strncpy(seq1, ref_seq->seq.s + f_msg->ex_ref_begin[b_f+1]-1, ref_len);
-		strncpy(seq2, read_seq->seq.s + f_msg->ex_read_begin[b_f+1]-1, read_len);
-		ret = extend_ssw(seq1, seq2, ref_len, read_len, &ref_l_os, &read_l_os, &ref_r_os, &read_r_os);
-		frag_refresh(f_msg, f_i, ref_r_os, read_r_os, LEFT);
-		if (ret == GOOD_ALIGN)
-			frag_covered(f_msg, f_i, b_f+1);*/
 	}
-
 	return GOOD_ALIGN;
+}
+*/
+
+//Extend the intervals between seeds in the same frag
+int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i, bntseq_t *bns, int8_t *pac, char *read_seq, int8_t *seq1, int8_t *seq2, int seed_len)
+{
+	/*
+	int i;
+	//for intervals between seeds
+	for (i = f_msg->fa_msg[f_i].seed_num-1; i > 0; i--)
+	{
+		seed_i = f_msg->fa_msg[f_i].seed_i[i];
+		seed_aln_i = f_msg->fa_msg[f_i].seed_aln_i[i];
+	}*/
+	//for last interval
+	return 0;
 }
 
 int frag_check(bntseq_t *bns, int8_t *pac, char *read_prefix, char *read_seq, frag_msg *f_msg, int seed_len)
@@ -327,50 +319,76 @@ int frag_check(bntseq_t *bns, int8_t *pac, char *read_prefix, char *read_seq, fr
 	fprintf(stdout, "frag:\n");
 	for (i = f_msg->frag_num-1; i>= 0; i--)
 	{
-		fprintf(stdout, "ref %d %d %d read %d %d\n", f_msg->chr[i], f_msg->ref_begin[i], f_msg->ref_end[i], f_msg->read_begin[i], f_msg->read_end[i]);
+		if (f_msg->fa_msg[i].flag == COVERED)
+			fprintf(stdout, "COVERED ");
+		fprintf(stdout, "ref %d %d %d read %d %d per_n %d\n", f_msg->fa_msg[i].chr, f_msg->fa_msg[i].ref_begin, f_msg->fa_msg[i].ref_end, f_msg->fa_msg[i].read_begin, f_msg->fa_msg[i].read_end, f_msg->fa_msg[i].per_n);
 	}
-//	int max_len = 16384 ;
-//	char *seq1 = (char*)malloc((max_len+1) * sizeof(char));
-//	char *seq2 = (char*)malloc((max_len+1) * sizeof(char));
-//
+
 	int max_len = 16384 ;
 	int8_t *seq1 = (int8_t*)malloc((max_len+1)*sizeof(int8_t));
 	int8_t *seq2 = (int8_t*)malloc((max_len+1)*sizeof(int8_t));
 	/*
 	 * extend twice
 	 */
+	/*
 	//extend right side of every frag
-	for (i = f_msg->frag_num-1; i >= 0; i--)
 	{
-		//if (f_msg->flag[i] == COVERED) continue;
-		f_msg->b_f[i] = i;
-		while (1)
+		for (i = f_msg->frag_num-1; i >= 0; i--)
 		{
-			if (unsoap2dp_extend(f_msg, i, RIGHT, bns, pac, read_seq, seq1, seq2) == BAD_ALIGN)
-				break;
-			if (frag_extend(f_msg, i, RIGHT, bns, pac, read_seq, seq1, seq2, seed_len) == BAD_ALIGN)
-				break;
+			//if (f_msg->flag[i] == COVERED) continue;
+			f_msg->b_f[i] = i;
+			while (1)
+			{
+				if (unsoap2dp_extend(f_msg, i, RIGHT, bns, pac, read_seq, seq1, seq2) == BAD_ALIGN)
+				{
+					break;
+				}
+				if (frag_extend(f_msg, i, RIGHT, bns, pac, read_seq, seq1, seq2, seed_len) == BAD_ALIGN)
+				{
+					break;
+				}
+			}
 		}
-	}
-	//extend left side of every frag
-	for (i = 0; i < f_msg->frag_num; i++)
-	{
-		//if (f_msg->frag[i] == COVERED) continue;
-		f_msg->b_f[i] = i;
-		while (1)
+		//extend left side of every frag
+		for (i = 0; i < f_msg->frag_num; i++)
 		{
-			if (unsoap2dp_extend(f_msg, i, LEFT, bns, pac, read_seq, seq1, seq2) == BAD_ALIGN)
-				break;
-			if (frag_extend(f_msg, i, LEFT, bns, pac, read_seq, seq1, seq2, seed_len) == BAD_ALIGN)
-				break;
-		}
-	}
+			//if (f_msg->frag[i] == COVERED) continue;
+			f_msg->b_f[i] = i;
+			while (1)
+			{
+				if (unsoap2dp_extend(f_msg, i, LEFT, bns, pac, read_seq, seq1, seq2) == BAD_ALIGN)
+				{
+					break;
+				}
 
+				if (frag_extend(f_msg, i, LEFT, bns, pac, read_seq, seq1, seq2, seed_len) == BAD_ALIGN)
+				{
+					break;
+				}
+			}
+		}
+	}
+	*/
+
+	/*
+	 * extend once
+	 * for every frag : take it as a RIGHT frag
+	 * for every interval : SV breakpoint(s).
+	 */ 
+	/*
+	for (i = f_msg->frag_num-1; i > 0; i--)
+	{
+		frag_extend(f_msg, a_msg, i, bns, pac, read_seq, seq1, seq2, seed_len);
+		split_mapping(f_msg, a_msg, i, i-1);	
+	}
+	frag_extend(f_msg, a_msg, i, bns, pac, read_seq, seq1, seq2, seed_len);
+	*/
+/*
 	for (i = f_msg->frag_num-1; i >= 0; i--)
 	{
 		if (f_msg->flag[i] == UNCOVERED)
-			printf("ref: %d %d  read: %d %d\n", f_msg->ex_ref_begin[i], f_msg->ex_ref_end[i], f_msg->ex_read_begin[i], f_msg->ex_read_end[i]);
-	}
+			fprintf(stdout, "ref: %d %d  read: %d %d\n", f_msg->ex_ref_begin[i], f_msg->ex_ref_end[i], f_msg->ex_read_begin[i], f_msg->ex_read_end[i]);
+	}*/
 	free(seq1);
 	free(seq2);
 	return 0;
