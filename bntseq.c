@@ -298,14 +298,15 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 	}
 	for (i = l_amb; i <= r_amb; i++)
 	{
-		int s, e, j;
+		int64_t s, e, j;
 		s = pac_coor > bns->ambs[i+offset].offset ? pac_coor : bns->ambs[i+offset].offset;
 		e = pac_coor + len > (bns->ambs[i+offset].offset + bns->ambs[i+offset].len) ? 
 				bns->ambs[i+offset].offset + bns->ambs[i+offset].len : pac_coor+len;
+		printf("s: %lld e: %lld\n", s, e);
 		if (srand == -1)	//rev
 		{
 			for (j = len-e; j < len-s; j++)
-				seq[j-pac_coor] <<= 2;
+				seq[j+pac_coor] <<= 2;
 		}
 		else
 		{

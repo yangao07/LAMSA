@@ -788,7 +788,7 @@ s_align* ssw_align (const s_profile* prof,
 	r->read_begin1 = -1;
 	r->cigar = 0;
 	r->cigarLen = 0;
-	if (maskLen < 15) {
+	if (maskLen < 15) {	//XXX do not need 2nd best result
 		fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
 	}
 
@@ -840,16 +840,16 @@ s_align* ssw_align (const s_profile* prof,
 	if ((7&flag) == 0 || ((2&flag) != 0 && r->score1 < filters) || ((4&flag) != 0 && (r->ref_end1 - r->ref_begin1 > filterd || r->read_end1 - r->read_begin1 > filterd))) goto end;
 
 	// Generate cigar.
-	refLen = r->ref_end1 - r->ref_begin1 + 1;
-	readLen = r->read_end1 - r->read_begin1 + 1;
-	band_width = abs(refLen - readLen) + 1;
-	path = banded_sw(ref + r->ref_begin1, prof->read + r->read_begin1, refLen, readLen, r->score1, weight_gapO, weight_gapE, band_width, prof->mat, prof->n);
-	if (path == 0) r = 0;
-	else {
-		r->cigar = path->seq;
-		r->cigarLen = path->length;
-		free(path);
-	}
+//	refLen = r->ref_end1 - r->ref_begin1 + 1;
+//	readLen = r->read_end1 - r->read_begin1 + 1;
+//	band_width = abs(refLen - readLen) + 1;
+//	path = banded_sw(ref + r->ref_begin1, prof->read + r->read_begin1, refLen, readLen, r->score1, weight_gapO, weight_gapE, band_width, prof->mat, prof->n);
+//	if (path == 0) r = 0;
+//	else {
+//		r->cigar = path->seq;
+//		r->cigarLen = path->length;
+//		free(path);
+//	}
 	
 end: 
 	return r;
