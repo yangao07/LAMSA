@@ -39,17 +39,31 @@ typedef struct {
 typedef struct {
 	int chr;
 	int srand;
-	int ref_begin;
+
+	int ref_begin;	//1-based
 	int ref_end;
-	int read_begin;
+	int read_begin;	//1-based
 	int read_end;
-	int ex_ref_begin;
+	
+	int ex_ref_begin;	//1-based
 	int ex_ref_end;
-	int ex_read_begin;
+	int ex_read_begin;	//1-based
 	int ex_read_end;
+	
+	int cigar_ref_start;	//frag's cigar start of ref, 1-based
+	int cigar_ref_end;		
+	int cigar_read_start;	//frag's cigar start of read, 1-based
+	int cigar_read_end;
+	uint32_t *cigar;		//frag's cigar
+	int cigar_len;			//frag's cigar length
+	int cigar_max;			//size of cigar[]
+	int edit_dis;			//frag's edit-dis
+	int len_dif;			//length difference between ref and read
+
 	int per_n;
 	int flag;
 	int b_f;
+	
 	int seed_num;	//seed number of per frag
 	int *seed_i;
 	int *seed_aln_i;
@@ -69,8 +83,10 @@ extern char nst_nt4_table[256];
 frag_msg *frag_init_msg(int frag_max);
 void frag_free_msg(frag_msg *f_msg);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len);//FLAG 0: start/1:end / 2:seed
-int frag_check(bntseq_t *bns, int8_t *pac, char *read_prefix, char *read_seq, frag_msg *f_msg, int seed_len);
+int frag_check(bntseq_t *bns, int8_t *pac, char *read_prefix, char *read_seq, frag_msg *f_msg, aln_msg *a_msg, int seed_len);
 
+#define MAXOFTWO(a, b) ((a) > (b) ? (a) : (b))
+#define MINOFTWO(a, b) ((a) < (b) ? (a) : (b))
 #define MAX_FRAG 2048 
 #define MAX_LINE_LEN 65536
 

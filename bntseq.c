@@ -318,7 +318,7 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 }
 
 #define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
-//convert binary file to ACGT sequence
+//convert binary seq to 'ACGT' sequence
 int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int srand, int *FLAG, int8_t *seq)
 {
 	int64_t pac_coor;

@@ -118,6 +118,7 @@ aln_msg *aln_init_msg(int seed_max)
 			msg[i].at[j].cigar = (uint32_t*)malloc(7 * sizeof(uint32_t));//XXX default value for 3-ed
 			msg[i].at[j].cigar_len = 0;
 			msg[i].at[j].cmax = 7;
+			msg[i].at[j].bmax = 0;
 		}
 	}
 	return msg;
@@ -142,10 +143,11 @@ void aln_free_msg(aln_msg *a_msg, int seed_max)	//a_msg大小为read_max个
 void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 {
 	int op;
-	long x;
+	long x, bi, bd;
 	char *s, *t;
 
 	a_msg[seed_i].at[aln_i].cigar_len=0;
+	bi = bd = 0;
 	for (s = s_cigar; *s; )
 	{
 		x = strtol(s, &t, 10);	
@@ -158,15 +160,15 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 		switch (op)
 		{
 			case 'M':	op = CMATCH;	break;
-			case 'I':	op = CINS;	break;
-			case 'D':	op = CDEL;	break;
-			case 'N':	op = CREF_SKIP;	break;
-			case 'S':	op = CSOFT_CLIP;	break;
-			case 'H':	op = CHARD_CLIP;	break;
-			case 'P':	op = CPAD;	break;
+			case 'I':	op = CINS;		bi += x;	break;
+			case 'D':	op = CDEL;		bd += x;	break;
+			case 'N':	op = CREF_SKIP;		bd += x;	break;
+			case 'S':	op = CSOFT_CLIP;		bi += x;	break;
+			case 'H':	op = CHARD_CLIP;		bd += x;	break;
+			case 'P':	op = CPAD;		bd += x;	break;
 			case '=':	op = CEQUAL;	break;
 			case 'X':	op = CDIFF;	break;
-			case 'B':	op = CBACK;	break;
+			case 'B':	op = CBACK;		bi += x;	break;	
 			default:	fprintf(stderr, "[lsat_aln] Cigar ERROR.\n"); exit(-1); break;
 		}
 		if (a_msg[seed_i].at[aln_i].cigar_len == a_msg[seed_i].at[aln_i].cmax)
@@ -175,9 +177,12 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 			a_msg[seed_i].at[aln_i].cigar = (uint32_t*)realloc(a_msg[seed_i].at[aln_i].cigar, a_msg[seed_i].at[aln_i].cmax * sizeof(uint32_t));
 		}
 		a_msg[seed_i].at[aln_i].cigar[a_msg[seed_i].at[aln_i].cigar_len] = CIGAR_GEN(x, op);
+		//modify variable directly OR use a auxiliary-variable
 		a_msg[seed_i].at[aln_i].cigar_len++;
 		s = t+1;
 	}
+	a_msg[seed_i].at[aln_i].len_dif = (int)(bd - bi);
+	a_msg[seed_i].at[aln_i].bmax = (int)(bd > bi ? bd : bi);
 }
 
 void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, int offset, int srand, int edit_dis, char *cigar)
@@ -187,9 +192,9 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, in
 		fprintf(stderr, "[lsat_aln] setAmsg ERROR!\n");
 		exit(0);
 	}
-	a_msg[read_x-1].read_id = read_id;
+	a_msg[read_x-1].read_id = read_id;			//from 1
 	a_msg[read_x-1].at[aln_y-1].chr = chr;
-	a_msg[read_x-1].at[aln_y-1].offset = offset;
+	a_msg[read_x-1].at[aln_y-1].offset = offset;	//1-base
 	a_msg[read_x-1].at[aln_y-1].nsrand = ((srand=='+')?1:-1);
 	a_msg[read_x-1].at[aln_y-1].edit_dis = edit_dis;
 	a_msg[read_x-1].n_aln = aln_y;
@@ -216,7 +221,8 @@ int get_min_dis(aln_msg *a_msg, int i, int j, int k, int* flag, int pre_pre, int
     //dis > 3 :DELETION
     //dis < -3:INSERT
 
-    int dis = a_msg[pre].at[k].nsrand * (act-exp);
+	//dis = offset_dis + per.edit_dis + per.cigar_len
+    int dis = a_msg[pre].at[k].nsrand * (act-exp) + a_msg[pre].at[k].edit_dis + a_msg[pre].at[k].cigar_len;
     
     if (dis > 10) 
         *flag = DELETION;
@@ -337,8 +343,6 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed
     //回溯，确定fragment
     int frag_num=0, pos = min_pos, flag = 0;
     //first end
-    //fprintf(stdout, "%d\t%d\t%d\t%d\t", a_msg[n_seed].at[pos].chr, a_msg[n_seed].nsrand[pos], a_msg[n_seed].offset[pos], a_msg[n_seed].read_id);    
-	
 	frag_set_msg(a_msg, n_seed, pos, 1, f_msg, frag_num, seed_len);
 	i = n_seed;
 	while (i > 0)
@@ -361,11 +365,13 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed
 			exit(-1);
 		}
 		pos = path[i][pos].from;
-		if (flag == 1 && i > 0)
+		if (flag == 1)
 		{
 			frag_set_msg(a_msg, pre, pos, 1, f_msg, frag_num, seed_len);
 			flag = 0;
 		}
+		else
+			frag_set_msg(a_msg, pre, pos, 2, f_msg, frag_num, seed_len);
 		i = pre;
 	}
 	/*
@@ -391,7 +397,6 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed
         }
     } */
     //last start
-	//fprintf(stdout, "%d\t%d\n", a_msg[0].at[pos].offset, a_msg[0].read_id);
 	frag_set_msg(a_msg, 0, pos, 0, f_msg, frag_num, seed_len);
 	return 0;
 }
@@ -456,7 +461,7 @@ int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_ms
 					path_dp(a_msg, n_seed, path, price, seed_len);
 					backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg);
 					/* SW-extenging */
-					frag_check(bns, pac, read_prefix, read_seq, f_msg, seed_len);
+					frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len);
 				}
 				n_seed = 0;
 				while (s_msg->n_seed[n_read] < read_id) {
@@ -486,7 +491,7 @@ int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_ms
 	path_dp(a_msg, n_seed, path, price, seed_len);
 	backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg);
 	/* SW-extenging */
-	frag_check(bns, pac, read_prefix, read_seq, f_msg, seed_len);
+	frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len);
 
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);

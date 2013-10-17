@@ -64,12 +64,16 @@ typedef struct {	//全部read包含seed数目信息
 
 typedef struct {
 	int32_t chr;
-	int32_t offset;
+	int32_t offset;	//1-base
 	int8_t nsrand;
 	int8_t edit_dis;
+
 	uint32_t *cigar;
 	int cigar_len;  //default: 7 for 3-ed
+	int len_dif;	//length difference between ref and read
 	int cmax;
+	int bmax;		//max band-width, NOT for this seed-aln, for this in-del case.
+					//max of the number of inserts and the number of dels
 } aln_t;
 typedef struct {
 	int32_t read_id;
