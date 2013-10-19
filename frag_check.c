@@ -20,6 +20,11 @@
 #define PER_LEN 100
 
 KSEQ_INIT(gzFile, gzread)
+int8_t sc_mat[25] = {1, -2, -2, -2, -1,
+				 -2,  1, -2, -2, -1,
+				 -2, -2,  1, -2, -1,
+				 -2, -2, -2,  1, -1,
+				 -1, -1, -1, -1, -1};
 
 
 /*
@@ -322,10 +327,10 @@ int getintv1(int8_t *seq1, bntseq_t *bns, int8_t *pac, aln_msg *a_msg, int seed1
 		pac2fa_core(bns, pac, a_msg[seed1_i].at[seed1_aln_i].chr, start, &len, -1, &flag, seq1);
 	}
 	int j;
-	fprintf(stdout, "ref:\t%d\t%ld\t", len, start);
-	for (j = 0; j < len; j++)
-		fprintf(stdout, "%d", (int)seq1[j]);
-	fprintf(stdout, "\n");
+//	fprintf(stdout, "ref:\t%d\t%ld\t", len, start);
+//	for (j = 0; j < len; j++)
+//		fprintf(stdout, "%d", (int)seq1[j]);
+//	fprintf(stdout, "\n");
 	return (int)len;
 }
 
@@ -336,77 +341,221 @@ int getintv2(int8_t *seq2, char *read_seq, aln_msg *a_msg, int seed1_i, int seed
 
 	//set band-width
 	*band_width = 2 * (((seed2_i - seed1_i) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
-
 	//convert char seq to int seq
 	for (j=0, s = i = a_msg[seed1_i].read_id * 2 * seed_len - seed_len; i < (a_msg[seed2_i].read_id-1) * 2 * seed_len; ++j, ++i)
 		seq2[j] = nst_nt4_table[(int)read_seq[i]];
-	fprintf(stdout, "read:\t%d\t%d\t", j, s);
-	for (i = 0; i < j; i++)
-		fprintf(stdout, "%d",(int)seq2[i]);
-	fprintf(stdout, "\n");
+//	fprintf(stdout, "read:\t%d\t%d\t", j, s);
+//	for (i = 0; i < j; i++)
+//		fprintf(stdout, "%d",(int)seq2[i]);
+//	fprintf(stdout, "\n");
 	return (j);
+}
+
+void printcigar(uint32_t *cigar, int cigar_len)
+{
+	int i;
+	for (i = 0; i < cigar_len; i++)
+		fprintf(stdout, "%d%c", (int)(cigar[i]>>4), "MIDNHS"[(int)(cigar[i] & 0xf)]);
+	fprintf(stdout, "\t");
+}
+
+void push_cigar(uint32_t *fcigar, int *fcigar_len, int *fcmax, uint32_t *cigar, int cigar_len)
+{
+	int i = *fcigar_len, j = 0;
+	if ((fcigar[i-1] & 0xf) == (cigar[0] & 0xf)) {
+		j = 1;
+		fcigar[i-1] += ((cigar[0] >> 4) << 4);
+	}
+	for (; j < cigar_len; ++i,++j) {
+		if (i == *fcmax) {
+			*fcmax <<= 1;
+			fcigar = (uint32_t*)realloc(fcigar, (*fcmax) * sizeof (uint32_t));
+			if (fcigar == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(-1);}
+		}	
+		fcigar[i] = cigar[j];
+	}
+	*fcigar_len = i;
 }
 
 //merge interval and seed to frag
 //Before, frag has the first seed's msg already
-void merge_cigar(int cigar_len, uint32_t *cigar, frag_msg *f_msg, int f_i)
+void merge_cigar(frag_msg *f_msg, int f_i, uint32_t *cigar, int cigar_len, int reflen, int readlen, bntseq_t *bns, int8_t *pac, char *read_seq)
 {
-	int fc_len = f_msg->fa_msg[f_i].cigar_len;
+	int *fc_len = &(f_msg->fa_msg[f_i].cigar_len);
 	uint32_t *fcigar = f_msg->fa_msg[f_i].cigar;
-
-	f_msg->fa_msg[f_i].cigar_len cigar
-	if (fcigar[fc_len-1] & 0xf != CMATCH || cigar[0] & 0xf != CMATCH)	//bound-repair
+	//refresh cigar msg
+	if ((fcigar[*fc_len-1] & 0xf) != CMATCH || (cigar[0] & 0xf) != CMATCH)	//bound-repair
 	{
-		    /* seq1, ref */ /* seq2, read */
+		    /* seq1, ref */ /*    seq2, read     */
 		int len1, len11=0,  len2, len21=0, len22=0, len_dif=0;
-		uint8_t *seq1, *seq2;
+		int bd_cigar_len = 0, b = 0, min_b, flag, score, ci, i, j;
+		uint32_t *bd_cigar = 0;
+		int8_t *seq1, *seq2;
 		int64_t ref_start;
 		int32_t read_start;
 
-		if (fcigar[fc_len-1] & 0xf == CMATCH)
-			len21 += MINOFTWO(3, (int)(fcigar[fc_len-1] >> 4));
-		else
-		{
-			if (fcigar[fc_len-1] & 0xf == CINS)	{
-				len21 += (int)(fcigar[fc_len-1]>>4);
-				len_dif -= len21;
-			} else {fprintf(stderr, "cigar [D] error.\n");exit(-1);}
-			if (fcigar[fc_len-2] & 0xf != CMATCH) {fprintf(stderr, "cigar error.\n");exit(-1);}
-			len21 += MINOFTWO(3, (int)(fcigar[fc_len-2] >> 4));	
+		//3-match boundary
+		if ((fcigar[*fc_len-1] & 0xf) == CMATCH) {
+			if ((int)(fcigar[*fc_len-1] >> 4) > 3) { 
+				fcigar[*fc_len-1] -= (0x11 << 4); len21 += 3;
+			} else { 
+				len21 += (int)(fcigar[*fc_len-1] >> 4); (*fc_len)--; }
+		} else {
+			if ((fcigar[*fc_len-1] & 0xf) == CINS) { 
+				len21 += (int)(fcigar[*fc_len-1] >> 4); len_dif -= len21; b += len21; (*fc_len)--;
+			} else { 
+				len_dif += (int)(fcigar[*fc_len-1] >> 4); b += (int)(fcigar[*fc_len-1] >> 4); (*fc_len)--;	}
+			if ((fcigar[*fc_len-1] & 0xf) != CMATCH) {fprintf(stderr, "cigar error.\n");exit(-1);}
+			if ((int)(fcigar[*fc_len-1] >> 4) > 3) { 
+				fcigar[*fc_len-1] -= (0x11 << 4); len21 += 3;
+			} else { 
+				len21 += (int)(fcigar[*fc_len-1] >> 4); (*fc_len)--; }
 		}
 		len11 = len21 + len_dif;
 		read_start = f_msg->fa_msg[f_i].cigar_read_end - len21 + 1;	//1-based
 		ref_start = f_msg->fa_msg[f_i].cigar_ref_end - len11 + 1;	//1-based
-
-		if (cigar[0] & 0xf == CMATCH)
-			len22 += MINOFTWO(3, (int)(cigar[0] >> 4));
-		else
-		{
-			if (cigar[0] & 0xf == CINS) {
-				len22 += (int)(cigar[0]>>4);
-				len_dif -= len22;
-			} else 	//CDEL
-				len_dif += (int)(cigar[0]>>4);
-			if (cigar[1] & 0xf != CMATCH) {fprintf(stderr, "cigar error.\n");exit(-1);}
-			len22 += MINOFTWO(3, (int)(cigar[1] >> 4));
+		if ((cigar[0] & 0xf) == CMATCH) {
+			if ((int)(cigar[0] >> 4) > 3) { 
+				cigar[0] -= (0x11 << 4); len22 += 3; ci = 0;
+			} else { 
+				len22 += (int)(fcigar[0] >> 4); ci = 1; }
+		} else {
+			if ((cigar[0] & 0xf) == CINS) {
+				len22 += (int)(cigar[0]>>4); len_dif -= len22; b += len22;
+			} else { 	//CDEL
+				len_dif += (int)(cigar[0]>>4); b += (int)(cigar[0]>>4);	}
+			if ((cigar[1] & 0xf) != CMATCH) {fprintf(stderr, "cigar error.\n");exit(-1);}
+			if ((int)(cigar[1] >> 4) > 3) {
+				cigar[1] -= (0x11 << 4); len22 += 3; ci = 1;
+			} else {
+				len22 += (int)(cigar[1] >> 4); ci = 2; }
 		}
 		len2 = len21 + len22;
 		len1 = len2 + len_dif;
+		min_b = abs(len_dif) + 3;
+		b = MAXOFTWO(b, min_b);
+		seq1 = (int8_t *)malloc((len1+1) * sizeof(int8_t));
+		seq2 = (int8_t *)malloc((len2+1) * sizeof(int8_t));
+		pac2fa_core(bns, pac, f_msg->fa_msg[f_i].chr, ref_start-1, &len1, 1, &flag, seq1);
+		for (i = 0, j = read_start-1; j < read_start + len2 -1; ++i, ++j)
+			seq2[i] = nst_nt4_table[(int)read_seq[j]];
+		score = ksw_global(len2, seq2, len1, seq1, 5, &sc_mat, 2, 1, b, &bd_cigar_len, &bd_cigar);
+		push_cigar(fcigar, fc_len, &(f_msg->fa_msg[f_i].cigar_max), bd_cigar, bd_cigar_len);
+		push_cigar(fcigar, fc_len, &(f_msg->fa_msg[f_i].cigar_max), cigar+ci, cigar_len-ci);
+		free(bd_cigar);
+		free(seq1);
+		free(seq2);
 	}
+	else push_cigar(fcigar, fc_len, &(f_msg->fa_msg[f_i].cigar_max), cigar, cigar_len);
+	//refresh coordinates msg
+	f_msg->fa_msg[f_i].cigar_ref_end += reflen;
+	f_msg->fa_msg[f_i].cigar_read_end += readlen;
+	f_msg->fa_msg[f_i].len_dif += (reflen-readlen);
 }
+//void merge_cigar(int cigar_len, uint32_t *cigar, frag_msg *f_msg, int f_i, bntseq_t *bns, int8_t *pac, char *read_seq)
+//{
+//	int *fc_len = &(f_msg->fa_msg[f_i].cigar_len);
+//	uint32_t *fcigar = f_msg->fa_msg[f_i].cigar;
+//	int i, j;
+//
+//	if ((fcigar[*fc_len-1] & 0xf) != CMATCH || (cigar[0] & 0xf) != CMATCH)	//bound-repair
+//	{
+//		    /* seq1, ref */ /*    seq2, read     */
+//		int len1, len11=0,  len2, len21=0, len22=0, len_dif=0;
+//		int bd_cigar_len = 0, b = 0, min_b, flag, score, ci;
+//		uint32_t *bd_cigar = 0;
+//		int8_t *seq1, *seq2;
+//		int64_t ref_start;
+//		int32_t read_start;
+//		//3-match boundary
+//		if ((fcigar[*fc_len-1] & 0xf) == CMATCH) {
+//			if( (int)(fcigar[*fc_len-1] >> 4) > 3) {
+//				fcigar[*fc_len-1] -= (0x11 << 4);
+//				len21 += 3;
+//			} else {
+//				len21 += (int)(fcigar[*fc_len-1] >> 4);
+//				(*fc_len)--;
+//			}
+//		} else {
+//			if ((fcigar[*fc_len-1] & 0xf) == CINS)	{
+//				len21 += (int)(fcigar[*fc_len-1]>>4);
+//				len_dif -= len21;
+//				b += len21;
+//				(*fc_len)--;
+//			} else {	//CDEL
+//				len_dif += (int)(fcigar[*fc_len-1]>>4);
+//				b += (int)(fcigar[*fc_len-1]>>4);
+//				(*fc_len)--;
+//			}
+//			if ((fcigar[*fc_len-1] & 0xf) != CMATCH) {fprintf(stderr, "cigar error.\n");exit(-1);}
+//			if( (int)(fcigar[*fc_len-1] >> 4) > 3) {
+//				fcigar[*fc_len-1] -= (0x11 << 4);
+//				len21 += 3;
+//			} else {
+//				len21 += (int)(fcigar[*fc_len-1] >> 4);
+//				(*fc_len)--;
+//			}
+//		}
+//		len11 = len21 + len_dif;
+//		read_start = f_msg->fa_msg[f_i].cigar_read_end - len21 + 1;	//1-based
+//		ref_start = f_msg->fa_msg[f_i].cigar_ref_end - len11 + 1;	//1-based
+//
+//		if ((cigar[0] & 0xf) == CMATCH) {
+//			if ((int)(cigar[0] >> 4) > 3) {
+//				cigar[0] -= (0x11 << 4);
+//				len22 += 3;
+//				ci = 0;
+//			} else {
+//				len22 += (int)(fcigar[0] >> 4);
+//				ci = 1;
+//			}
+//		}
+//		else {
+//			if ((cigar[0] & 0xf) == CINS) {
+//				len22 += (int)(cigar[0]>>4);
+//				len_dif -= len22;
+//				b += len22;
+//			} else { 	//CDEL
+//				len_dif += (int)(cigar[0]>>4);
+//				b += (int)(cigar[0]>>4);
+//			}
+//			if ((cigar[1] & 0xf) != CMATCH) {fprintf(stderr, "cigar error.\n");exit(-1);}
+//			if ((int)(cigar[1] >> 4) > 3) {
+//				cigar[1] -= (0x11 << 4);
+//				len22 += 3;
+//				ci = 1;
+//			} else {
+//				len22 += (int)(cigar[1] >> 4);
+//				ci = 2;
+//			}
+//		}
+//		len2 = len21 + len22;
+//		len1 = len2 + len_dif;
+//		min_b = abs(len_dif) + 3;
+//		b = MAXOFTWO(b, min_b);
+//		seq1 = (int8_t *)malloc((len1+1) * sizeof(int8_t));
+//		seq2 = (int8_t *)malloc((len2+1) * sizeof(int8_t));
+//		pac2fa_core(bns, pac, f_msg->fa_msg[f_i].chr, ref_start-1, &len1, 1, &flag, seq1);
+//		for (i = 0, j = read_start-1; j < read_start + len2 -1; ++i, ++j)
+//			seq2[i] = nst_nt4_table[(int)read_seq[j]];
+//		score = ksw_global(len2, seq2, len1, seq1, 5, &sc_mat, 2, 1, b, &bd_cigar_len, &bd_cigar);
+//		push_cigar(fcigar, fc_len, &(f_msg->fa_msg[f_i].cigar_max), bd_cigar, bd_cigar_len);
+//		push_cigar(fcigar, fc_len, &(f_msg->fa_msg[f_i].cigar_max), cigar+ci, cigar_len-ci);
+//		free(bd_cigar);
+//		free(seq1);
+//		free(seq2);
+//	}
+//	else
+//		push_cigar(fcigar, fc_len, &(f_msg->fa_msg[f_i].cigar_max), cigar, cigar_len);
+//}
 //Extend the intervals between seeds in the same frag
 int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i, bntseq_t *bns, int8_t *pac, char *read_seq, int8_t *seq1, int8_t *seq2, int seed_len)
 {
 	int i, j, seed_i, seed_aln_i, last_i, last_aln_i;
 	int len1, len2;
-	int b, cigar_len, score;
+	int b, min_b, cigar_len, score;
 	uint32_t *cigar=0;
 
-	int8_t mat[25] = {1, -2, -2, -2, -1,
-					 -2,  1, -2, -2, -1,
-					 -2, -2,  1, -2, -1,
-					 -2, -2, -2,  1, -1,
-					 -1, -1, -1, -1, -1};
 	//banded global alignment for intervals between seeds
 	cigar_len = 0;
 	//get the first node
@@ -419,12 +568,14 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i, bntseq_t *bns, int8_t 
 		for (j = 0; j < f_msg->fa_msg[f_i].cigar_len; j++)
 			f_msg->fa_msg[f_i].cigar[j] = a_msg[last_i].at[last_aln_i].cigar[j];
 		f_msg->fa_msg[f_i].cigar_ref_start = a_msg[last_i].at[last_aln_i].offset;				//1-based
-		f_msg->fa_msg[f_i].cigra_read_start = (a_msg[last_i].read_id - 1) *2*seed_len+1;		//1-based
+		f_msg->fa_msg[f_i].cigar_read_start = (a_msg[last_i].read_id - 1) *2*seed_len+1;		//1-based
 		f_msg->fa_msg[f_i].cigar_read_end = f_msg->fa_msg[f_i].cigar_read_start - 1 + seed_len;	//1-based
 		f_msg->fa_msg[f_i].len_dif = a_msg[last_i].at[last_aln_i].len_dif;
-		f_msg->fa_msg[f_i].cigar_ref_end = f_msg->fa_msg[f_i].ref_start-1+seed_len + len_dif;	//1-based
+		f_msg->fa_msg[f_i].cigar_ref_end = f_msg->fa_msg[f_i].cigar_ref_start-1+seed_len + f_msg->fa_msg[f_i].len_dif;	//1-based
 		f_msg->fa_msg[f_i].edit_dis = a_msg[last_i].at[last_aln_i].edit_dis;
 	}
+	printcigar(f_msg->fa_msg[f_i].cigar, f_msg->fa_msg[f_i].cigar_len);
+	fprintf(stdout, "\n");
 	for (--i; i >= 0; --i)
 	{
 		seed_i = f_msg->fa_msg[f_i].seed_i[i];
@@ -437,13 +588,21 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i, bntseq_t *bns, int8_t 
 		//	fprintf(stdout, "\n");
 		len1 = getintv1(seq1, bns, pac, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, seed_len);
 		len2 = getintv2(seq2, read_seq, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, &b, seed_len);
+		min_b = abs(len2-len1)+3;
+		b = MAXOFTWO(b, min_b);
 		cigar_len = 0;
-		score = ksw_global(len2, seq2, len1, seq1, 5, &mat, 2, 1, b, &cigar_len, &cigar);
-		for (j = 0; j < cigar_len; j++)
-			fprintf(stdout, "%d%c", (cigar[j])>>4, "MIDNHS"[cigar[j]&0xf]);
-		printf("\t%d\n", b);
-		merge_cigar(cigar_len, cigar, f_msg, f_i);	//merge interval to frag
-		merge_cigar(a_msg[seed_i].at[seed_aln_i].cigar_len, a_msg[seed_i].at[seed_aln_i].cigar, f_msg, f_i);	//merge seed to frag
+		score = ksw_global(len2, seq2, len1, seq1, 5, &sc_mat, 2, 1, b, &cigar_len, &cigar);
+//		for (j = 0; j < cigar_len; j++)
+//			fprintf(stdout, "%d%c", (cigar[j])>>4, "MIDNHS"[cigar[j]&0xf]);
+//		printf("\t%d\n", b);
+		printcigar(f_msg->fa_msg[f_i].cigar, f_msg->fa_msg[f_i].cigar_len);
+		merge_cigar(f_msg, f_i, cigar, cigar_len, len1, len2, bns, pac, read_seq);
+		printcigar(cigar, cigar_len);	printcigar(f_msg->fa_msg[f_i].cigar, f_msg->fa_msg[f_i].cigar_len);
+
+		printcigar(a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len);	
+		merge_cigar(f_msg, f_i, a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len, seed_len+a_msg[seed_i].at[seed_aln_i].len_dif, seed_len, bns, pac, read_seq);//merge seed to frag
+		printcigar(f_msg->fa_msg[f_i].cigar, f_msg->fa_msg[f_i].cigar_len);
+		fprintf(stdout, "\n");
 		last_i = seed_i;
 		last_aln_i = seed_aln_i;
 	}

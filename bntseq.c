@@ -324,6 +324,8 @@ int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, con
 	int64_t pac_coor;
 	int i,k;
 	
+	if (start == 247115470)
+		printf("here");
 	*FLAG = 0;
 
 	if (start > bns->anns[seq_n-1].len)
