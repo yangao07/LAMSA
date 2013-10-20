@@ -138,41 +138,40 @@ int result_check(s_align* result, int ref_len, int read_len, int* ref_l_os, int*
 			ret = GOOD_ALIGN;
 		}
 	}
-	
-//	printf("ref: %d %d\tread: %d %d\n",result->ref_begin1, result->ref_end1, result->read_begin1, result->read_end1);
-//	printf("ret: %d\n", ret);
+	//	printf("ref: %d %d\tread: %d %d\n",result->ref_begin1, result->ref_end1, result->read_begin1, result->read_end1);
+	//	printf("ret: %d\n", ret);
 	return ret;
 }
 
 //int extend_ssw(char* ref_seq, char* read_seq, int ref_len, int read_len, int* ref_l_os, int* read_l_os, int* ref_r_os, int* read_r_os)
 int extend_ssw(int8_t *ref_num, int8_t *read_num, int ref_len, int read_len, int* ref_l_os, int* read_l_os, int* ref_r_os, int* read_r_os)
 {
-//	int i;
-//	printf("ref: %d\n", ref_len);
-//	for (i = 0; i < ref_len; i++)
-//		printf("%d ", ref_num[i]);
-//	printf("\nread: %d\n", read_len);
-//	for (i = 0; i < read_len; i++)
-//		printf("%d ", read_num[i]);
-//	printf("\n");
+	//	int i;
+	//	printf("ref: %d\n", ref_len);
+	//	for (i = 0; i < ref_len; i++)
+	//		printf("%d ", ref_num[i]);
+	//	printf("\nread: %d\n", read_len);
+	//	for (i = 0; i < read_len; i++)
+	//		printf("%d ", read_num[i]);
+	//	printf("\n");
 	int32_t l, m, k, match = 2, mismatch = 2, gap_open = 3, gap_extension = 1;	// default parameters for genome sequence alignment
 	s_profile* profile;
 	//int8_t* read_num = (int8_t*)malloc(read_len);
 	//int8_t* ref_num  = (int8_t*)malloc(ref_len);	//ref and read seq represented in numbers
 	s_align* result;
 
-	/* This table is used to transform nucleotide letters into numbers. */
-//	int8_t nt_table[128] = {
-//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
-//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-//		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
-//		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-//		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
-//		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4 
-//	};
-	
+		/* This table is used to transform nucleotide letters into numbers. */
+	//	int8_t nt_table[128] = {
+	//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+	//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+	//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+	//		4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+	//		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
+	//		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+	//		4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
+	//		4, 4, 4, 4,  3, 0, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4 
+	//	};
+		
 	// initialize scoring matrix for genome sequences
 	//  A  C  G  T	N (or other ambiguous code) 
 	//  2 -2 -2 -2 	0	A
