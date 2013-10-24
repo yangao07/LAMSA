@@ -24,10 +24,11 @@ int soap_bulid(char *prefix, char *path)
 		strcpy(cmd, path);
 		strcat(cmd, "/soap2-dp-builder ");
 		strcat(cmd, prefix);
-		fprintf(stdout, "Executing soap2-dp-builder ...\n");
-		printf("%s\n", cmd);
+		fprintf(stderr, "Executing soap2-dp-builder ... \n");
+		fprintf(stderr, "%s", cmd);
 		if (system(cmd) != 0 )
 			exit(-1);
+		fprintf(stderr, " done.\n");
 		return 1;
 	}
 	return 0;

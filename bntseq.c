@@ -302,7 +302,7 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 		s = pac_coor > bns->ambs[i+offset].offset ? pac_coor : bns->ambs[i+offset].offset;
 		e = pac_coor + len > (bns->ambs[i+offset].offset + bns->ambs[i+offset].len) ? 
 				bns->ambs[i+offset].offset + bns->ambs[i+offset].len : pac_coor+len;
-		printf("s: %lld e: %lld\n", s, e);
+		//printf("s: %lld e: %lld\n", s, e);
 		if (srand == -1)	//rev
 		{
 			for (j = len-e; j < len-s; j++)
@@ -324,8 +324,6 @@ int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, con
 	int64_t pac_coor;
 	int i,k;
 	
-	if (start == 247115470)
-		printf("here");
 	*FLAG = 0;
 
 	if (start > bns->anns[seq_n-1].len)
@@ -355,44 +353,44 @@ int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, con
 	return 0;
 }
 
-//int main(int argc, char *argv[])
-int fa2pac(int argc, char *argv[])
-{
-	gzFile fp;
-
-	if (argc < 2)
-	{
-		fprintf(stderr, "Usage: fa2pac <in.fa> [<out.prefix>]\n");
-		return 1;
-	}
-	fp = gzopen(argv[1], "r");
-	bns_fa2bnt(fp, (argc < 3)? argv[1] : argv[2]);
-	gzclose(fp);
-
-	//test for pac2fa
-	bntseq_t *bns;
-	bns = bns_restore(argv[1]);
-	int8_t *pac, *seq;
-
-	pac = (int8_t*)calloc(bns->l_pac/4 + 1, 1);
-	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
-
-	int32_t len = 260;
-	int flag=0,i;
-	seq = (int8_t*)calloc(len, 1);
-	pac2fa_core(bns, pac, 1, 0, &len, 1, &flag, seq);
-
-	printf("len:  %d\nflag: %d\n", len, flag);
-	for (i = 0; i < len; i++)
-	{
-		printf("%c", n_char[seq[i]]);
-		if ((i+1) % 50 == 0)
-			printf("\n");
-	}
-	printf("\n");
-	free(pac);
-	free(seq);
-	bns_destroy(bns);
-
-	return 0;
-}
+////int main(int argc, char *argv[])
+//int fa2pac(int argc, char *argv[])
+//{
+//	gzFile fp;
+//
+//	if (argc < 2)
+//	{
+//		fprintf(stderr, "Usage: fa2pac <in.fa> [<out.prefix>]\n");
+//		return 1;
+//	}
+//	fp = gzopen(argv[1], "r");
+//	bns_fa2bnt(fp, (argc < 3)? argv[1] : argv[2]);
+//	gzclose(fp);
+//
+//	//test for pac2fa
+//	bntseq_t *bns;
+//	bns = bns_restore(argv[1]);
+//	int8_t *pac, *seq;
+//
+//	pac = (int8_t*)calloc(bns->l_pac/4 + 1, 1);
+//	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
+//
+//	int32_t len = 260;
+//	int flag=0,i;
+//	seq = (int8_t*)calloc(len, 1);
+//	pac2fa_core(bns, pac, 1, 0, &len, 1, &flag, seq);
+//
+//	printf("len:  %d\nflag: %d\n", len, flag);
+//	for (i = 0; i < len; i++)
+//	{
+//		printf("%c", n_char[seq[i]]);
+//		if ((i+1) % 50 == 0)
+//			printf("\n");
+//	}
+//	printf("\n");
+//	free(pac);
+//	free(seq);
+//	bns_destroy(bns);
+//
+//	return 0;
+//}

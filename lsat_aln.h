@@ -25,7 +25,7 @@
 
 #define SOAP2_DP_DIR "./soap2-dp"
 
-//Copy from samtools-0.1.19
+//copy from samtools-0.1.19
 #define CIGAR_STR "MIDNSHP=XB"
 /*
   CIGAR operations.
@@ -64,7 +64,7 @@ typedef struct {	//全部read包含seed数目信息
 
 typedef struct {
 	int32_t chr;
-	int32_t offset;	//1-base
+	int32_t offset;	//1-base	XXX:64_t?
 	int8_t nsrand;
 	int8_t edit_dis;
 

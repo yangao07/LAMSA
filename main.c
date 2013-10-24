@@ -3,7 +3,7 @@
  *
  * LSAT: A Long Sequence Alignment Tool.
  *
- * Created by Yan Gao on 2013/9/20
+ * Created by Yan Gao on 2013/9/20.
  *
  */
 #include <stdio.h>

@@ -50,7 +50,7 @@ typedef struct {
 	int ex_read_begin;	//1-based
 	int ex_read_end;
 	
-	int cigar_ref_start;	//frag's cigar start of ref, 1-based
+	int cigar_ref_start;	//frag's cigar start of ref, 1-based	XXX int64_t?
 	int cigar_ref_end;		
 	int cigar_read_start;	//frag's cigar start of read, 1-based
 	int cigar_read_end;
