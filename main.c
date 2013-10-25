@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include "lsat_aln.h"
+#include "build_ref.h"
 
 static int usage(void)	//main usage
 {

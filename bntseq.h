@@ -36,5 +36,5 @@ extern char nst_nt4_table[256];
 void bns_fa2bnt(gzFile fp_fa, const char *prefix);
 bntseq_t *bns_restore(const char *prefix);
 void bns_destroy(bntseq_t *bns);
-int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int rev, int *FLAG, int8_t *seq);
+int pac2fa_core(const bntseq_t *bns, const uint8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int rev, int *FLAG, uint8_t *seq);
 #endif

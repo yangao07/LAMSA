@@ -35,7 +35,9 @@ seed_msg *seed_init_msg(void)
 
 	msg->n_read = 0;
 	msg->n_seed = (int *)calloc(READ_INIT_MAX, sizeof(int));
+    msg->last_len = (int *)malloc(READ_INIT_MAX * sizeof(int));
 	msg->seed_max = 0;
+    msg->read_max_len = 0;
 
 	return msg;
 }
@@ -43,6 +45,7 @@ seed_msg *seed_init_msg(void)
 void seed_free_msg(seed_msg *msg)
 {
 	free(msg->n_seed);
+    free(msg->last_len);
 	free(msg);
 }
 
@@ -54,16 +57,14 @@ int split_seed(const char *prefix, seed_msg *s_msg, int seed_len)
 	FILE *outfp;
 	int m_read, n_seed, *new_p, i;
 
-	if ((infp = gzopen(prefix, "r")) == NULL)
-	{
+	if ((infp = gzopen(prefix, "r")) == NULL) {
 		fprintf(stderr, "[lsat_aln] Can't open read file %s\n", prefix);
 		exit(-1);
 	}
 	seq = kseq_init(infp);
 
 	strcpy(out_f, prefix); strcat(out_f, ".seed");
-	if ((outfp = fopen(out_f, "w")) == NULL)
-	{
+	if ((outfp = fopen(out_f, "w")) == NULL) {
 		fprintf(stderr, "[lsat_aln] Can't open seed file %s\n", out_f);
 		exit(-1);
 	}
@@ -75,19 +76,28 @@ int split_seed(const char *prefix, seed_msg *s_msg, int seed_len)
 	{
 		n_seed = ((seq->seq.l / seed_len) + 1) >> 1;
 		if (n_seed > s_msg->seed_max) s_msg->seed_max = n_seed;
+        if (seq->seq.l > s_msg->read_max_len) s_msg->read_max_len = seq->seq.l;
 		if (s_msg->n_read == m_read-1)
 		{
 			m_read <<= 1;
 			if ((new_p = (int*)realloc(s_msg->n_seed, m_read * sizeof(int))) == NULL)
 			{
 				free(s_msg->n_seed);
-				fprintf(stderr, "[lsat_aln] Can't allocate more memory.\n");
+				fprintf(stderr, "[lsat_aln] Can't allocate more memory for n_seed[].\n");
 				exit(1);
 			}
 			s_msg->n_seed = new_p;
+            if ((new_p = (int*)realloc(s_msg->last_len, m_read * sizeof(int))) == NULL)
+            {
+                free(s_msg->last_len);
+                fprintf(stderr, "[lsat_aln] Can't allocate more memory for last_len[].\n");
+                exit(-1);
+            }
+			s_msg->last_len = new_p;
 		}
 		s_msg->n_read++;
 		s_msg->n_seed[s_msg->n_read] = s_msg->n_seed[s_msg->n_read-1] + n_seed;
+        s_msg->last_len[s_msg->n_read] = seq->seq.l - (n_seed * 2 - 1) * seed_len;
 		for (i = 0; i < n_seed; i++)
 		{
 			sprintf(seed_head, ">%s_%d:%d\n", seq->name.s, i, i*seed_len*2);
@@ -155,7 +165,8 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 		x = strtol(s, &t, 10);	
 		if (x == 0)
 		{
-			fprintf(stderr, "[lsat_aln] Cigar ERROR.\n");
+            fprintf(stderr, "%s\n",s);
+			fprintf(stderr, "[lsat_aln] Cigar ERROR 1.\n");
 			exit(-1);
 		}
 		op = toupper(*t);
@@ -171,7 +182,7 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 			case '=':	op = CEQUAL;	break;
 			case 'X':	op = CDIFF;	break;
 			case 'B':	op = CBACK;		bi += x;	break;	
-			default:	fprintf(stderr, "[lsat_aln] Cigar ERROR.\n"); exit(-1); break;
+			default:	fprintf(stderr, "[lsat_aln] Cigar ERROR 2.\n"); exit(-1); break;
 		}
 		if (a_msg[seed_i].at[aln_i].cigar_len == a_msg[seed_i].at[aln_i].cmax)
 		{
@@ -187,7 +198,7 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 	a_msg[seed_i].at[aln_i].bmax = (int)(bd > bi ? bd : bi);
 }
 
-void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, int offset, int srand, int edit_dis, char *cigar)
+void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, int64_t offset, char srand, int edit_dis, char *cigar)
 {   //read_x: (除去unmap和repeat的)read序号, aln_y: read对应的比对结果序号(从1开始)
 	if (aln_y > PER_ALN_N) {
 		fprintf(stderr, "[lsat_aln] setAmsg ERROR!\n");
@@ -212,9 +223,9 @@ int get_min_dis(aln_msg *a_msg, int i, int j, int k, int* flag, int pre_pre, int
         *flag = CHR_DIF;
     	return PRICE_DIF_CHR;
     }
-    int exp = a_msg[pre].at[k].offset + a_msg[pre].at[k].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * 2 * seed_len;	
-    int act = a_msg[i].at[j].offset;
-	int dis = a_msg[pre].at[k].nsrand * (act-exp) - ((a_msg[pre].at[k].nsrand==1)?a_msg[pre].at[k].len_dif:a_msg[i].at[j].len_dif);
+    int64_t exp = a_msg[pre].at[k].offset + a_msg[pre].at[k].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * 2 * seed_len;	
+    int64_t act = a_msg[i].at[j].offset;
+	int64_t dis = a_msg[pre].at[k].nsrand * (act-exp) - ((a_msg[pre].at[k].nsrand==1)?a_msg[pre].at[k].len_dif:a_msg[i].at[j].len_dif);
 
     if (dis > 10) *flag = DELETION;
     else if (dis < -10) *flag = INSERT;
@@ -225,50 +236,14 @@ int get_min_dis(aln_msg *a_msg, int i, int j, int k, int* flag, int pre_pre, int
     return adjest(dis);
 }
 
-// XXX FIXME: path between node that are NOT adjacent.
+// path between node that are NOT adjacent.
 // e.g. 10000;10200;80000;10600/80020;10800/80040 ... 
 // Here, 10600 and 100800 should be selected, rather than 800200 and 800400.
-/*int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_len)
-{
-    int i,j,k;
-    int tmp, min;
-    int flag;
-    int rev_flag = 0;   //reverse
-
-    //Initilization of first cloumn
-    for (j = 0; j < a_msg[0].n_aln; j++)
-    {
-        price[0][j] = 0;
-    }
-
-    for (i = 1; i < n_seed; i++)    //n_seed条seed，相邻两条连接一条路径
-    {
-        for (j = 0; j < a_msg[i].n_aln; j++)
-        {
-            min = price[i-1][0] + get_min_dis(a_msg, i, j, 0, &flag, seed_len);
-            path[i][j].from = 0;
-            path[i][j].flag = flag;
-            for (k = 1; k < a_msg[i-1].n_aln; k++)
-            {
-                if ((tmp = price[i-1][k] + get_min_dis(a_msg, i, j, k, &flag, seed_len)) < min)
-                {
-                    min = tmp;
-                    path[i][j].from = k;
-                    path[i][j].flag = flag;
-                }
-            }
-            price[i][j] = min;
-        }
-    }
-
-    return 0;
-}*/
 int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_len)
 {
 	int i,j,k;
 	int tmp, min;
 	int flag;
-	int rev_flag = 0;	//reverse
 
 	// Initilization of first cloumn
 	for (j = 0; j < a_msg[0].n_aln; j++)
@@ -283,8 +258,7 @@ int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_l
 			path[i][j].flag = flag;
 			path[i][j].pre_pre = 0;
 			for (k = 1; k < a_msg[i-1].n_aln; k++) {
-				if ((tmp = price[i-1][k] + get_min_dis(a_msg, i, j, k, &flag, 0, seed_len)) < min)
-				{
+				if ((tmp = price[i-1][k] + get_min_dis(a_msg, i, j, k, &flag, 0, seed_len)) < min) {
 					min = tmp;
 					path[i][j].from = k;
 					path[i][j].flag = flag;
@@ -293,8 +267,7 @@ int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_l
 			}
 			if (i >= 2)	{
 				for (k = 0; k < a_msg[i-2].n_aln; k++) {
-					if ((tmp = price[i-2][k] + PRICE_SKIP + get_min_dis(a_msg, i, j, k, &flag, 1, seed_len)) < min)
-					{
+					if ((tmp = price[i-2][k] + PRICE_SKIP + get_min_dis(a_msg, i, j, k, &flag, 1, seed_len)) < min)	{
 						min = tmp;
 						path[i][j].from = k;
 						path[i][j].flag = flag;
@@ -312,8 +285,7 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed
 {
     if (n_seed == -1)
     {
-        fprintf(stdout, "frag: 0\n");    
-        return 0;
+        return 1;
     }
     //确定回溯起点
     int i, pre;
@@ -358,12 +330,14 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed
 	frag_set_msg(a_msg, 0, pos, 0, f_msg, frag_num, seed_len);
 	return 0;
 }
-int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, int8_t *pac)
+int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
 {
 	FILE *result_p;
 	char line[1024];
 	int n_read/*start from 1*/, n_seed, i;
-	int read_id, chr, offset, srand, edit_dis;
+    char srand;
+	int read_id, chr, edit_dis;
+    long long offset;
 	char cigar[1024];
 	
 	aln_msg *a_msg;
@@ -381,11 +355,11 @@ int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_ms
 	f_msg = frag_init_msg(s_msg->seed_max);
 	readfp = gzopen(read_prefix, "r");
 	read_seq_t = kseq_init(readfp);
-	read_seq = calloc(100001, sizeof(char));
+	read_seq = calloc(s_msg->read_max_len+1, sizeof(char));
 
 	for (i = 0; i < s_msg->seed_max; i++) {
 		price[i] = (int*)malloc(PER_ALN_N * sizeof(int));
-		path[i] = (int*)malloc(PER_ALN_N * sizeof(path_msg));
+		path[i] = (path_msg*)malloc(PER_ALN_N * sizeof(path_msg));
 	}
 	if ((result_p = fopen(seed_result, "r")) == NULL) {
 		fprintf(stderr, "[lsat_aln] Can't open seed result file %s.\n", seed_result); 
@@ -400,7 +374,7 @@ int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_ms
 	while (fgets(line, 1024, result_p) != NULL)
 	{
 		//XXX for new-out.0 add 'cigar'
-		sscanf(line, "%d %d %d %c %d %s", &read_id, &chr, &offset, &srand, &edit_dis, cigar);
+		sscanf(line, "%d %d %lld %c %d %s", &read_id, &chr, &offset, &srand, &edit_dis, cigar);
 		if (read_id == last_id) {		// seeds from same read
 			if (++multi_aln > PER_ALN_N) {
 				if (!REPEAT) {
@@ -408,21 +382,21 @@ int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_ms
 					REPEAT = 1;
 				}
 				continue;
-			} else setAmsg(a_msg, n_seed, multi_aln, read_id - s_msg->n_seed[n_read-1], chr, offset, srand, edit_dis, cigar);
+			} else setAmsg(a_msg, n_seed, multi_aln, read_id - s_msg->n_seed[n_read-1], chr, (int64_t)offset, srand, edit_dis, cigar);
 		} else {		//get a new seed
 			REPEAT = 0;
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
-					fprintf(stdout, "read %d n_seed %d\n", n_read, n_seed);
+					//fprintf(stdout, "read %d n_seed %d\n", n_read, n_seed);
 					path_dp(a_msg, n_seed, path, price, seed_len);
-					backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg);
+					if (backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg) != 1)
 					/* SW-extenging */
-					frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len);
+					    frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
 				}
 				n_seed = 0;
 				while (s_msg->n_seed[n_read] < read_id) {
 					if (FLAG == 0) FLAG = 1;
-					else fprintf(stdout, "read %d n_seed 0\nfrag: 0\n\n", n_read);
+					//else fprintf(stdout, "read %d n_seed 0\nfrag: 0\n\n", n_read);
 					n_read++;
 					if (kseq_read(read_seq_t) < 0) {
 						fprintf(stderr, "[lsat_aln] Read file ERROR.\n");
@@ -442,11 +416,11 @@ int frag_cluster(char *ref_prefix, char *read_prefix, char *seed_result, seed_ms
 			setAmsg(a_msg, n_seed, multi_aln, read_id-s_msg->n_seed[n_read-1], chr, offset, srand, edit_dis, cigar);
 		}
 	}
-	fprintf(stdout, "n_read %d n_seed %d\n", n_read, n_seed);
+	//fprintf(stdout, "n_read %d n_seed %d\n", n_read, n_seed);
 	path_dp(a_msg, n_seed, path, price, seed_len);
-	backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg);
+	if (backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg) != 1)
 	/* SW-extenging */
-	frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len);
+        frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
 
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);
@@ -550,10 +524,10 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int no_soap2_
 	/* SW-extending for per-frag */
 	fprintf(stderr, "[lsat_aln] Restoring ref-indices ... ");
 	bns = bns_restore(ref_prefix);
-	int8_t *pac = (int8_t*)calloc(bns->l_pac/4+1, 1);
+	uint8_t *pac = (uint8_t*)calloc(bns->l_pac/4+1, 1);
 	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);	fprintf(stderr, "done.\n");
 	fprintf(stderr, "[lsat_aln] Clustering frag ... ");
-	frag_cluster(ref_prefix, read_prefix, seed_result, s_msg, opt_l, bns, pac);	fprintf(stderr, "done.\n");
+	frag_cluster(read_prefix, seed_result, s_msg, opt_l, bns, pac);	fprintf(stderr, "done.\n");
 
 	seed_free_msg(s_msg);
 	free(pac);

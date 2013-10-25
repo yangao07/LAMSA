@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #define READ_INIT_MAX 3000
-#define SEED_INIT_MAX 1000
+//#define SEED_INIT_MAX 1000
 
 #define SEED_LEN 100
 #define PER_ALN_N 100
@@ -57,14 +57,15 @@
 
 typedef struct {	//全部read包含seed数目信息
     int n_read;		//获取的read总数目			
-    int *n_seed;	//存放每条read的seed数目	
-					//XXX last_len
+    int *n_seed;	//存放每条read的seed数目    index from 1
+	int *last_len;	//last_len                  index from 1
     int seed_max;   //contig中分割成短read的数目最大值	
+    int read_max_len;    //max length of read
 } seed_msg;
 
 typedef struct {
 	int32_t chr;
-	int32_t offset;	//1-base	XXX:64_t?
+	int64_t offset;	//1-base
 	int8_t nsrand;
 	int8_t edit_dis;
 

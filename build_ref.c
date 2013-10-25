@@ -38,7 +38,7 @@ int lsat_index(int argc, char *argv[])
 	char *prefix=0;
 	char path[1024]="\0";
 	int c;
-	clock_t t;
+	//XXX clock_t t;  
 	
 	while ((c = getopt(argc, argv, "s:")) >= 0)
 	{

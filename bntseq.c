@@ -224,7 +224,11 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 		fp = fopen(amb_filename, "r");
 		fscanf(fp, "%lld%d%d", &xx, &n_seqs, &bns->n_holes);
 		l_pac = xx;
-		//XXX//xassert(l_pac == bns->l_pac && n_seqs == bns->n_seqs, "inconsistent .ann and .amb files.");
+		//xassert(l_pac == bns->l_pac && n_seqs == bns->n_seqs, "inconsistent .ann and .amb files.");
+        if (l_pac != bns->l_pac || n_seqs != bns->n_seqs) {
+            fprintf(stderr, "[bntseq] inconsistent .ann and .amb files.\n");
+            exit(-1);
+        }
 		bns->ambs = (bntamb1_t*)calloc(bns->n_holes, sizeof(bntamb1_t));
 		for (i = 0; i < bns->n_holes; ++i) {
 			bntamb1_t *p = bns->ambs + i;
@@ -249,7 +253,7 @@ bntseq_t *bns_restore(const char *prefix)
 	return bns_restore_core(ann_filename, amb_filename, pac_filename);
 }
 
-int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_coor, const int64_t len, int8_t *seq, const int srand)
+int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_coor, const int64_t len, uint8_t *seq, const int srand)
 {
 	int i;
 	int32_t offset = bns->anns[seq_n-1].ambs_offset;
@@ -319,10 +323,10 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 
 #define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
 //convert binary seq to 'ACGT' sequence
-int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int srand, int *FLAG, int8_t *seq)
+int pac2fa_core(const bntseq_t *bns, const uint8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int srand, int *FLAG, uint8_t *seq)
 {
 	int64_t pac_coor;
-	int i,k;
+	int64_t i,k;
 	
 	*FLAG = 0;
 
@@ -370,14 +374,14 @@ int pac2fa_core(const bntseq_t *bns, const int8_t *pac, const int32_t seq_n, con
 //	//test for pac2fa
 //	bntseq_t *bns;
 //	bns = bns_restore(argv[1]);
-//	int8_t *pac, *seq;
+//	uint8_t *pac, *seq;
 //
-//	pac = (int8_t*)calloc(bns->l_pac/4 + 1, 1);
+//	pac = (uint8_t*)calloc(bns->l_pac/4 + 1, 1);
 //	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
 //
 //	int32_t len = 260;
 //	int flag=0,i;
-//	seq = (int8_t*)calloc(len, 1);
+//	seq = (uint8_t*)calloc(len, 1);
 //	pac2fa_core(bns, pac, 1, 0, &len, 1, &flag, seq);
 //
 //	printf("len:  %d\nflag: %d\n", len, flag);
