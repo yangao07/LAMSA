@@ -294,7 +294,7 @@ int getintv1(uint8_t *seq1, bntseq_t *bns, uint8_t *pac, aln_msg *a_msg, int see
 
 int getintv2(uint8_t *seq2, char *read_seq, aln_msg *a_msg, int seed1_i, int seed1_aln_i, int seed2_i, int seed2_aln_i, int *band_width, int seed_len)
 {
-	int32_t i;
+	int32_t i, s;
 	int j;
 
 	//set band-width

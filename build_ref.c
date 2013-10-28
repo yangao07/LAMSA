@@ -21,9 +21,8 @@ int soap_bulid(char *prefix, char *path)
 		//soap2-dp-bulid prefix
 		char cmd[1024];
 		
-		strcpy(cmd, path);
-		strcat(cmd, "/soap2-dp-builder ");
-		strcat(cmd, prefix);
+		strcpy(cmd, path); strcat(cmd, "/soap2-dp-builder "); strcat(cmd, prefix);
+        strcat(cmd, " > "); strcat(cmd, prefix), strcat(cmd, ".build");
 		fprintf(stderr, "Executing soap2-dp-builder ... \n");
 		fprintf(stderr, "%s", cmd);
 		if (system(cmd) != 0 )
