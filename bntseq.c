@@ -197,6 +197,11 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 	bns = (bntseq_t*)calloc(1, sizeof(bntseq_t));
 	{ // read .ann
 		fp = fopen(ann_filename, "r");
+        if (fp == NULL)
+        {
+            fprintf(stderr, "[bntseq] Wrong index path.\n");
+            exit(-1);
+        }
 		fscanf(fp, "%lld%d", &xx, &bns->n_seqs);
 		bns->l_pac = xx;
 		bns->anns = (bntann1_t*)calloc(bns->n_seqs, sizeof(bntann1_t));

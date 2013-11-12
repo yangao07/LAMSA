@@ -387,7 +387,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 			REPEAT = 0;
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
-					//fprintf(stdout, "read %d n_seed %d\n", n_read, n_seed);
+					fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
 					path_dp(a_msg, n_seed, path, price, seed_len);
 					if (backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg) != 1)
 					/* SW-extenging */
@@ -416,7 +416,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 			setAmsg(a_msg, n_seed, multi_aln, read_id-s_msg->n_seed[n_read-1], chr, offset, srand, edit_dis, cigar);
 		}
 	}
-	//fprintf(stdout, "n_read %d n_seed %d\n", n_read, n_seed);
+	fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
 	path_dp(a_msg, n_seed, path, price, seed_len);
 	if (backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg) != 1)
 	/* SW-extenging */
