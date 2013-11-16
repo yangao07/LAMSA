@@ -124,6 +124,7 @@ aln_msg *aln_init_msg(int seed_max)
 	{
 		msg[i].read_id = -1;
     	msg[i].n_aln = 0;
+		msg[i].skip = 0;
 		msg[i].at = (aln_t*)malloc(PER_ALN_N * sizeof(aln_t));
 		for (j = 0; j < PER_ALN_N; j++)
 		{
@@ -213,64 +214,245 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, in
 	setCigar(a_msg, read_x-1, aln_y-1,  cigar);
 }
 
-int get_min_dis(aln_msg *a_msg, int i, int j, int k, int* flag, int pre_pre, int seed_len)    //(i,j)对应节点，来自i-1的第k个aln
+int get_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, int seed_len)    //(i,j)对应节点，来自pre的第pre_a个aln
 {
-	int pre = (pre_pre == 1)?(i-2):(i-1);
     if (pre < 0) {fprintf(stderr, "[lsat_aln] a_msg error.\n"); exit(0);}
 
-    if (a_msg[i].at[j].chr != a_msg[pre].at[k].chr || a_msg[i].at[j].nsrand != a_msg[pre].at[k].nsrand)	//different chr or different srnad
+    if (a_msg[i].at[j].chr != a_msg[pre].at[pre_a].chr || a_msg[i].at[j].nsrand != a_msg[pre].at[pre_a].nsrand)	//different chr or different srnad
     {
         *flag = CHR_DIF;
     	return PRICE_DIF_CHR;
     }
-    int64_t exp = a_msg[pre].at[k].offset + a_msg[pre].at[k].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * 2 * seed_len;	
+    int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * 2 * seed_len;	
     int64_t act = a_msg[i].at[j].offset;
-	int64_t dis = a_msg[pre].at[k].nsrand * (act-exp) - ((a_msg[pre].at[k].nsrand==1)?a_msg[pre].at[k].len_dif:a_msg[i].at[j].len_dif);
+	int64_t dis = a_msg[pre].at[pre_a].nsrand * (act-exp) - ((a_msg[pre].at[pre_a].nsrand==1)?a_msg[pre].at[pre_a].len_dif:a_msg[i].at[j].len_dif);
 
-    if (dis > 10) *flag = DELETION;
-    else if (dis < -10) *flag = INSERT;
-    else *flag = MATCH; 
+    if (dis > 10 && dis < DEL_THD) *flag = DELETION;
+    else if (dis < -10 && dis >= (0-((a_msg[i].read_id-a_msg[pre].read_id)*2-1)*seed_len)) *flag = INSERT;
+    else if (dis <= 10 && dis >= -10) *flag = MATCH; 
+	else *flag = UNCONNECT;
+
     dis=(dis>0?dis:(0-dis)); //Absolute value
 	//dis = offset_dis + pre.edit_dis + pre.cigar_len
-	dis += (a_msg[pre].at[k].edit_dis + a_msg[pre].at[k].cigar_len);
+	dis += (a_msg[pre].at[pre_a].edit_dis + a_msg[pre].at[pre_a].cigar_len);
     return adjest(dis);
+}
+
+//return: 1: yes, 0: no.
+int check_in(int seed_i, int line_i, int **line, int *path_end, aln_msg *a_msg, int seed_len)
+{
+	int flag;
+
+	if (path_end[line_i] == 0) return 0;
+	get_dis(a_msg, line[line_i][path_end[line_i]-1], 0, seed_i, 0, &flag, seed_len);
+	if (flag != UNCONNECT || flag != CHR_DIF)
+	{
+		line[line_i][path_end[line_i]] = seed_i;
+		path_end[line_i]++;
+		return 1;
+	}
+	else return 0;
+}
+
+void new_line(int seed_i, int **line, int *path_end, int *path_n)
+{
+	line[*path_n][0] = seed_i;
+	path_end[*path_n] = 1;
+	(*path_n)++;
+}
+
+int main_line_deter(aln_msg *a_msg, int n_seed, int seed_len, int *main_line)
+{
+	int i, j, last_i, path_n, main_i, flag, m_len;
+	int **line, *path_end;
+
+	path_end = (int*)calloc(n_seed, sizeof(int));
+	line = (int**)malloc(n_seed * sizeof(int*));
+	for (i = 0; i < n_seed; i++) line[i] = (int*)malloc(n_seed * sizeof(int));
+	last_i = 0;	path_n = 0; main_i = 0;
+
+	for (i = 0; i < n_seed; i++)
+	{
+		if (a_msg[i].n_aln == 1)
+		{
+			if (check_in(i, last_i, line, path_end, a_msg, seed_len)) 
+			{
+				flag = 1;
+				if (path_end[last_i] > path_end[main_i]) main_i = last_i;
+				continue;
+			}
+			for (j = 0; j < path_n; j++)
+			{
+				if (j == last_i) continue;
+				if (check_in(i, j, line, path_end, a_msg, seed_len))
+				{
+					flag = 1;
+					last_i = j;
+					if (path_end[last_i] > path_end[main_i]) main_i = last_i;
+					break;
+				}
+			}
+			if (flag==0) new_line(i, line, path_end, &path_n);
+		}
+	}
+	main_line = line[main_i];
+	for (i = 0; i < n_seed; i++)
+	{
+		if (i != main_i) free(line[i]);
+	}
+	m_len = path_end[main_i];
+	free(path_end);
+	return m_len; 
+}
+
+int add_path(aln_msg *a_msg, path_msg **path, int **price, int *price_n, int start, int end, int rev, int seed_len)
+{
+	if (start == end) return 0;
+	else if (start > end) {fprintf(stderr, "[add_path] error: start > end.\n"); exit(-1);}
+
+	int i, j, k, last_i, from, to;
+	int con_flag, flag, min, dis;
+
+	if (rev == 1) {//add seeds onto 'end' from end+1 to start 
+		from = start-1;
+		to = end;
+	}
+	else {	//rev == -1, add seeds onto 'start' from start+1 to end 
+		from = end+1;
+		to = start;
+	}
+	price[to][0] = 0; price_n[to] = 1; path[to][0].flag = PATH_END; last_i = to;
+	for (i = to-rev; i != from; i=i-rev)
+	{
+		price_n[i] = 0;
+		for (j = 0; j < a_msg[i].n_aln; j++)
+		{
+			flag = 0; min = -1;
+			for (k = 0; k < price_n[last_i]; k++) {
+				dis = price[last_i][k] + get_dis(a_msg, i, j, last_i, k, &con_flag, seed_len);
+				if (con_flag != UNCONNECT && con_flag != CHR_DIF && ((min == -1)||(dis < min)))
+				{
+					min = dis;
+					path[i][j].from.x = last_i;
+					path[i][j].from.y = k;
+					path[i][j].flag = con_flag;
+					flag = 1;
+				}
+			}
+			if (flag) { 
+				price[i][price_n[i]] = min;
+				price_n[i]++;
+			}
+		}
+		if (price_n[i] > 0) last_i = i;
+	}
+	if (rev == 1)	//repair the orientation and construce a minmum path, like reverse a single linked list.
+	{
+		int curr_p_x, curr_p_y, curr_f_x, curr_f_y, curr_flag, pre_p_x, pre_p_y, pre_f_x, pre_f_y, pre_flag, min_i;
+		for (i = start; i < to; i++)
+		{
+			if (price_n[i] > 0)
+			{
+				min = -1;
+				for (j = 0; j < price_n[i]; j++)
+				{
+					if (min == -1 || price[i][j] < min)
+					{
+						min = price[i][j];
+						min_i = j;
+					}
+				}
+				
+				pre_p_x = i; pre_p_y = min_i; pre_f_x = path[i][min_i].from.x; pre_f_y = path[i][min_i].from.y; pre_flag = path[i][min_i].flag;
+				path[i][min_i].flag = PATH_END;
+				while (pre_flag != PATH_END) {
+					curr_p_x = pre_f_x; curr_p_y = pre_f_y;
+					curr_f_x = path[curr_p_x][curr_p_y].from.x; curr_f_y = path[curr_p_x][curr_p_y].from.y;
+					curr_flag = path[curr_p_x][curr_p_y].flag;
+
+					path[curr_p_x][curr_p_y].from.x = pre_p_x;
+					path[curr_p_x][curr_p_y].from.y = pre_p_y;
+					path[curr_p_x][curr_p_y].flag = pre_flag;
+
+					pre_p_x = curr_p_x; pre_p_y = curr_p_y;
+					pre_f_x = curr_f_x; pre_f_y = curr_f_y;
+					pre_flag = curr_flag;
+				}
+				break;
+			}
+		}
+	}
+	return 1;
+}
+/********************************************/
+/*	1. Use uniquely aligned seeds to:		*
+ *		Determine the MAIN LINE.			*
+ *	2. Add other seeds to the MAIN LINE.	*/
+/********************************************/      
+int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int *price_n, int seed_len, int n_seq)
+{
+	int i, m_len;
+	int *main_line=NULL;	//uniq[n_seed], uniq_len;
+
+	//1. Determine the main line: 
+	m_len = main_line_deter(a_msg, n_seed, seed_len, main_line);
+	if (m_len == 0)
+	{
+		fprintf(stderr, "[path_dp] no seed is uniquely aligned to the ref.\n");
+		exit(-1);
+	}
+
+	//2. Add other seeds to the main line.
+	add_path(a_msg, path, price, price_n, 0, main_line[0], 1, seed_len);
+	for (i = 0; i < m_len-1; i++)
+	{
+		add_path(a_msg, path, price, price_n, main_line[i], main_line[i+1], -1, seed_len);
+	}
+	add_path(a_msg, path, price, price_n, main_line[i], n_seed-1, -1, seed_len);
+
+	free(main_line);
+	return 0;
 }
 
 // path between node that are NOT adjacent.
 // e.g. 10000;10200;80000;10600/80020;10800/80040 ... 
-// Here, 10600 and 100800 should be selected, rather than 800200 and 800400.
-int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_len)
+// Here, 10600 and 10800 should be selected, rather than 800200 and 800400.
+/*
+int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_len, int n_seqs)
 {
 	int i,j,k;
 	int tmp, min;
-	int flag;
+	int aln_flag;
+	//if all the alignments of current seed can NOT connect with previous seed, long-skip is allowed until a connection appears.
+	//NOTE: the alignments of skiped seeds should be retained.
 
 	// Initilization of first cloumn
 	for (j = 0; j < a_msg[0].n_aln; j++)
 		price[0][j] = 0;
-
+	// DP : get one or more main path (XXX maybe two is more meaningful)
 	for (i = 1; i < n_seed; i++) {	//n_seed seeds, two adjacent seeds have a path
-		//for all alns, sort before search OR search directly XXX
+		//for all alignments, sort before search OR search directly XXX
 		//sort by tag 'NM'.
 		for (j = 0; j < a_msg[i].n_aln; j++) {
-			min = price[i-1][0] + get_min_dis(a_msg, i, j, 0, &flag,0, seed_len);
+			//XXX modify the process of DP
+			min = price[i-1][0] + get_dis(a_msg, i, j, 0, &aln_flag,0, seed_len);
 			path[i][j].from = 0;
-			path[i][j].flag = flag;
+			path[i][j].flag = aln_flag;
 			path[i][j].pre_pre = 0;
 			for (k = 1; k < a_msg[i-1].n_aln; k++) {
-				if ((tmp = price[i-1][k] + get_min_dis(a_msg, i, j, k, &flag, 0, seed_len)) < min) {
+				if ((tmp = price[i-1][k] + get_dis(a_msg, i, j, k, &aln_flag, 0, seed_len)) < min) {
 					min = tmp;
 					path[i][j].from = k;
-					path[i][j].flag = flag;
+					path[i][j].flag = aln_flag;
 					path[i][j].pre_pre = 0;
 				}
 			}
 			if (i >= 2)	{
 				for (k = 0; k < a_msg[i-2].n_aln; k++) {
-					if ((tmp = price[i-2][k] + PRICE_SKIP + get_min_dis(a_msg, i, j, k, &flag, 1, seed_len)) < min)	{
+					if ((tmp = price[i-2][k] + PRICE_SKIP + get_dis(a_msg, i, j, k, &aln_flag, 1, seed_len)) < min)	{
 						min = tmp;
 						path[i][j].from = k;
-						path[i][j].flag = flag;
+						path[i][j].flag = aln_flag;
 						path[i][j].pre_pre = 1;
 					}
 				}
@@ -280,56 +462,56 @@ int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int seed_l
 	}
 	return 0;
 }
+*/
 
-int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed_len, frag_msg *f_msg)  //from end to start, find every fragment's postion
+int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int *price_n, int seed_len, frag_msg *f_msg)  //from end to start, find every fragment's postion
 {
     if (n_seed == -1)
     {
         return 1;
     }
-    //确定回溯起点
-    int i, pre;
-    int min_pos=0, min_score=price[n_seed][0];
-    for (i = 1; i < a_msg[n_seed].n_aln; i++) {
-        if (price[n_seed][i] < min_score) {
-            min_pos = i;
-            min_score = price[n_seed][i];
-        }
+    //Determin the start point of backtrack.
+    int i, j, min, min_i;//(path[i][min_i])
+    for (i = n_seed-1; i >= 0; i--)
+    {
+    	if (price_n[i] > 0) {
+    		min = -1;
+			for (j = 0; j < price_n[i]; j++)
+			{
+				if (min == -1 || price[i][j] < min)
+				{
+					min = price[i][j];
+					min_i = j;
+				}
+			}
+			break;
+    	}
     }
-    //回溯，确定fragment
-    int frag_num=0, pos = min_pos, flag = 0;
+    //backtrack from (i, min_i)
+    int last_x = i, last_y = min_i, frag_num = 0, tmp, flag = 0;
     //first end
-	frag_set_msg(a_msg, n_seed, pos, 1, f_msg, frag_num, seed_len);
-	i = n_seed;
-	while (i > 0)
-	{
-		if (path[i][pos].flag != MATCH) {
-			//start
-			frag_set_msg(a_msg, i, pos, 0, f_msg, frag_num, seed_len);
-			flag = 1;
-			frag_num++;
-		}
+    frag_set_msg(a_msg, last_x, last_y, 1, f_msg, frag_num, seed_len);
+    while (path[last_x][last_y].flag != PATH_END) {
+    	if (path[last_x][last_y].flag != MATCH) {
+    		//start
+    		frag_set_msg(a_msg, last_x, last_y, 0, f_msg, frag_num, seed_len);
+    		flag = 1;
+    		frag_num++;
+    	}
+    	tmp = last_x;
+    	last_x = path[last_x][last_y].from.x;
+    	last_y = path[tmp][last_y].from.y;
 
-		if (path[i][pos].pre_pre) {
-			pre = i-2;
-		} else pre = i-1;
-
-		if (pre < 0) {
-			fprintf(stderr, "[lsat_aln] Error!\n");
-			exit(-1);
-		}
-		pos = path[i][pos].from;
-
-		if (flag == 1) {
-			frag_set_msg(a_msg, pre, pos, 1, f_msg, frag_num, seed_len);
-			flag = 0;
-		} else frag_set_msg(a_msg, pre, pos, 2, f_msg, frag_num, seed_len);
-		i = pre;
-	}
-    //last start
-	frag_set_msg(a_msg, 0, pos, 0, f_msg, frag_num, seed_len);
+    	if (flag == 1) {
+    		//next end
+    		frag_set_msg(a_msg, last_x, last_y, 1, f_msg, frag_num, seed_len);
+    		flag = 0; 
+    	} else frag_set_msg(a_msg, last_x, last_y, 2, f_msg, frag_num, seed_len);
+    }
+    frag_set_msg(a_msg, last_x, last_y, 0, f_msg, frag_num, seed_len);
 	return 0;
 }
+
 int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
 {
 	FILE *result_p;
@@ -341,7 +523,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	char cigar[1024];
 	
 	aln_msg *a_msg;
-	int **price;
+	int **price, *price_n;
 	path_msg **path;
 	frag_msg *f_msg;
 	gzFile readfp;
@@ -351,11 +533,12 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	//alloc mem and initialization
 	a_msg = aln_init_msg(s_msg->seed_max);
 	price = (int**)malloc(s_msg->seed_max * sizeof(int*));
+	price_n = (int*)malloc(s_msg->seed_max * sizeof(int));
 	path = (path_msg**)malloc(s_msg->seed_max * sizeof(path_msg*));
 	f_msg = frag_init_msg(s_msg->seed_max);
 	readfp = gzopen(read_prefix, "r");
 	read_seq_t = kseq_init(readfp);
-	read_seq = calloc(s_msg->read_max_len+1, sizeof(char));
+	read_seq = (char*)calloc(s_msg->read_max_len+1, sizeof(char));
 
 	for (i = 0; i < s_msg->seed_max; i++) {
 		price[i] = (int*)malloc(PER_ALN_N * sizeof(int));
@@ -388,8 +571,8 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
 					fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
-					path_dp(a_msg, n_seed, path, price, seed_len);
-					if (backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg) != 1)
+					path_dp(a_msg, n_seed, path, price, price_n, seed_len, bns->n_seqs);
+					if (backtrack(a_msg, path, n_seed, price, price_n, seed_len, f_msg) != 1)
 					/* SW-extenging */
 					    frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
 				}
@@ -417,8 +600,8 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 		}
 	}
 	fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
-	path_dp(a_msg, n_seed, path, price, seed_len);
-	if (backtrack(a_msg, path, n_seed-1, price, seed_len, f_msg) != 1)
+	path_dp(a_msg, n_seed, path, price, price_n, seed_len, bns->n_seqs);
+	if (backtrack(a_msg, path, n_seed, price, price_n, seed_len, f_msg) != 1)
 	/* SW-extenging */
         frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
 
@@ -426,11 +609,11 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	aln_free_msg(a_msg, s_msg->seed_max);
 	for (i = 0; i < s_msg->seed_max; i++)
 	{ free(price[i]); free(path[i]); }
-	free(price); free(path);
+	free(price); free(price_n); free(path);
 	frag_free_msg(f_msg);
 	gzclose(readfp);
 	kseq_destroy(read_seq_t);
-	//free(read_seq);
+	free(read_seq);
 
 	return 0;
 }

@@ -15,6 +15,10 @@
 #define DELETION 2
 #define CHR_DIF 3
 #define REVERSE 4
+#define UNCONNECT 5
+#define PATH_END 6
+
+#define DEL_THD 10000
 #define THRSHOLD 50
 
 #define PRICE_DIF_CHR 3000	//相邻read比对到不同chr上的路径代价
@@ -79,13 +83,18 @@ typedef struct {
 typedef struct {
 	int32_t read_id;
 	int8_t n_aln;
+	int skip;
 	aln_t *at;	
 } aln_msg;
 
 typedef struct {
+	int x;
+	int y;
+} from_t;
+
+typedef struct {
     int flag;   //MATCH INSERT DELETION
-    int from;
-	int pre_pre;	//skip one node
+    from_t from;
 } path_msg;
 
 int lsat_aln(int argc, char* argv[]);
