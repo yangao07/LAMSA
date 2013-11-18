@@ -8,25 +8,25 @@ AC_KSEQ_H	kseq.h	31;"	d
 BAD_ALIGN	frag_check.h	94;"	d
 BNTSEQ_H	bntseq.h	2;"	d
 BUILD_REF_H	build_ref.h	2;"	d
-CBACK	lsat_aln.h	55;"	d
+CBACK	lsat_aln.h	56;"	d
 CC	Makefile	/^CC=			gcc$/;"	m
-CDEL	lsat_aln.h	41;"	d
-CDIFF	lsat_aln.h	54;"	d
-CEQUAL	lsat_aln.h	52;"	d
+CDEL	lsat_aln.h	42;"	d
+CDIFF	lsat_aln.h	55;"	d
+CEQUAL	lsat_aln.h	53;"	d
 CFLAGS	Makefile	/^CFLAGS=		-g -Wall -O0$/;"	m
-CHARD_CLIP	lsat_aln.h	48;"	d
+CHARD_CLIP	lsat_aln.h	49;"	d
 CHR_DIF	lsat_aln.h	16;"	d
-CIGAR_GEN	lsat_aln.h	58;"	d
-CIGAR_SHIFT	lsat_aln.h	57;"	d
-CIGAR_STR	lsat_aln.h	32;"	d
-CINS	lsat_aln.h	39;"	d
-CMATCH	lsat_aln.h	37;"	d
+CIGAR_GEN	lsat_aln.h	59;"	d
+CIGAR_SHIFT	lsat_aln.h	58;"	d
+CIGAR_STR	lsat_aln.h	33;"	d
+CINS	lsat_aln.h	40;"	d
+CMATCH	lsat_aln.h	38;"	d
 COVERED	frag_check.h	99;"	d
-CPAD	lsat_aln.h	50;"	d
-CREF_SKIP	lsat_aln.h	43;"	d
-CSOFT_CLIP	lsat_aln.h	46;"	d
+CPAD	lsat_aln.h	51;"	d
+CREF_SKIP	lsat_aln.h	44;"	d
+CSOFT_CLIP	lsat_aln.h	47;"	d
 DELETION	lsat_aln.h	15;"	d
-DEL_THD	lsat_aln.h	20;"	d
+DEL_THD	lsat_aln.h	21;"	d
 E	ksw.c	/^	__m128i *qp, *H0, *H1, *E, *Hmax;$/;"	m	struct:_kswq_t	file:
 EDIT_THS	lsat_aln.h	11;"	d
 FRAG_H	frag_check.h	2;"	d
@@ -62,19 +62,20 @@ MAX_MIS	extend_ssw.c	18;"	d	file:
 MINOFTWO	frag_check.h	89;"	d
 MINUS_INF	ksw.c	443;"	d	file:
 OBJS	Makefile	/^OBJS=		main.o build_ref.o	bntseq.o lsat_aln.o frag_check.o extend_ssw.o ssw.o ksw.o$/;"	m
+PATH_END	lsat_aln.h	19;"	d
 PER_ALN_N	lsat_aln.h	9;"	d
 PER_LEN	frag_check.c	20;"	d	file:
-PRICE_DIF_CHR	lsat_aln.h	23;"	d
-PRICE_LONG_DEL	lsat_aln.h	24;"	d
-PRICE_SKIP	lsat_aln.h	25;"	d
+PRICE_DIF_CHR	lsat_aln.h	24;"	d
+PRICE_LONG_DEL	lsat_aln.h	25;"	d
+PRICE_SKIP	lsat_aln.h	26;"	d
 PROG	Makefile	/^PROG=		lsat$/;"	m
 READ_INIT_MAX	lsat_aln.h	5;"	d
 REVERSE	lsat_aln.h	17;"	d
 RIGHT	frag_check.h	96;"	d
 SEED_LEN	lsat_aln.h	8;"	d
-SOAP2_DP_DIR	lsat_aln.h	29;"	d
+SOAP2_DP_DIR	lsat_aln.h	30;"	d
 SSW_H	ssw.h	12;"	d
-THRSHOLD	lsat_aln.h	21;"	d
+THRSHOLD	lsat_aln.h	22;"	d
 UNCONNECT	lsat_aln.h	18;"	d
 UNCOVERED	frag_check.h	100;"	d
 UNLIKELY	ksw.c	33;"	d	file:
@@ -96,7 +97,7 @@ __rpac	bntseq.c	329;"	d	file:
 _kswq_t	ksw.c	/^struct _kswq_t {$/;"	s	file:
 _profile	ssw.c	/^struct _profile{$/;"	s	file:
 add_path	lsat_aln.c	/^int add_path(aln_msg *a_msg, path_msg **path, int **price, int *price_n, int start, int end, int rev, int seed_len)$/;"	f
-adjest	lsat_aln.h	27;"	d
+adjest	lsat_aln.h	28;"	d
 align_destroy	ssw.c	/^void align_destroy (s_align* a) {$/;"	f
 alignment_end	ssw.c	/^} alignment_end;$/;"	t	typeref:struct:__anon13	file:
 aln_free_msg	lsat_aln.c	/^void aln_free_msg(aln_msg *a_msg, int seed_max)	\/\/a_msg大小为read_max个$/;"	f
@@ -110,7 +111,7 @@ anno	bntseq.h	/^	char *name, *anno;$/;"	m	struct:__anon1
 anns	bntseq.h	/^	bntann1_t *anns; \/\/ n_seqs elements$/;"	m	struct:__anon3
 at	lsat_aln.h	/^	aln_t *at;	$/;"	m	struct:__anon10
 b_f	frag_check.h	/^	int b_f;$/;"	m	struct:__anon4
-backtrack	lsat_aln.c	/^int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int seed_len, frag_msg *f_msg)  \/\/from end to start, find every fragment's postion$/;"	f
+backtrack	lsat_aln.c	/^int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int *price_n, int seed_len, frag_msg *f_msg)  \/\/from end to start, find every fragment's postion$/;"	f
 banded_sw	ssw.c	/^cigar* banded_sw (const int8_t* ref,$/;"	f
 bias	ssw.c	/^	uint8_t bias;$/;"	m	struct:_profile	file:
 bmax	lsat_aln.h	/^	int bmax;		\/\/max band-width, NOT for this seed-aln, for this in-del case.$/;"	m	struct:__anon9
@@ -201,7 +202,7 @@ lsat_soap2_dp	lsat_aln.c	/^int lsat_soap2_dp(const char *ref_prefix, const char 
 m	kseq.h	/^	size_t l, m;$/;"	m	struct:__kstring_t
 main	ksw.c	/^int main(int argc, char *argv[])$/;"	f
 main	main.c	/^int main(int argc, char *argv[])$/;"	f
-main_line_deter	lsat_aln.c	/^int main_line_deter(aln_msg *a_msg, int n_seed, int seed_len, int *main_line)$/;"	f
+main_line_deter	lsat_aln.c	/^int main_line_deter(aln_msg *a_msg, int n_seed, int seed_len, int *m_i, int **line)$/;"	f
 mat	ssw.c	/^	const int8_t* mat;$/;"	m	struct:_profile	file:
 max	ksw.c	/^	uint8_t shift, mdiff, max, size;$/;"	m	struct:_kswq_t	file:
 max16	ssw.c	137;"	d	file:
@@ -228,7 +229,6 @@ path_dp	lsat_aln.c	/^int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, in
 path_msg	lsat_aln.h	/^} path_msg;$/;"	t	typeref:struct:__anon12
 per_n	frag_check.h	/^	int per_n;$/;"	m	struct:__anon4
 per_seed_max	frag_check.h	/^	int per_seed_max;$/;"	m	struct:__anon5
-pre_pre	lsat_aln.h	/^	int pre_pre;	\/\/skip one node$/;"	m	struct:__anon12
 printcigar	frag_check.c	/^void printcigar(uint32_t *cigar, int cigar_len)$/;"	f
 profile_byte	ssw.c	/^	__m128i* profile_byte;	\/\/ 0: none$/;"	m	struct:_profile	file:
 profile_word	ssw.c	/^	__m128i* profile_word;	\/\/ 0: none$/;"	m	struct:_profile	file:

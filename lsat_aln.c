@@ -214,9 +214,12 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, in
 	setCigar(a_msg, read_x-1, aln_y-1,  cigar);
 }
 
+//XXX order of pre and curr?
 int get_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, int seed_len)    //(i,j)对应节点，来自pre的第pre_a个aln
 {
     if (pre < 0) {fprintf(stderr, "[lsat_aln] a_msg error.\n"); exit(0);}
+
+	if ((pre == i) && (pre_a == j)) {*flag = MATCH; return 0;}
 
     if (a_msg[i].at[j].chr != a_msg[pre].at[pre_a].chr || a_msg[i].at[j].nsrand != a_msg[pre].at[pre_a].nsrand)	//different chr or different srnad
     {
@@ -225,7 +228,7 @@ int get_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, int see
     }
     int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * 2 * seed_len;	
     int64_t act = a_msg[i].at[j].offset;
-	int64_t dis = a_msg[pre].at[pre_a].nsrand * (act-exp) - ((a_msg[pre].at[pre_a].nsrand==1)?a_msg[pre].at[pre_a].len_dif:a_msg[i].at[j].len_dif);
+	int64_t dis = a_msg[pre].at[pre_a].nsrand * (act-exp) - ((a_msg[pre].at[pre_a].nsrand==1)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
 
     if (dis > 10 && dis < DEL_THD) *flag = DELETION;
     else if (dis < -10 && dis >= (0-((a_msg[i].read_id-a_msg[pre].read_id)*2-1)*seed_len)) *flag = INSERT;
@@ -245,7 +248,7 @@ int check_in(int seed_i, int line_i, int **line, int *path_end, aln_msg *a_msg, 
 
 	if (path_end[line_i] == 0) return 0;
 	get_dis(a_msg, line[line_i][path_end[line_i]-1], 0, seed_i, 0, &flag, seed_len);
-	if (flag != UNCONNECT || flag != CHR_DIF)
+	if (flag != UNCONNECT && flag != CHR_DIF)
 	{
 		line[line_i][path_end[line_i]] = seed_i;
 		path_end[line_i]++;
@@ -261,20 +264,19 @@ void new_line(int seed_i, int **line, int *path_end, int *path_n)
 	(*path_n)++;
 }
 
-int main_line_deter(aln_msg *a_msg, int n_seed, int seed_len, int *main_line)
+//method of main-line determination XXX
+int main_line_deter(aln_msg *a_msg, int n_seed, int seed_len, int *m_i, int **line)
 {
 	int i, j, last_i, path_n, main_i, flag, m_len;
-	int **line, *path_end;
 
-	path_end = (int*)calloc(n_seed, sizeof(int));
-	line = (int**)malloc(n_seed * sizeof(int*));
-	for (i = 0; i < n_seed; i++) line[i] = (int*)malloc(n_seed * sizeof(int));
+	int *path_end = (int*)calloc(n_seed, sizeof(int));
 	last_i = 0;	path_n = 0; main_i = 0;
 
 	for (i = 0; i < n_seed; i++)
 	{
 		if (a_msg[i].n_aln == 1)
 		{
+			flag = 0;
 			if (check_in(i, last_i, line, path_end, a_msg, seed_len)) 
 			{
 				flag = 1;
@@ -295,11 +297,7 @@ int main_line_deter(aln_msg *a_msg, int n_seed, int seed_len, int *main_line)
 			if (flag==0) new_line(i, line, path_end, &path_n);
 		}
 	}
-	main_line = line[main_i];
-	for (i = 0; i < n_seed; i++)
-	{
-		if (i != main_i) free(line[i]);
-	}
+	(*m_i) = main_i;
 	m_len = path_end[main_i];
 	free(path_end);
 	return m_len; 
@@ -310,77 +308,99 @@ int add_path(aln_msg *a_msg, path_msg **path, int **price, int *price_n, int sta
 	if (start == end) return 0;
 	else if (start > end) {fprintf(stderr, "[add_path] error: start > end.\n"); exit(-1);}
 
-	int i, j, k, last_i, from, to;
+	int i, j, k, pre_i, anchor, termi;
+	int back_i, back_j;// for rev-path
 	int con_flag, flag, min, dis;
 
-	if (rev == 1) {//add seeds onto 'end' from end+1 to start 
-		from = start-1;
-		to = end;
+	if (rev == 1) {//rev-path add seeds onto 'end' from end+1 to start 
+		termi = start-1;
+		anchor = end;
+
 	}
-	else {	//rev == -1, add seeds onto 'start' from start+1 to end 
-		from = end+1;
-		to = start;
+	else {	//rev == -1/-2, add seeds onto 'start' from start+1 to end 
+		termi = end+1;
+		anchor = start;
 	}
-	price[to][0] = 0; price_n[to] = 1; path[to][0].flag = PATH_END; last_i = to;
-	for (i = to-rev; i != from; i=i-rev)
+	price[anchor][0] = 0; price_n[anchor] = 1; /*path[anchor][0].flag = PATH_END;*/ pre_i = anchor; back_i= anchor; back_j = 0;;
+	if (rev == -1 || rev == 1)	//onepoint
 	{
-		price_n[i] = 0;
-		for (j = 0; j < a_msg[i].n_aln; j++)
+		for (i = anchor-rev; i != termi; i=i-rev)
 		{
-			flag = 0; min = -1;
-			for (k = 0; k < price_n[last_i]; k++) {
-				dis = price[last_i][k] + get_dis(a_msg, i, j, last_i, k, &con_flag, seed_len);
-				if (con_flag != UNCONNECT && con_flag != CHR_DIF && ((min == -1)||(dis < min)))
-				{
-					min = dis;
-					path[i][j].from.x = last_i;
-					path[i][j].from.y = k;
-					path[i][j].flag = con_flag;
-					flag = 1;
+			price_n[i] = 0;
+			for (j = 0; j < a_msg[i].n_aln; j++)
+			{
+				flag = 0; min = -1;
+				for (k = 0; k < a_msg[pre_i].n_aln; k++) {
+					if (price[pre_i][k] == -1) continue;
+					if (rev == 1)
+						dis = price[pre_i][k] + get_dis(a_msg, i, j, pre_i, k, &con_flag, seed_len);
+					else dis = price[pre_i][k] + get_dis(a_msg, pre_i, k, i, j, &con_flag, seed_len);
+					if (con_flag != UNCONNECT && con_flag != CHR_DIF && ((min == -1)||(dis < min)))
+					{
+						min = dis;
+						path[i][j].from.x = pre_i;
+						path[i][j].from.y = k;
+						path[i][j].flag = con_flag;
+						flag = 1;
+					}
 				}
+				if (flag) { price_n[i]++; back_i= i; back_j= j; }
+				price[i][j] = min;
 			}
-			if (flag) { 
-				price[i][price_n[i]] = min;
-				price_n[i]++;
-			}
+			if (price_n[i] > 0) pre_i = i;
 		}
-		if (price_n[i] > 0) last_i = i;
+	}
+	else //rev == -2 : two endpoint
+	{
+		int last_flag;
+		for	(i = anchor+1; i != end+1; i++)
+		{
+			price_n[i] = 0;
+			for (j = 0; j < a_msg[i].n_aln; j++)
+			{
+				flag = 0; min = -1;
+				for (k = 0; k < a_msg[pre_i].n_aln; k++) {
+					if (price[pre_i][k] == -1) continue;
+					dis = price[pre_i][k] + get_dis(a_msg, pre_i, k, i, j, &con_flag, seed_len);
+					if (con_flag != UNCONNECT && con_flag != CHR_DIF) {
+						get_dis(a_msg, i, j, end, 0, &last_flag, seed_len);
+						if (last_flag != UNCONNECT && last_flag != CHR_DIF && ((min == -1)||(dis < min))) {
+							min = dis;
+							path[i][j].from.x = pre_i;
+							path[i][j].from.y = k;
+							path[i][j].flag = con_flag;
+							flag = 1;
+						}
+					}
+				}
+				if (flag) price_n[i]++;
+				price[i][j] = min;
+			}
+			if (price_n[i] > 0) pre_i = i;
+		}
 	}
 	if (rev == 1)	//repair the orientation and construce a minmum path, like reverse a single linked list.
 	{
-		int curr_p_x, curr_p_y, curr_f_x, curr_f_y, curr_flag, pre_p_x, pre_p_y, pre_f_x, pre_f_y, pre_flag, min_i;
-		for (i = start; i < to; i++)
+		int curr_p_x, curr_p_y, curr_f_x, curr_f_y, curr_flag, pre_p_x, pre_p_y, pre_f_x, pre_f_y, pre_flag;
+		if (price_n[back_i] > 0)
 		{
-			if (price_n[i] > 0)
-			{
-				min = -1;
-				for (j = 0; j < price_n[i]; j++)
-				{
-					if (min == -1 || price[i][j] < min)
-					{
-						min = price[i][j];
-						min_i = j;
-					}
-				}
-				
-				pre_p_x = i; pre_p_y = min_i; pre_f_x = path[i][min_i].from.x; pre_f_y = path[i][min_i].from.y; pre_flag = path[i][min_i].flag;
-				path[i][min_i].flag = PATH_END;
-				while (pre_flag != PATH_END) {
-					curr_p_x = pre_f_x; curr_p_y = pre_f_y;
-					curr_f_x = path[curr_p_x][curr_p_y].from.x; curr_f_y = path[curr_p_x][curr_p_y].from.y;
-					curr_flag = path[curr_p_x][curr_p_y].flag;
+			pre_p_x = back_i; pre_p_y = back_j; pre_f_x = path[back_i][back_j].from.x; pre_f_y = path[back_i][back_j].from.y; pre_flag = path[back_i][back_j].flag;
+			path[back_i][back_j].flag = PATH_END;
+			while (pre_p_x != anchor) {
+				curr_p_x = pre_f_x; curr_p_y = pre_f_y;
+				curr_f_x = path[curr_p_x][curr_p_y].from.x; curr_f_y = path[curr_p_x][curr_p_y].from.y;
+				curr_flag = path[curr_p_x][curr_p_y].flag;
 
-					path[curr_p_x][curr_p_y].from.x = pre_p_x;
-					path[curr_p_x][curr_p_y].from.y = pre_p_y;
-					path[curr_p_x][curr_p_y].flag = pre_flag;
+				path[curr_p_x][curr_p_y].from.x = pre_p_x;
+				path[curr_p_x][curr_p_y].from.y = pre_p_y;
+				path[curr_p_x][curr_p_y].flag = pre_flag;
 
-					pre_p_x = curr_p_x; pre_p_y = curr_p_y;
-					pre_f_x = curr_f_x; pre_f_y = curr_f_y;
-					pre_flag = curr_flag;
-				}
-				break;
+				pre_p_x = curr_p_x; pre_p_y = curr_p_y;
+				pre_f_x = curr_f_x; pre_f_y = curr_f_y;
+				pre_flag = curr_flag;
 			}
 		}
+		else {fprintf(stderr, "[add_path] rev error.\n"); exit(-1);}
 	}
 	return 1;
 }
@@ -391,27 +411,33 @@ int add_path(aln_msg *a_msg, path_msg **path, int **price, int *price_n, int sta
 /********************************************/      
 int path_dp(aln_msg *a_msg, int n_seed, path_msg **path, int **price, int *price_n, int seed_len, int n_seq)
 {
-	int i, m_len;
-	int *main_line=NULL;	//uniq[n_seed], uniq_len;
+	int i, m_i, m_len;
+	int **line;
 
 	//1. Determine the main line: 
-	m_len = main_line_deter(a_msg, n_seed, seed_len, main_line);
+	line = (int**)malloc(n_seed * sizeof(int*));
+	for (i = 0; i < n_seed; i++) line[i] = (int*)malloc(n_seed * sizeof(int));
+	m_len = main_line_deter(a_msg, n_seed, seed_len, &m_i, line);
 	if (m_len == 0)
 	{
 		fprintf(stderr, "[path_dp] no seed is uniquely aligned to the ref.\n");
-		exit(-1);
+		return 0;
 	}
+	fprintf(stdout, "main line : %d %d\n", a_msg[line[m_i][0]].read_id, a_msg[line[m_i][m_len-1]].read_id);
 
 	//2. Add other seeds to the main line.
-	add_path(a_msg, path, price, price_n, 0, main_line[0], 1, seed_len);
+	
+	if (add_path(a_msg, path, price, price_n, 0, line[m_i][0], 1, seed_len) == 0) //rev-path one endpoint
+		path[line[m_i][0]][0].flag = PATH_END;
 	for (i = 0; i < m_len-1; i++)
 	{
-		add_path(a_msg, path, price, price_n, main_line[i], main_line[i+1], -1, seed_len);
+		add_path(a_msg, path, price, price_n, line[m_i][i], line[m_i][i+1], -2, seed_len);	//two endpoint
 	}
-	add_path(a_msg, path, price, price_n, main_line[i], n_seed-1, -1, seed_len);
+	add_path(a_msg, path, price, price_n, line[m_i][m_len-1], n_seed-1, -1, seed_len);	//one endpoint
 
-	free(main_line);
-	return 0;
+	for (i = 0; i < n_seed; i++) free(line[i]);
+	free(line);
+	return 1;
 }
 
 // path between node that are NOT adjacent.
@@ -468,7 +494,7 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int *pri
 {
     if (n_seed == -1)
     {
-        return 1;
+        return 0;
     }
     //Determin the start point of backtrack.
     int i, j, min, min_i;//(path[i][min_i])
@@ -476,8 +502,9 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int *pri
     {
     	if (price_n[i] > 0) {
     		min = -1;
-			for (j = 0; j < price_n[i]; j++)
+			for (j = 0; j < a_msg[i].n_aln; j++)
 			{
+				if (price[i][j] == -1) continue;
 				if (min == -1 || price[i][j] < min)
 				{
 					min = price[i][j];
@@ -487,14 +514,17 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int *pri
 			break;
     	}
     }
+	if (min == -1) {fprintf(stderr, "[bacetrack] error : path and price do NOT match.\n"); exit(-1);}
     //backtrack from (i, min_i)
     int last_x = i, last_y = min_i, frag_num = 0, tmp, flag = 0;
     //first end
     frag_set_msg(a_msg, last_x, last_y, 1, f_msg, frag_num, seed_len);
+	fprintf(stdout, "    end   %d ref %d read %d\n", a_msg[last_x].at[last_y].nsrand, a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
     while (path[last_x][last_y].flag != PATH_END) {
     	if (path[last_x][last_y].flag != MATCH) {
     		//start
     		frag_set_msg(a_msg, last_x, last_y, 0, f_msg, frag_num, seed_len);
+			fprintf(stdout, "    start %d ref %d read %d\n", a_msg[last_x].at[last_y].nsrand, a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
     		flag = 1;
     		frag_num++;
     	}
@@ -505,11 +535,13 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int **price, int *pri
     	if (flag == 1) {
     		//next end
     		frag_set_msg(a_msg, last_x, last_y, 1, f_msg, frag_num, seed_len);
+			fprintf(stdout, "    end   %d ref %d read %d\n", a_msg[last_x].at[last_y].nsrand, a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
     		flag = 0; 
     	} else frag_set_msg(a_msg, last_x, last_y, 2, f_msg, frag_num, seed_len);
     }
     frag_set_msg(a_msg, last_x, last_y, 0, f_msg, frag_num, seed_len);
-	return 0;
+	fprintf(stdout, "    start %d ref %d read %d\n", a_msg[last_x].at[last_y].nsrand, a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
+	return 1;
 }
 
 int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
@@ -571,10 +603,10 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
 					fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
-					path_dp(a_msg, n_seed, path, price, price_n, seed_len, bns->n_seqs);
-					if (backtrack(a_msg, path, n_seed, price, price_n, seed_len, f_msg) != 1)
+					if (path_dp(a_msg, n_seed, path, price, price_n, seed_len, bns->n_seqs))
+						if (backtrack(a_msg, path, n_seed, price, price_n, seed_len, f_msg))
 					/* SW-extenging */
-					    frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
+							frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
 				}
 				n_seed = 0;
 				while (s_msg->n_seed[n_read] < read_id) {
@@ -600,10 +632,10 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 		}
 	}
 	fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
-	path_dp(a_msg, n_seed, path, price, price_n, seed_len, bns->n_seqs);
-	if (backtrack(a_msg, path, n_seed, price, price_n, seed_len, f_msg) != 1)
-	/* SW-extenging */
-        frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
+	if (path_dp(a_msg, n_seed, path, price, price_n, seed_len, bns->n_seqs))
+		if (backtrack(a_msg, path, n_seed, price, price_n, seed_len, f_msg))
+		/* SW-extenging */
+			frag_check(bns, pac, read_prefix, read_seq, f_msg, a_msg, seed_len, s_msg->last_len[n_read]);
 
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);
@@ -613,7 +645,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	frag_free_msg(f_msg);
 	gzclose(readfp);
 	kseq_destroy(read_seq_t);
-	free(read_seq);
+	//free(read_seq);
 
 	return 0;
 }
