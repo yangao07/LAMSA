@@ -18,10 +18,10 @@
 #define UNCONNECT 5
 #define PATH_END 6
 
-#define DEL_THD 10000
+#define DEL_THD 100000	//XXX
 #define THRSHOLD 50
 
-#define PRICE_DIF_CHR 3000	//相邻read比对到不同chr上的路径代价
+#define PRICE_DIF_CHR 100000	//相邻read比对到不同chr上的路径代价
 #define PRICE_LONG_DEL 5000
 #define PRICE_SKIP	20
 

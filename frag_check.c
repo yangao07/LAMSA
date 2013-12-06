@@ -519,7 +519,7 @@ void split_mapping(frag_msg *f_msg, aln_msg *a_msg, int f1_i, int f2_i, int seed
 
 		if (dis > 0) fprintf(stdout, "%d\t%d\t%d\tDEL\n", a_msg[s1_i].at[s1_aln_i].chr, pos, dis);
 		else if (dis < 0) fprintf(stdout, "%d\t%d\t%d\tINS\n", a_msg[s1_i].at[s1_aln_i].chr, pos, (0-dis));
-		else fprintf(stderr, "[split-map] frag error.\n");
+		else fprintf(stderr, "[split-map] frag error: %d %d %lld.\n", a_msg[s1_i].at[s1_aln_i].chr, a_msg[s1_i].at[s1_aln_i].nsrand, a_msg[s1_i].at[s1_aln_i].offset);
 	}
 	else	//dif srand
 	{
