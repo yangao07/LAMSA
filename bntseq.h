@@ -31,6 +31,7 @@ typedef struct {
 
 
 extern char nst_nt4_table[256];
+extern char com_nst_nt4_table[256];
 //int fa2pac(int argc, char *argv[]);
 
 void bns_fa2bnt(gzFile fp_fa, const char *prefix);

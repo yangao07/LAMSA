@@ -56,12 +56,13 @@
 #define CBACK       9
 
 #define CIGAR_SHIFT	4
-#define CIGAR_GEN(l,o) ((l)<<CIGAR_SHIFT|(o)) 
+#define CIGAR_GEN(l,o) ((int)(l)<<CIGAR_SHIFT|(o)) 
 
 
 typedef struct {	//全部read包含seed数目信息
     int n_read;		//获取的read总数目			
     int *n_seed;	//存放每条read的seed数目    index from 1
+    int *read_len;	//length of read
 	int *last_len;	//last_len                  index from 1
     int seed_max;   //contig中分割成短read的数目最大值	
     int read_max_len;    //max length of read
@@ -86,6 +87,12 @@ typedef struct {
 	int skip;
 	aln_t *at;	
 } aln_msg;
+
+/*typedef struct {
+	int same;		//
+	int8_t n_aln;	//init:0
+	aln_t *at;
+} hash_aln_msg;*/
 
 typedef struct {
 	int x;

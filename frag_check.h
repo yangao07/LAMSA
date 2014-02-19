@@ -58,7 +58,7 @@ typedef struct {
 	int cigar_len;			//frag's cigar length
 	int cigar_max;			//size of cigar[]
 	int edit_dis;			//frag's edit-dis
-	int len_dif;			//length difference between ref and read
+	int len_dif;			//length difference between ref and read. eg, ref=101, read=100, then len_dif = 101-100 = 1.
 
 	int per_n;
 	int flag;
@@ -79,11 +79,23 @@ typedef struct {
 } frag_msg;
 
 
+typedef struct {
+	uint64_t offset;	//1-based
+	int chr;
+	int nsrand;			//1:'+' -1:'-'
+	uint32_t *cigar;
+	int c_m;
+	int cigar_len;
+} aln_res;
+
+extern const int8_t sc_mat[25];
+extern const int8_t bwasw_sc_mat[25];
 extern char nst_nt4_table[256];
 frag_msg *frag_init_msg(int frag_max);
 void frag_free_msg(frag_msg *f_msg);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len);//FLAG 0: start/1:end / 2:seed
-int frag_check(bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_seq, frag_msg *f_msg, aln_msg *a_msg, int seed_len, int last_len);
+int frag_check(bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_seq, int read_len, int seed_all, frag_msg *f_msg, aln_msg *a_msg, uint32_t **hash_num, uint64_t ***hash_node, int seed_len, int last_len);
+void printcigar(uint32_t *cigar, int cigar_len);
 
 #define MAXOFTWO(a, b) ((a) > (b) ? (a) : (b))
 #define MINOFTWO(a, b) ((a) < (b) ? (a) : (b))
