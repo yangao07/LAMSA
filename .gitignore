@@ -25,9 +25,13 @@ cscope.*
 
 #data
 data/*
+out
 
 #soap2-dp
 soap2-dp/*
 
 #output
 output/*
+
+#eclipse project
+*project

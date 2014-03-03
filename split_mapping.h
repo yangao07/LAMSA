@@ -16,6 +16,16 @@ typedef struct{
 	hash_frag_aln *hfa;
 } hash_frag;
 
+typedef struct {
+	int32_t offset;
+	int32_t len;
+}hash_blank_t;
+
+typedef struct {
+	int32_t n_blanks;
+	hash_blank_t *blank;
+}hash_line_t;
+
 #define HASH_FRAG_START 1
 #define HASH_FRAG_END 2
 #define HASH_FRAG_SEED 3
