@@ -723,17 +723,17 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int *price_n, int see
     frag_set_msg(a_msg, last_x, last_y, 1, f_msg, frag_num, seed_len);
     end_x = last_x;
 	
-	fprintf(stdout, "    end   %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
+	//fprintf(stdout, "    end   %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
     while (path[last_x][last_y].flag != PATH_END) {
     	if (path[last_x][last_y].flag != MATCH) {
     		//start
     		start_x = last_x;
     		if (start_x == end_x) {
-    			fprintf(stdout, "    flase start %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
+    			;//fprintf(stdout, "    flase start %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
     		}
 			else {
 				frag_set_msg(a_msg, last_x, last_y, 0, f_msg, frag_num, seed_len);
-				fprintf(stdout, "    start %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
+			//	fprintf(stdout, "    start %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
     			++frag_num;
     		}
     		flag = 1;
@@ -747,7 +747,7 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int *price_n, int see
     		frag_set_msg(a_msg, last_x, last_y, 1, f_msg, frag_num, seed_len);
 			end_x = last_x;
 
-			fprintf(stdout, "    end   %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
+			//fprintf(stdout, "    end   %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
     		flag = 0; 
     	} else {
     		frag_set_msg(a_msg, last_x, last_y, 2, f_msg, frag_num, seed_len);	//seed
@@ -756,7 +756,7 @@ int backtrack(aln_msg* a_msg, path_msg **path, int n_seed, int *price_n, int see
     }
 	//start
     frag_set_msg(a_msg, last_x, last_y, 0, f_msg, frag_num, seed_len);
-	fprintf(stdout, "    start %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
+	//fprintf(stdout, "    start %d ref %lld read %d\n", a_msg[last_x].at[last_y].nsrand, (long long)a_msg[last_x].at[last_y].offset, a_msg[last_x].read_id);
 	return 1;
 }
 
@@ -832,8 +832,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
 					//debug XXX
-					if (n_read > 124) exit(0);
-					fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
+				//	fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
 					if (find_path(a_msg, n_seed, line, path_end, path, price_n, seed_len, bns->n_seqs))
                    // if (find_path(a_msg, n_seed, main_line, main_price, main_path, path, price, price_n, seed_len, bns->n_seqs))
 						if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
@@ -865,7 +864,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 			setAmsg(a_msg, n_seed, multi_aln, read_id-s_msg->n_seed[n_read-1], chr, offset, srand, edit_dis, cigar);
 		}
 	}
-	fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
+	//fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
 	if (find_path(a_msg, n_seed, line, path_end, path, price_n, seed_len, bns->n_seqs))
     //if (find_path(a_msg, n_seed, main_line, main_price, main_path, path, price, price_n, seed_len, bns->n_seqs))
 		if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
