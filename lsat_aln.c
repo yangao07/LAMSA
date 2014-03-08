@@ -31,6 +31,10 @@ seed_msg *seed_init_msg(void)
 
 	msg->n_read = 0;
 	msg->n_seed = (int *)calloc(READ_INIT_MAX, sizeof(int));
+	msg->read_name = (char **)malloc(READ_INIT_MAX * sizeof(char*));
+	int i;
+	for (i = 0; i < READ_INIT_MAX; ++i)
+		msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
     msg->last_len = (int *)malloc(READ_INIT_MAX * sizeof(int));
     msg->read_len = (int *)malloc(READ_INIT_MAX * sizeof(int));
 	msg->seed_max = 0;
@@ -41,6 +45,7 @@ seed_msg *seed_init_msg(void)
 
 void seed_free_msg(seed_msg *msg)
 {
+	free(msg->read_name);
 	free(msg->n_seed);
     free(msg->last_len);
     free(msg->read_len);
@@ -110,6 +115,7 @@ int split_seed(const char *prefix, seed_msg *s_msg, int seed_len)
 		s_msg->n_seed[s_msg->n_read] = s_msg->n_seed[s_msg->n_read-1] + n_seed;
         s_msg->last_len[s_msg->n_read] = seq->seq.l - (n_seed * 2 - 1) * seed_len;
         s_msg->read_len[s_msg->n_read] = seq->seq.l;
+		strcpy(s_msg->read_name[s_msg->n_read], seq->name.s);
 
 		for (i = 0; i < n_seed; ++i)
 		{
@@ -119,7 +125,7 @@ int split_seed(const char *prefix, seed_msg *s_msg, int seed_len)
 			fputs(seed_head, outfp);
 			fputs(seed_seq, outfp);
 		}
-        fprintf(infofp, "%d %d %d\n", n_seed, s_msg->last_len[s_msg->n_read], (int)seq->seq.l);
+        fprintf(infofp, "%s %d %d %d\n", seq->name.s, n_seed, s_msg->last_len[s_msg->n_read], (int)seq->seq.l);
 	}
 
 
@@ -136,6 +142,7 @@ int split_seed(const char *prefix, seed_msg *s_msg, int seed_len)
 int split_seed_info(const char *prefix, seed_msg *s_msg, int *seed_len)
 {
     char seed_info[1024];
+	char read_name[1024];
     FILE *infofp;
     int m_read, n_seed, last_len, len, n;
     int *new_p;
@@ -153,7 +160,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg, int *seed_len)
         fprintf(stderr, "[split seed] INFO file error.[1]\n");
         exit(-1);
     }
-    while ((n = fscanf(infofp, "%d %d %d", &n_seed, &last_len, &len)) != EOF)
+    while ((n = fscanf(infofp, "%s %d %d %d", read_name, &n_seed, &last_len, &len)) != EOF)
     {
        if (n != 3)
        {
@@ -179,11 +186,20 @@ int split_seed_info(const char *prefix, seed_msg *s_msg, int *seed_len)
                exit(-1);
            }
            s_msg->last_len = new_p;
+		   if ((new_p = (int*)realloc(s_msg->read_len, m_read * sizeof(int))) == NULL)
+		   {
+			   free(s_msg->read_len);
+			   fprintf(stderr, "[lsat aln] Can't allocate more memory for read_len[].\n");
+			   exit(-1);
+		   }
+		   s_msg->read_len = new_p;
+		   //read_name
        }
        ++s_msg->n_read;
        s_msg->n_seed[s_msg->n_read] = s_msg->n_seed[s_msg->n_read-1] + n_seed;
        s_msg->last_len[s_msg->n_read] = last_len;
        s_msg->read_len[s_msg->n_read] = len;
+	   strcpy(s_msg->read_name[s_msg->n_read], read_name);
        if (last_len != len - (n_seed * 2 - 1) * (*seed_len))
        {
            fprintf(stderr, "[split seed] INFO file error.[3]\n");
@@ -838,7 +854,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 						if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
 						/* SW-extenging */
 						{
-							frag_check(bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1], f_msg, a_msg, &hash_num, &hash_node, seed_len, s_msg->last_len[n_read]);
+							frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1], f_msg, a_msg, &hash_num, &hash_node, seed_len, s_msg->last_len[n_read]);
 						}
 				}
 				n_seed = 0;
@@ -869,7 +885,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
     //if (find_path(a_msg, n_seed, main_line, main_price, main_path, path, price, price_n, seed_len, bns->n_seqs))
 		if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
 		/* SW-extenging */
-			frag_check(bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1], f_msg, a_msg, &hash_num, &hash_node, seed_len, s_msg->last_len[n_read]);
+			frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1], f_msg, a_msg, &hash_num, &hash_node, seed_len, s_msg->last_len[n_read]);
 
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);

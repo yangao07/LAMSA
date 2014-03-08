@@ -61,6 +61,7 @@
 
 typedef struct {	//全部read包含seed数目信息
     int n_read;		//获取的read总数目			
+	char **read_name;
     int *n_seed;	//存放每条read的seed数目    index from 1
     int *read_len;	//length of read
 	int *last_len;	//last_len                  index from 1

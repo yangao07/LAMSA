@@ -374,10 +374,10 @@ void printcigar(uint32_t *cigar, int cigar_len)
 {
 	int i;
 
-    fprintf(stdout, "cigar %d: ", cigar_len);
+    //fprintf(stdout, "cigar %d: ", cigar_len);
 	for (i = 0; i < cigar_len; i++)
 		fprintf(stdout, "%d%c", (int)(cigar[i]>>4), "MIDNSHP=X"[(int)(cigar[i] & 0xf)]);
-	fprintf(stdout, "\t");
+	//fprintf(stdout, "\t");
 }
 
 void printnst(char *msg1, uint8_t *seq, int len, char *msg2)
@@ -844,7 +844,7 @@ int check_cigar(uint32_t *cigar, int cigar_len)
 }
 
 //read_seq: char or uint8_t?
-int frag_check(bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_seq, int read_len, int seed_all, frag_msg *f_msg, aln_msg *a_msg, uint32_t **hash_num, uint64_t ***hash_node, int seed_len, int last_len)
+int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_seq, int read_len, int seed_all, frag_msg *f_msg, aln_msg *a_msg, uint32_t **hash_num, uint64_t ***hash_node, int seed_len, int last_len)
 {
 	int i;
 	//fprintf(stdout, "frag:\n");
@@ -923,9 +923,8 @@ int frag_check(bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_
 		a_res.offset = f_msg->fa_msg[0].cigar_ref_start;
 	}
 	
-	fprintf(stdout, "chr: %c%d offset: %lld ", "--+"[a_res.nsrand+1], a_res.chr, (long long)a_res.offset); printcigar(a_res.cigar, a_res.cigar_len);
-	check_cigar(a_res.cigar, a_res.cigar_len); 
-	//printcigar(a_res.cigar, a_res.cigar_len);
+	fprintf(stdout, "%s\t%d\t%c\t%lld\t", read_name, a_res.chr, "--+"[a_res.nsrand+1], (long long)a_res.offset); printcigar(a_res.cigar, a_res.cigar_len); fprintf(stdout, "\n");
+	//check_cigar(a_res.cigar, a_res.cigar_len); 
 	free(seq1); 
 	free(seq2); 
 	free(a_res.cigar); 
