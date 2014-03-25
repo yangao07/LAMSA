@@ -7,6 +7,7 @@
 #include "frag_check.h"
 #include "ksw.h"
 
+//uint64_t counter=0;
 //hash_num : number of hash-seed that have same key_int
 //hash_node : first 8*2 bit : last 8 bp, last 32-8*2 bit : pos of seed
 
@@ -124,6 +125,7 @@ int hash_calcu(int *key_int, int *kmer_int, uint8_t *seed, int hash_len, int key
 	(*key_int) = (*kmer_int) = 0;
 	for (i = 0; i < key_len; ++i) (*key_int) = (*key_int) << 2 | (int)seed[i];
 	for (; i < hash_len; ++i) (*kmer_int) = (*kmer_int) << 2 | (int)seed[i];	
+	if (*key_int > 16) {fprintf(stderr, "[hash init] Error: key_int %d.\n", *key_int); exit(-1); }
 	return 0;
 }
 
@@ -232,8 +234,8 @@ int init_hash_pos_num(uint8_t *hash_seq, int hash_len, int key_len, uint32_t **h
 }
 
 //hash_len = 10 (2+8)
-//key_len = 2
-//hash_size = 4^2 = 16
+//key_len = 2	//fixed value
+//hash_size = 4^2 = 16	//fixed value
 int init_hash(uint8_t *read_seq, int read_len, int hash_len, uint32_t **hash_num, uint64_t ***hash_node, int32_t **hash_pos, int key_len, int hash_size)
 {
 	int i;
@@ -245,7 +247,7 @@ int init_hash(uint8_t *read_seq, int read_len, int hash_len, uint32_t **hash_num
 	{
 		//strncpy(kmer, read_seq,	hash_len);
         hash_seq = read_seq+i;
-		init_hash_pos_num(hash_seq, hash_len, key_len, hash_num, hash_node); 
+		init_hash_pos_num(hash_seq, hash_len, key_len, hash_num, hash_node);
 	}
 	hash_calcu_pos_start(hash_size, hash_node, *hash_num);
 	for (i = 0; i <= read_len-hash_len; ++i)
@@ -333,23 +335,35 @@ int hash_get_dis(int *hash_pos, int *start_a, int a, int a_i, int b, int b_i, in
 	return abs(dis);
 }
 
-/*int hash_main_dis(int *hash_pos, int *start_a, int a, int a_i, int b, int b_i, int *con_flag)
+//1-mismatch betweed two adjacent nodes is allowed
+int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, int *con_flag)
 {
-	if (a == b && a_i == b_i) {*con_flag = MATCH; return 0;}
-	int exp, act, dis;
-
-	exp = hash_pos[start_a[a]+a_i] + b - a;
-	act = hash_pos[start_a[b]+b_i];
-	dis = (act - exp);
-
-	if (dis == 0) *con_flag = MATCH; 
-	else *con_flag = UNCONNECT;
-	//printf("%d", dis);
+	int dis;
+	if (a_i > b_i) dis = a_offset - b_offset;
+	else dis = b_offset - a_offset;
+	if (dis == 0)
+	{	//match or mismatch
+		if (abs(b_i - a_i) <= hash_len + 1)
+			*con_flag = MATCH;
+		else *con_flag = MISMATCH;
+	}
+	else	//SV or UNCONNECT
+	{
+		if (dis > 0) *con_flag = INSERT;
+		else if (dis < 0 && dis > (0-abs(a_i-b_i)))
+				*con_flag = DELETION;
+		else *con_flag = UNCONNECT;
+	}
 	return abs(dis);
-}*/ 
-int hash_main_dis(int *hash_pos, int *start_a, int a, int a_i, int offset, int *con_flag)
+} 
+//node.x : from.x
+/*int hash_main_dis(int *hash_pos, int *start_a, line_node node, line_node from, int *con_flag)
 {
-	if ((hash_pos[start_a[a]+a_i] - a) == offset)
+	int offset;
+	if (from.x == -1) offset = 0;
+	else offset = hash_pos[start_a[from.x]+from.y] - from.x;
+
+	if ((hash_pos[start_a[node.x]+node.y] - node.x) == offset)
 	{
 		*con_flag = MATCH; 
 		return 0;
@@ -357,9 +371,9 @@ int hash_main_dis(int *hash_pos, int *start_a, int a, int a_i, int offset, int *
 	else
 	{
 		*con_flag = UNCONNECT;
-		return abs(hash_pos[start_a[a]+a_i] - a - offset);
+		return abs(hash_pos[start_a[node.x]+node.y] - node.x - offset);
 	}
-}
+}*/
 
 int hash_new_line(int offset, int hash_i, int **line, int *line_end, int path_n)
 {
@@ -725,6 +739,7 @@ int hash_swap_line(int **line, int *line_end, int ii, int jj)
 	return 0;
 }
 
+/*
 int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int ref_end, int read_start, int read_end, int hash_len, int **line, int *line_end, hash_DP_node *h_node)
 {
     if (((ref_end - ref_start) < hash_len) || ((read_end - read_start) < hash_len))
@@ -745,7 +760,7 @@ int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int r
 				flag = 0;
 				for (k = path_n-1; k >= 0; --k)
 				{
-					hash_main_dis(hash_pos, start_a, i, j, line[k][0], &con_flag);
+					hash_main_dis(, &con_flag);
 					if (con_flag == MATCH)
 					{
 						flag = 1;
@@ -774,7 +789,7 @@ int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int r
 				hash_swap_line(line, line_end, i, j);
 		}
 	}
-	/*fprintf(stdout, "all mini line:\nstart:\t");
+	//fprintf(stdout, "all mini line:\nstart:\t");
 	for (i = 0; i < path_n; ++i)
 	{
 		if (line_end[i] != 0)
@@ -790,7 +805,7 @@ int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int r
 		if (line_end[i] != 0)
 			fprintf(stdout, "%d ", line[i][0]);
 	}
-	fprintf(stdout, "\n");*/
+	//fprintf(stdout, "\n");
 	for (i = 0; i < path_n; ++i)
 		hash_DP_init(h_node, line, line_end, i, hash_len);
 	//calculate node value
@@ -817,6 +832,7 @@ int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int r
 
 	return path_n;
 }
+*/
 
 int hash_copy_main_line(int **line, int *line_end, int m_i, int **mini_line, int *mini_line_end, int mini_i)
 {
@@ -849,263 +865,263 @@ int hash_copy_main_line(int **line, int *line_end, int m_i, int **mini_line, int
 //line: i
 //MEM, mis-match allowed seeds combining
 //XXX mis-match have negative effect
-int hash_main_line(int *hash_pos, int *start_a, int *len_a, int ref_len, int read_len, int hash_len, int **line, int *line_end, hash_DP_node *h_node)
-{
-	int i, j, k, path_n;
-	int flag, con_flag;
-	int path_i[500], tmp, copy_flag[500];
-	int min_len=len_a[0];
-
-	//head hash-node line and tail hash_node line
-	line[0][0] = 0;
-	line_end[0] = 0;
-	line[1][0] = read_len - ref_len;
-	line_end[1] = 0;
-	path_n = 2;
-
-	//filter out unique-aln seeds
-	for (i = 0; i <= ref_len-hash_len; ++i) 
-	{ 
-		if (len_a[i] == 1)
-		{
-			flag = 0;
-			for (j = path_n-1; j >= 0; --j)
-			{
-				hash_main_dis(hash_pos, start_a, i, 0, line[j][0], &con_flag);
-				if (con_flag == MATCH)
-				{
-					flag = 1;
-					line[j][line_end[j]+1] = i;
-					++line_end[j];
-					//XXX
-					/*if (j != (path_n-1))
-					  {
-					  for (k = j+1; k != path_n; ++k)
-					  line_end[k] = 0;
-					  path_n = j+1;
-					  }*/
-					break;
-				}
-				//XXX
-				if (line_end[j] > 5) break;
-			}
-			if (flag == 0)
-			{
-				hash_new_line(hash_pos[start_a[i]]-i, i, line, line_end, path_n);
-				++path_n;
-			}
-			min_len = 1;
-		}
-		else if (min_len != 1 && len_a[i] < min_len && len_a[i] >=2)
-		{
-			min_len = len_a[i];	
-		}
-	}
-	//filter out min_len-aln seeds
-	if (path_n == 2 && line_end[0] == 0 && line_end[1] == 0)
-	{
-		//line_end[0] = 0;//no hash-node is uniquely aligned to read
-		for (i = 0; i <= ref_len-hash_len; ++i)
-		{
-			if (len_a[i] == min_len)
-			{
-				for (k = 0; k < min_len; ++k)
-				{
-					flag = 0;
-					for (j = path_n-1; j >=0; --j)
-					{
-						hash_main_dis(hash_pos, start_a, i, k, line[j][0], &con_flag);
-						if (con_flag == MATCH)
-						{
-							flag = 1;
-							line[j][line_end[j]+1] = i;
-							++line_end[j];
-							break;
-						}
-						//if (line_end[j] > 5) break;
-					}
-					if (flag == 0)
-					{
-						hash_new_line(hash_pos[start_a[i]+k]-i, i, line, line_end, path_n);
-						++path_n;
-					}
-				}
-			}
-		}
-		//return 0;
-	}
-
-	//add multi-aln seed to the unique(min_len)-aln seeds lines.
-	for (i = 0; i <= ref_len-hash_len; ++i)
-	{
-		if (len_a[i] > min_len)
-		{
-			//XXX k or j ?
-			for (k = 0; k < path_n; ++k)
-			{
-				for (j = 0; j < len_a[i]; ++j)
-				{
-					hash_main_dis(hash_pos, start_a, i, j, line[k][0], &con_flag);
-					if (con_flag == MATCH)
-					{
-						hash_add_line(line, line_end, k, i);
-						break;
-					}
-				}
-			}
-			/*
-			   for (j = 0; j < len_a[i]; ++j)
-			   {
-			   for (k = 0; k < path_n; ++k)
-			   {//int hash_get_dis(int *hash_pos, int *start_a, int a, int a_i, int b, int b_i, int hash_len, int *con_flag)
-			//if (i < line[line_end[path_i[k]]-1])
-			hash_main_dis(hash_pos, start_a, line[path_i[k]][0], i, j, &con_flag);
-			if (con_flag == MATCH)
-			{
-			hash_add_line(line, line_end, path_i[k], i);
-			break;
-			}
-			}
-			}
-			*/
-		}
-	}
-	hash_cut_line(line, line_end, &path_n, hash_len);
-
-	for (i = 0; i < path_n; ++i) { path_i[i] = i; copy_flag[i] = 0; }
-	//XXX sort by the start postion of every node-line.
-	//remove the line whose line_end[] = 0
-	for (i = 0; i < path_n-1; ++i)
-	{
-		for (j = i+1; j < path_n; ++j)
-		{
-			if (line_end[i] == 0 || (line[j][1] < line[i][1]) || ((line[j][1] == line[i][1]) && (line[j][0] < line[i][0])))
-				hash_swap_line(line, line_end, i, j);
-		}
-	}
-
-	/*fprintf(stdout, "all line:\nstart: ");
-	for (i = 0; i < path_n; ++i)
-	{
-		printf("%d, ", line[i][1]);
-	}
-	printf("\nend: ");
-
-	for (i = 0; i < path_n; ++i)
-	{
-		printf("%d, ", line[i][line_end[i]]+hash_len-1);
-	}
-	printf("\noffset: ");
-	for (i = 0; i < path_n; ++i)
-	{
-		printf("%d, ", line[i][0]);
-	}
-	printf("\n");*/
-
-	//DP algorithm
-	//initialization of DP nodes
-	//XXX node-lines should be sorted by the start postion
-	for (i = 0; i < path_n; ++i)
-		if (line_end[i] != 0) hash_DP_init(h_node, line, line_end, i, hash_len);
-	//calculate node value
-	for (i = 1; i < path_n; ++i)
-		if (line_end[i] != 0) hash_update_line(h_node, line, line_end, i, hash_len);
-	//find backtrack node(longest cover-length)
-	int max_node_i = -1, max_cover_len = 0;
-	for (i = 0; i < path_n; ++i)
-	{
-		if (line_end[i] == 0) continue;
-		if ((h_node[i].line.ref_cover_len + h_node[i].line.read_cover_len) > max_cover_len)
-		{
-			max_node_i = i;
-			max_cover_len = h_node[i].line.ref_cover_len + h_node[i].line.read_cover_len;
-		}
-	}
-	for (i = 0; i < h_node[max_node_i].line.n_line; ++i)
-		copy_flag[h_node[max_node_i].line.line_i[i]] = 1;
-	line_end[path_n] = 0;
-	for (i = 0; i < path_n; ++i)
-	{
-		if (copy_flag[i] == 1) hash_copy_line(line, line_end, i, path_n);// XXX len = 3 * line_num
-	}
-
-	//for existing blank, use mini-local_main_line() to fill it
-	int **_line, *_line_end;
-	int _ref_start, _ref_end, _read_start, _read_end;
-	hash_DP_node *_h_node;
-
-	_line = (int**)malloc((ref_len-hash_len+1) * sizeof(int*));
-	_h_node = (hash_DP_node*)malloc((ref_len-hash_len+1) * sizeof(hash_DP_node));
-	for (i = 0; i <= ref_len-hash_len; ++i) {
-		_line[i] = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
-		//XXX 100 * sizeof
-		_h_node[i].line.line_i = (int32_t*)malloc(100 * sizeof(int32_t));
-	}
-	_line_end = (int*)malloc((ref_len-hash_len+1) * sizeof(int));
-
-	int line_1, line_2, mini_i;
-
-	//blank between left bound and head node-line
-
-	line_2 = h_node[max_node_i].line.line_i[0];
-	if (line[line_2][1] > hash_len && (line[line_2][1] + line[line_2][0]) > hash_len)//blank exists XXX > seed_len
-	{
-		_ref_start = 0;
-		_ref_end = line[line_2][1]-1;
-		_read_start = 0;
-		_read_end = _ref_end + line[line_2][0];
-		mini_i = mini_main_line(hash_pos, start_a, len_a, _ref_start, _ref_end, _read_start, _read_end, hash_len, _line, _line_end, _h_node);
-		if (mini_i != -1 && _line_end[mini_i] != 0)
-			hash_copy_main_line(line, line_end, path_n, _line, _line_end, mini_i);
-	}
-	//blank between node-lines
-	for (i = 0; i < h_node[max_node_i].line.n_line - 1; ++i)
-	{
-		line_1 = h_node[max_node_i].line.line_i[i];
-		line_2 = h_node[max_node_i].line.line_i[i+1];
-
-		if ((line[line_1][line_end[line_1]] + hash_len - 1) < (line[line_2][1]-1-hash_len) //blank exists
-				&& (line[line_1][line_end[line_1]]+hash_len-1+line[line_1][0]) < (line[line_2][1]+line[line_2][0]-1-hash_len))
-		{
-			_ref_start = line[line_1][line_end[line_1]] + hash_len;
-			_ref_end = line[line_2][1] - 1;
-			_read_start = _ref_start + line[line_1][0];
-			_read_end = _ref_end + line[line_2][0];
-			mini_i = mini_main_line(hash_pos, start_a, len_a, _ref_start, _ref_end, _read_start, _read_end, hash_len, _line, _line_end, _h_node);
-			if (mini_i != -1 && _line_end[mini_i] != 0)
-				hash_copy_main_line(line, line_end, path_n, _line, _line_end, mini_i);
-		}
-	}
-	//blank between tail node-line and right bound
-	line_1 = line_2;
-	_ref_start = line[line_1][line_end[line_1]] + hash_len;
-	_ref_end = ref_len - 1;
-	_read_start = _ref_start + line[line_1][0];
-	_read_end = read_len - 1;
-	mini_i = mini_main_line(hash_pos, start_a, len_a, _ref_start, _ref_end, _read_start, _read_end, hash_len, _line, _line_end, _h_node);
-	if (mini_i != -1 && _line_end[mini_i] != 0)
-		hash_copy_main_line(line, line_end, path_n, _line, _line_end, mini_i);
-	//free variable
-	for (i = 0; i <= ref_len-hash_len; ++i) { free(_line[i]); free(_h_node[i].line.line_i); }
-	free(_line); free(_line_end); free(_h_node);
-
-	//print filtered node-line
-	/*fprintf(stdout, "main line: %d\nstart: ", max_node_i);
-	for (i = 0; i < line_end[path_n]; ++i)
-	{
-		printf("%d, ", line[path_n][i*3+1]);
-	} printf("\nend: ");
-	for (i = 0; i < line_end[path_n]; ++i)
-	{
-		printf("%d, ", line[path_n][i*3+1]+line[path_n][i*3+2]+hash_len - 2);
-	} printf("\noffset: ");
-	for (i = 0; i < line_end[path_n]; ++i)
-	{
-		printf("%d, ", line[path_n][i*3]);
-	} printf("\n");*/
-
-	return path_n; 
-}
+//	int hash_main_line(int *hash_pos, int *start_a, int *len_a, int ref_len, int read_len, int hash_len, int **line, int *line_end, hash_DP_node *h_node)
+//	{
+//		int i, j, k, path_n;
+//		int flag, con_flag;
+//		int path_i[500], tmp, copy_flag[500];
+//		int min_len=len_a[0];
+//
+//		//head hash-node line and tail hash_node line
+//		line[0][0] = 0;
+//		line_end[0] = 0;
+//		line[1][0] = read_len - ref_len;
+//		line_end[1] = 0;
+//		path_n = 2;
+//
+//		//filter out unique-aln seeds
+//		for (i = 0; i <= ref_len-hash_len; ++i) 
+//		{ 
+//			if (len_a[i] == 1)
+//			{
+//				flag = 0;
+//				for (j = path_n-1; j >= 0; --j)
+//				{
+//					hash_main_dis(hash_pos, start_a, i, 0, line[j][0], &con_flag);
+//					if (con_flag == MATCH)
+//					{
+//						flag = 1;
+//						line[j][line_end[j]+1] = i;
+//						++line_end[j];
+//						//XXX
+//						/*if (j != (path_n-1))
+//						  {
+//						  for (k = j+1; k != path_n; ++k)
+//						  line_end[k] = 0;
+//						  path_n = j+1;
+//						  }*/
+//						break;
+//					}
+//					//XXX
+//					if (line_end[j] > 5) break;
+//				}
+//				if (flag == 0)
+//				{
+//					hash_new_line(hash_pos[start_a[i]]-i, i, line, line_end, path_n);
+//					++path_n;
+//				}
+//				min_len = 1;
+//			}
+//			else if (min_len != 1 && len_a[i] < min_len && len_a[i] >=2)
+//			{
+//				min_len = len_a[i];	
+//			}
+//		}
+//		//filter out min_len-aln seeds
+//		if (path_n == 2 && line_end[0] == 0 && line_end[1] == 0)
+//		{
+//			//line_end[0] = 0;//no hash-node is uniquely aligned to read
+//			for (i = 0; i <= ref_len-hash_len; ++i)
+//			{
+//				if (len_a[i] == min_len)
+//				{
+//					for (k = 0; k < min_len; ++k)
+//					{
+//						flag = 0;
+//						for (j = path_n-1; j >=0; --j)
+//						{
+//							hash_main_dis(hash_pos, start_a, i, k, line[j][0], &con_flag);
+//							if (con_flag == MATCH)
+//							{
+//								flag = 1;
+//								line[j][line_end[j]+1] = i;
+//								++line_end[j];
+//								break;
+//							}
+//							//if (line_end[j] > 5) break;
+//						}
+//						if (flag == 0)
+//						{
+//							hash_new_line(hash_pos[start_a[i]+k]-i, i, line, line_end, path_n);
+//							++path_n;
+//						}
+//					}
+//				}
+//			}
+//			//return 0;
+//		}
+//
+//		//add multi-aln seed to the unique(min_len)-aln seeds lines.
+//		for (i = 0; i <= ref_len-hash_len; ++i)
+//		{
+//			if (len_a[i] > min_len)
+//			{
+//				//XXX k or j ?
+//				for (k = 0; k < path_n; ++k)
+//				{
+//					for (j = 0; j < len_a[i]; ++j)
+//					{
+//						hash_main_dis(hash_pos, start_a, i, j, line[k][0], &con_flag);
+//						if (con_flag == MATCH)
+//						{
+//							hash_add_line(line, line_end, k, i);
+//							break;
+//						}
+//					}
+//				}
+//				/*
+//				   for (j = 0; j < len_a[i]; ++j)
+//				   {
+//				   for (k = 0; k < path_n; ++k)
+//				   {//int hash_get_dis(int *hash_pos, int *start_a, int a, int a_i, int b, int b_i, int hash_len, int *con_flag)
+//				//if (i < line[line_end[path_i[k]]-1])
+//				hash_main_dis(hash_pos, start_a, line[path_i[k]][0], i, j, &con_flag);
+//				if (con_flag == MATCH)
+//				{
+//				hash_add_line(line, line_end, path_i[k], i);
+//				break;
+//				}
+//				}
+//				}
+//				*/
+//			}
+//		}
+//		hash_cut_line(line, line_end, &path_n, hash_len);
+//
+//		for (i = 0; i < path_n; ++i) { path_i[i] = i; copy_flag[i] = 0; }
+//		//XXX sort by the start postion of every node-line.
+//		//remove the line whose line_end[] = 0
+//		for (i = 0; i < path_n-1; ++i)
+//		{
+//			for (j = i+1; j < path_n; ++j)
+//			{
+//				if (line_end[i] == 0 || (line[j][1] < line[i][1]) || ((line[j][1] == line[i][1]) && (line[j][0] < line[i][0])))
+//					hash_swap_line(line, line_end, i, j);
+//			}
+//		}
+//
+//		/*fprintf(stdout, "all line:\nstart: ");
+//		for (i = 0; i < path_n; ++i)
+//		{
+//			printf("%d, ", line[i][1]);
+//		}
+//		printf("\nend: ");
+//
+//		for (i = 0; i < path_n; ++i)
+//		{
+//			printf("%d, ", line[i][line_end[i]]+hash_len-1);
+//		}
+//		printf("\noffset: ");
+//		for (i = 0; i < path_n; ++i)
+//		{
+//			printf("%d, ", line[i][0]);
+//		}
+//		printf("\n");*/
+//
+//		//DP algorithm
+//		//initialization of DP nodes
+//		//XXX node-lines should be sorted by the start postion
+//		for (i = 0; i < path_n; ++i)
+//			if (line_end[i] != 0) hash_DP_init(h_node, line, line_end, i, hash_len);
+//		//calculate node value
+//		for (i = 1; i < path_n; ++i)
+//			if (line_end[i] != 0) hash_update_line(h_node, line, line_end, i, hash_len);
+//		//find backtrack node(longest cover-length)
+//		int max_node_i = -1, max_cover_len = 0;
+//		for (i = 0; i < path_n; ++i)
+//		{
+//			if (line_end[i] == 0) continue;
+//			if ((h_node[i].line.ref_cover_len + h_node[i].line.read_cover_len) > max_cover_len)
+//			{
+//				max_node_i = i;
+//				max_cover_len = h_node[i].line.ref_cover_len + h_node[i].line.read_cover_len;
+//			}
+//		}
+//		for (i = 0; i < h_node[max_node_i].line.n_line; ++i)
+//			copy_flag[h_node[max_node_i].line.line_i[i]] = 1;
+//		line_end[path_n] = 0;
+//		for (i = 0; i < path_n; ++i)
+//		{
+//			if (copy_flag[i] == 1) hash_copy_line(line, line_end, i, path_n);// XXX len = 3 * line_num
+//		}
+//
+//		//for existing blank, use mini-local_main_line() to fill it
+//		int **_line, *_line_end;
+//		int _ref_start, _ref_end, _read_start, _read_end;
+//		hash_DP_node *_h_node;
+//
+//		_line = (int**)malloc((ref_len-hash_len+1) * sizeof(int*));
+//		_h_node = (hash_DP_node*)malloc((ref_len-hash_len+1) * sizeof(hash_DP_node));
+//		for (i = 0; i <= ref_len-hash_len; ++i) {
+//			_line[i] = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
+//			//XXX 100 * sizeof
+//			_h_node[i].line.line_i = (int32_t*)malloc(100 * sizeof(int32_t));
+//		}
+//		_line_end = (int*)malloc((ref_len-hash_len+1) * sizeof(int));
+//
+//		int line_1, line_2, mini_i;
+//
+//		//blank between left bound and head node-line
+//		line_2 = h_node[max_node_i].line.line_i[0];
+//		if (line[line_2][1] > hash_len && (line[line_2][1] + line[line_2][0]) > hash_len)//blank exists XXX > seed_len
+//		{
+//			_ref_start = 0;
+//			_ref_end = line[line_2][1]-1;
+//			_read_start = 0;
+//			_read_end = _ref_end + line[line_2][0];
+//			mini_i = mini_main_line(hash_pos, start_a, len_a, _ref_start, _ref_end, _read_start, _read_end, hash_len, _line, _line_end, _h_node);
+//			if (mini_i != -1 && _line_end[mini_i] != 0)
+//				hash_copy_main_line(line, line_end, path_n, _line, _line_end, mini_i);
+//		}
+//		//blank between node-lines
+//		for (i = 0; i < h_node[max_node_i].line.n_line - 1; ++i)
+//		{
+//			line_1 = h_node[max_node_i].line.line_i[i];
+//			line_2 = h_node[max_node_i].line.line_i[i+1];
+//
+//			if ((line[line_1][line_end[line_1]] + hash_len - 1) < (line[line_2][1]-1-hash_len) //blank exists
+//					&& (line[line_1][line_end[line_1]]+hash_len-1+line[line_1][0]) < (line[line_2][1]+line[line_2][0]-1-hash_len))
+//			{
+//				_ref_start = line[line_1][line_end[line_1]] + hash_len;
+//				_ref_end = line[line_2][1] - 1;
+//				_read_start = _ref_start + line[line_1][0];
+//				_read_end = _ref_end + line[line_2][0];
+//				mini_i = mini_main_line(hash_pos, start_a, len_a, _ref_start, _ref_end, _read_start, _read_end, hash_len, _line, _line_end, _h_node);
+//				if (mini_i != -1 && _line_end[mini_i] != 0)
+//					hash_copy_main_line(line, line_end, path_n, _line, _line_end, mini_i);
+//			}
+//		}
+//		//blank between tail node-line and right bound
+//		line_1 = line_2;
+//		_ref_start = line[line_1][line_end[line_1]] + hash_len;
+//		_ref_end = ref_len - 1;
+//		_read_start = _ref_start + line[line_1][0];
+//		_read_end = read_len - 1;
+//		mini_i = mini_main_line(hash_pos, start_a, len_a, _ref_start, _ref_end, _read_start, _read_end, hash_len, _line, _line_end, _h_node);
+//		if (mini_i != -1 && _line_end[mini_i] != 0)
+//			hash_copy_main_line(line, line_end, path_n, _line, _line_end, mini_i);
+//		//free variable
+//		
+//		for (i = 0; i <= ref_len-hash_len; ++i) { free(_line[i]); free(_h_node[i].line.line_i); }
+//		free(_line); free(_line_end); free(_h_node);
+//
+//		//print filtered node-line
+//		/*fprintf(stdout, "main line: %d\nstart: ", max_node_i);
+//		for (i = 0; i < line_end[path_n]; ++i)
+//		{
+//			printf("%d, ", line[path_n][i*3+1]);
+//		} printf("\nend: ");
+//		for (i = 0; i < line_end[path_n]; ++i)
+//		{
+//			printf("%d, ", line[path_n][i*3+1]+line[path_n][i*3+2]+hash_len - 2);
+//		} printf("\noffset: ");
+//		for (i = 0; i < line_end[path_n]; ++i)
+//		{
+//			printf("%d, ", line[path_n][i*3]);
+//		} printf("\n");*/
+//
+//		return path_n; 
+//	}
 
 int hash_add_path(int *hash_pos, int *start_a, int *len_a, int hash_len, path_msg **path, int *price_n, int start, int end, int rev)
 {
@@ -1368,18 +1384,19 @@ int hash_backtrack(path_msg **path, int *price_n, int *hash_pos, int *start_a, i
 	return 1;
 }
 
-//return the offset len of next line
+//return the overlap len of two nodes 
+//return value >= 0
 int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right, int *clen, uint32_t **cigar)
 {
 	int dlen, ilen;
-	dlen = ref_right - ref_left - 1;
-	ilen = read_right - read_left - 1;
-	if ((dlen > 0) && (ilen > 0))
+	dlen = ref_left - ref_right + 1;
+	ilen = read_left - read_right + 1;
+	if ((dlen < 0) && (ilen < 0))
 	{
 		fprintf(stderr, "[make_indel_cigar] Error: dlen: %d, ilen: %d.\n", dlen, ilen);
 		exit(-1);
 	}
-	int len = dlen - ilen;
+	int len = ilen - dlen;
 	if (len > 0)
 	{
 		(*clen) = 1;
@@ -1392,7 +1409,7 @@ int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right,
 	}
 	else //len==0
 		(*clen) = 0;
-	return (dlen < ilen ? dlen : ilen); 
+	return (dlen > ilen ? dlen : ilen); 
 }
 
 int _push_cigar(uint32_t **res_cigar, int *res_clen, uint32_t *cigar, int clen)
@@ -1419,6 +1436,406 @@ int _push_cigar(uint32_t **res_cigar, int *res_clen, uint32_t *cigar, int clen)
 	return 0;
 }
 
+// init for dp node, head and tail node NOT include
+int hash_dp_init(hash_dp_node **h_node, int *hash_pos, int *start_a, int *len_a, int node_i, int ref_i, line_node head, int hash_len, int dp_flag)
+{
+	int i, con_flag;
+	for (i = 0; i < len_a[node_i]; ++i)
+	{
+		hash_main_dis(h_node[head.x][head.y].ref_i, h_node[head.x][head.y].offset, ref_i, hash_pos[start_a[node_i]+i] - ref_i, hash_len, &con_flag);
+		if (con_flag == UNCONNECT)
+		{
+            h_node[node_i][i].from = (line_node){-1,-1};
+            h_node[node_i][i].ref_i = ref_i;
+            h_node[node_i][i].offset = hash_pos[start_a[node_i]+i] - ref_i;
+            h_node[node_i][i].score = 0;
+            h_node[node_i][i].node_n = 0;
+            h_node[node_i][i].match_flag = con_flag;
+			h_node[node_i][i].dp_flag = 0 - dp_flag;
+			continue;
+		}
+		h_node[node_i][i].from = head;
+		h_node[node_i][i].ref_i = ref_i;
+		//h_node[node_i][i].read_i = hash_pos[start_a[node_i]+i];
+		h_node[node_i][i].offset = hash_pos[start_a[node_i]+i] - ref_i;
+		h_node[node_i][i].score = 2 * hash_len - (con_flag == MATCH?0: HASH_SV_PEN);//XXX
+		h_node[node_i][i].node_n = 1;
+		h_node[node_i][i].match_flag = con_flag;
+		h_node[node_i][i].dp_flag = dp_flag;
+	}
+	return 0;
+}
+
+//XXX use con_flag
+//                                                                 h_len: whole number of hash-dp-node
+
+#ifndef __NEW__
+int hash_min_extend(hash_dp_node **h_node, int *len_a, int node_i, int h_len, int min_len, int dp_flag)
+{
+	int i, j, k;
+	// (node_i, i), (j, k)
+	for (i = 0; i < len_a[node_i]; ++i)
+	{
+		for (j = 0; j < h_len; ++j)
+		{
+			if (len_a[j] == min_len)
+			{
+				for (k = 0; k < len_a[j]; ++k)
+				{
+                    //counter++;
+                    if (h_node[node_i][i].dp_flag < 0)
+                        continue;
+					if (h_node[node_i][i].offset == h_node[j][k].offset)    //XXX: 
+					{
+						h_node[node_i][i].dp_flag = dp_flag;
+						goto NextCheck;
+					}
+				}
+			}
+		}
+		NextCheck:;
+	}
+	return 0;
+}
+#endif
+
+//(node_x,node_y): the min-len node to be extended
+#ifdef __NEW__
+int hash_min_extend(hash_dp_node **h_node, int *len_a, int node_x, int node_y, int h_len, int min_len, int dp_flag, int hash_len)
+{
+    int i, j, con_flag;
+    int last_x = node_x, last_y = node_y;
+
+    //from right to left
+    //for (i = node_x-1; i > 0; --i)
+    i = node_x - 1;
+    while (i > 0)
+    {
+        if (len_a[i] > min_len)
+        {
+            for (j = 0; j < len_a[i]; ++j)
+            {
+                //counter++;
+                if (h_node[i][j].dp_flag < 0)
+                    continue;
+                //hash_main_dis(h_node[i][j].ref_i, h_node[i][j].offset, h_node[last_x][last_y].ref_i, h_node[last_x][last_y].offset, hash_len, &con_flag);
+                //if (con_flag == MATCH)
+                if (h_node[last_x][last_y].ref_i - h_node[i][j].ref_i <= hash_len+1 && h_node[i][j].offset == h_node[last_x][last_y].offset)
+                {
+                    h_node[i][j].dp_flag = dp_flag;
+                    last_x = i;
+                    last_y = j;
+                    break;
+                }
+                else
+                {
+                    if (h_node[last_x][last_y].ref_i - h_node[i][j].ref_i > hash_len+1)
+                        return 0;
+                }
+            }
+        }
+        --i;
+    }
+    last_x = node_x; last_y = node_y;
+    i = node_x + 1;
+    //for (i = node_x+1; i < h_len-1; ++i)
+    while (i < h_len-1)
+    {
+        if (len_a[i] > min_len);
+        {
+            for (j = 0; j < len_a[i]; ++j)
+            {
+                if (h_node[i][j].dp_flag < 0)
+                    continue;
+                //hash_main_dis(h_node[last_x][last_y].ref_i, h_node[last_x][last_y].offset, h_node[i][j].ref_i, h_node[i][j].offset, hash_len, &con_flag);
+                //if (con_flag == MATCH)
+                if (h_node[i][j].ref_i - h_node[last_x][last_y].ref_i <= hash_len + 1 && h_node[i][j].offset == h_node[last_x][last_y].offset)
+                {
+                    h_node[i][j].dp_flag = dp_flag;
+                    last_x = i;
+                    last_y = j;
+                    break;
+                }
+                else
+                {
+                    if (h_node[i][j].ref_i - h_node[last_x][last_y].ref_i > hash_len + 1)
+                        return 0;
+                }
+            }
+        }
+        ++i;
+    } 
+    return 0;
+}
+#endif
+
+//pruning XXX
+int hash_dp_update(hash_dp_node **h_node, int *len_a, int node_x, int node_y, line_node head, int hash_len, int dp_flag)
+{
+	int i, j, con_flag;
+	line_node max_from = h_node[node_x][node_y].from;
+	int max_score = h_node[node_x][node_y].score;
+	int score_plus, ref_plus, read_plus, pen;
+	int max_flag;
+	for (i = node_x-1; i > head.x; --i)
+	{
+		for (j = 0; j < len_a[i]; ++j)
+		{
+			if (h_node[i][j].dp_flag == dp_flag)
+			{
+				hash_main_dis(h_node[i][j].ref_i, h_node[i][j].offset, h_node[node_x][node_y].ref_i, h_node[node_x][node_y].offset, hash_len, &con_flag);
+				if (con_flag == UNCONNECT)
+					continue;
+				//overlap of pre-node and cur-node may exist
+                ref_plus = ((h_node[node_x][node_y].ref_i - h_node[i][j].ref_i) > hash_len) ? hash_len : (h_node[node_x][node_y].ref_i - h_node[i][j].ref_i);
+                read_plus = ((h_node[node_x][node_y].ref_i + h_node[node_x][node_y].offset - h_node[i][j].ref_i - h_node[i][j].offset) > hash_len) ? hash_len : (h_node[node_x][node_y].ref_i + h_node[node_x][node_y].offset - h_node[i][j].ref_i - h_node[i][j].offset);
+                pen = (con_flag == MATCH)?0:HASH_SV_PEN;
+				score_plus = ref_plus + read_plus - pen;
+				if (h_node[i][j].score + score_plus > max_score)
+				{
+					max_score = h_node[i][j].score + score_plus;
+					max_from = (line_node){i, j};
+					max_flag = con_flag;
+				}
+			}
+		}
+        //当前得分是最优得分, 跳出 DP
+
+	}
+	if (max_from.x != h_node[node_x][node_y].from.x || max_from.y != h_node[node_x][node_y].from.y)
+	{
+		h_node[node_x][node_y].score = max_score;
+		h_node[node_x][node_y].from = max_from;
+		h_node[node_x][node_y].match_flag = max_flag;
+        if (max_flag == MATCH)
+            h_node[max_from.x][max_from.y].dp_flag = 0 - dp_flag;       //extend the mathc-node-line as long as possible, in forward direction
+	    h_node[node_x][node_y].node_n += h_node[max_from.x][max_from.y].node_n;
+	}
+	return 0;
+}
+//line: forward
+int mini_hash_main_line(hash_dp_node **h_node, int *hash_pos, int *start_a, int *len_a, int hash_len, int hash_step, line_node head, line_node tail, line_node *line)
+{
+	//mini: dp_flag = 0;
+	int i, j, mini_dp_flag = MULTI_FLAG;
+	// from head.x+1 or head.x + hash_len
+	for (i = head.x+1; i < tail.x; ++i)
+		//only part of the dp-node members need to be re-inited
+		hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step, head, hash_len, mini_dp_flag);
+
+	h_node[tail.x][tail.y].from = head;
+	h_node[tail.x][tail.y].score = 0;
+	h_node[tail.x][tail.y].node_n = 0;
+	h_node[tail.x][tail.y].dp_flag = mini_dp_flag;
+
+	for (i = head.x+2; i <= tail.x; ++i)
+	{
+		for (j = 0; j < len_a[i]; ++j)
+			hash_dp_update(h_node, len_a, i, j, head, hash_len, mini_dp_flag);
+	}
+
+	int node_i = h_node[tail.x][tail.y].node_n-1;
+	int last_x, last_y;
+	i = h_node[tail.x][tail.y].from.x;
+	j = h_node[tail.x][tail.y].from.y;
+	while (i != head.x)
+	{
+		if (node_i < 0) {fprintf(stderr, "[mini main line] bug.\n");}
+		line[node_i].x = i;
+		line[node_i].y = j;
+		--node_i;
+		last_x = h_node[i][j].from.x;
+		last_y = h_node[i][j].from.y;
+		i = last_x;
+		j = last_y;
+	}
+	if (node_i >= 0) {fprintf(stderr, "[mini main line] bug.\n");}
+	return h_node[tail.x][tail.y].node_n;
+}
+
+//return: length of node-path
+int hash_main_line(int *hash_pos, int *start_a, int *len_a, int ref_len, int read_len, int hash_seed_n, int hash_len, int hash_step, hash_dp_node **h_node, line_node *line)
+{
+	int i, j;
+	int node_i;
+	int min_len = HASH_MIN_LEN, dp_flag = 0, flag=0;
+
+	//dp init
+	//						from, ref_i, offset, score, node_n, match_flag, dp_flag
+	line_node head = {0, 0};
+	line_node tail = {hash_seed_n+1, 0};
+	h_node[0][0] = (hash_dp_node){(line_node){-1,0}, 0-hash_len, 0, 0, 0, MATCH, MIN_FLAG};
+	h_node[hash_seed_n+1][0] = (hash_dp_node){head, ref_len, read_len-ref_len, 0, 0, UNMATCH, MIN_FLAG};
+
+	//for min_len, dp_flag = 1, else 0
+	for (i = 1; i <= hash_seed_n; ++i)
+	{
+		if (len_a[i] == min_len)
+		{
+			dp_flag = MIN_FLAG;
+			flag = 1;
+		}
+		else dp_flag = MULTI_FLAG;
+		hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step, head, hash_len, dp_flag);
+	}
+#ifdef __DEBUG__    
+    printf("init:\n");
+    for (i = 0; i <= hash_seed_n+1; ++i)
+    {
+        for (j = 0; j < len_a[i]; ++j)
+        {
+            printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
+        }
+    }
+#endif
+
+	if (flag) {	//min_len aln exist
+		//min-aln match-extend
+#ifndef __NEW__
+		for (i = 1; i < hash_seed_n+1; ++i)
+		{
+			if (len_a[i] > min_len)
+				hash_min_extend(h_node, len_a, i, hash_seed_n+2, min_len, MIN_FLAG);
+		}
+#endif
+#ifdef __NEW__
+        for (i = 0; i <= hash_seed_n+1; ++i)
+        {
+            if (len_a[i] <= min_len)
+            {
+                for (j = 0; j < len_a[i]; ++j)
+                {
+                    hash_min_extend(h_node, len_a, i, j, hash_seed_n+2, min_len, MIN_FLAG, hash_len);
+                }
+            }
+        }
+#endif
+#ifdef __DEBUG__    
+        printf("extend:\n");
+        for (i = 0; i <= hash_seed_n+1; ++i)
+        {
+            for (j = 0; j < len_a[i]; ++j)
+            {
+                printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
+            }
+        }
+#endif
+        //dp-update for min-aln match-line nodes, whose dp_flag = MIN_FLAG 
+		for (i = 2; i <= hash_seed_n+1; ++i)
+		{
+			for (j = 0; j < len_a[i]; ++j)
+			{
+				if (h_node[i][j].dp_flag == MIN_FLAG)
+					hash_dp_update(h_node, len_a, i, j, head, hash_len, MIN_FLAG);
+			}
+		}
+#ifdef __DEBUG__    
+        printf("update:\n");
+        for (i = 0; i <= hash_seed_n+1; ++i)
+        {
+            for (j = 0; j < len_a[i]; ++j)
+            {
+                printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
+            }
+        }
+#endif
+
+		//dp-update for the blank remaining, backtrack for existing blank
+		//line: reverse firstly, convert to be forward
+		int mini_len;
+		line_node *_line = (line_node*)malloc(hash_seed_n * sizeof(line_node));;
+		line_node right, left;
+		node_i = 0;
+
+		right = tail;
+		left = h_node[tail.x][tail.y].from;
+		while (1)
+		{
+			if (h_node[right.x][right.y].match_flag != MATCH && left.x < right.x-1)// there is a seed left
+			//if (h_node[left.x][left.y].ref_i 
+			{
+				mini_len = mini_hash_main_line(h_node, hash_pos, start_a, len_a, hash_len, hash_step, left, right, _line);
+				//add mini-line to the main-line, _line is forward, but the line is reverse
+				for (i = 0; i < mini_len; ++i)
+					line[node_i++] = _line[mini_len - 1 - i];
+			}
+			if (left.x == head.x)
+				break;
+			line[node_i++] = left;
+			right = left;
+			left = h_node[right.x][right.y].from;
+		}
+		free(_line);
+		//convert line to be forward
+		line_node tmp;
+		for (i = 0; i < node_i/2; ++i)
+		{
+			tmp = line[i];
+			line[i] = line[node_i-1-i];
+			line[node_i-1-i] = tmp;	
+		}
+		return node_i;
+	} else { 
+		//dp-update for the whole seeds' aln result
+        //init again? XXX
+		for (i = 2; i < hash_seed_n+1; ++i)
+		{
+			for (j = 0; j < len_a[i]; ++j)
+            {
+                if (h_node[i][j].dp_flag == MULTI_FLAG)
+                {
+                    hash_dp_update(h_node, len_a, i, j, head, hash_len, MULTI_FLAG);
+                }
+            }
+		}
+		hash_dp_update(h_node, len_a, tail.x, tail.y, head, hash_len, MULTI_FLAG);
+#ifdef __DEBUG__
+		printf("whole-update\n");
+        for (i = 0; i <= hash_seed_n+1; ++i)
+        {
+            for (j = 0; j < len_a[i]; ++j)
+            {
+                printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
+            }
+        }
+#endif
+
+		//line_node right, left;
+		node_i = h_node[tail.x][tail.y].node_n-1;
+		int last_x, last_y;
+		//right = tail;
+		i = h_node[tail.x][tail.y].from.x;
+		j = h_node[tail.x][tail.y].from.y;
+		//left = h_node[right.x][right.y].from;
+		while (i != head.x)
+		{
+			if (node_i < 0) { fprintf(stderr, "[hash main line] bug: node_i < 0.\n"); exit(-1); }
+			line[node_i].x = i;
+			line[node_i].y = j;
+			--node_i;
+			last_x = h_node[i][j].from.x;
+			last_y = h_node[i][j].from.y;
+			i = last_x;
+			j = last_y;
+		}
+		//while (left.x != head.x)
+		//{
+		//	if (node_i < 0) 
+        //    {
+        //        fprintf(stderr, "[hash main line] bug: node_i < 0.\n"); 
+        //        exit(-1);
+        //    }
+		//	line[node_i] = left;
+		//	node_i--;
+		//	right = left;
+		//	left = h_node[right.x][right.y].from;
+		//}
+		if (node_i >= 0) {fprintf(stderr, "[hash main line] bug: node_i >= 0.\n"); exit(-1);}
+		return h_node[tail.x][tail.y].node_n;
+	}
+}
+
+/*
 int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, int hash_len, int key_len, uint32_t *hash_num, uint64_t **hash_node, int32_t *hash_pos)
 {
 	int i, read_i;//q_key_int, q_kmer_int, 
@@ -1426,8 +1843,9 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 	int cur_ref_bound, new_ref_bound, cur_read_bound, new_read_bound;
 	int q_key_int, q_kmer_int, node_i;
 
-	int *start_a = (int*)malloc((ref_len-hash_len+1) * sizeof(int));
-	int *len_a = (int*)malloc((ref_len-hash_len+1) * sizeof(int));
+	//add (ref_len, read_len)
+	int *start_a = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
+	int *len_a = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
 	if (start_a == NULL || len_a == NULL) {fprintf(stderr, "[hash_split_map] Not enougy memory.\n");}
 
 	for (i = 0; i <= ref_len - hash_len; ++i)
@@ -1439,35 +1857,35 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 			start_a[i] = ((hash_node[q_key_int][node_i] & 0xffff0000) >> 16);
 			len_a[i] = (hash_node[q_key_int][node_i] & 0xffff);
 		}
-		else start_a[i] = len_a[i] = -1;	//XXX
+		else start_a[i] = len_a[i] = 0;	//XXX
 	}
 
-	/*
-	for (i = 0; i <= ref_len - hash_len; ++i) 
-	{
-		int j;
-		fprintf(stdout, "%d %d -> ", i, len_a[i]);
-		for (j = 0; j < len_a[i]; ++j)
-			fprintf(stdout, "%d ", hash_pos[start_a[i]+j]);
-		fprintf(stdout,"\n");
-	}*/
+	
+	   //for (i = 0; i <= ref_len - hash_len; ++i) 
+	   //{
+	   //int j;
+	   //fprintf(stdout, "%d %d -> ", i, len_a[i]);
+	   //for (j = 0; j < len_a[i]; ++j)
+	   //fprintf(stdout, "%d ", hash_pos[start_a[i]+j]);
+	   //fprintf(stdout,"\n");
+	   //}
 	//main line
 	int **line, *line_end, m_i;
-	path_msg **path;
-	int *price_n;
 	hash_DP_node *h_node;
 
-	line = (int**)malloc((ref_len-hash_len+1+2) * sizeof(int*));
-	path = (path_msg**)malloc((ref_len-hash_len+1+2) * sizeof(path_msg*));
-	h_node = (hash_DP_node*)malloc((ref_len-hash_len+1+2) * sizeof(hash_DP_node));
-	for (i = 0; i <= ref_len-hash_len+2; ++i) {
+	line = (int**)malloc(((ref_len-hash_len+1)*(read_len-hash_len+1)+2) * sizeof(int*));
+	h_node = (hash_DP_node*)malloc(((ref_len-hash_len+1)*(read_len-hash_len+1)+2) * sizeof(hash_DP_node));
+	for (i = 0; i < (ref_len-hash_len+1)*(read_len-hash_len+1)+2; ++i) {
 		line[i] = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
-		path[i] = (path_msg*)malloc((read_len-hash_len+1) * sizeof(int));
 		//XXX 100 * sizeof
 		h_node[i].line.line_i = (int32_t*)malloc(100 * sizeof(int32_t));
 	}
-	line_end = (int*)malloc((ref_len-hash_len+1+2) * sizeof(int));
-	price_n = (int*)malloc((ref_len-hash_len+1+2) * sizeof(int));
+	line_end = (int*)malloc(((ref_len-hash_len+1)*(read_len-hash_len+1)+2) * sizeof(int));
+	if (line == NULL || h_node == NULL || line_end == NULL)
+	{
+		fprintf(stderr, "[hash split map]Not enough memory.\n");
+		exit(-1);
+	}
 
 	//line[m_i][]: [(offset, start, len),(),()...]
 	m_i = hash_main_line(hash_pos, start_a, len_a, ref_len, read_len, hash_len, line, line_end, h_node);
@@ -1490,14 +1908,14 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 		_q_len = line[m_i][1] + line[m_i][0];
 		_b_w = abs(_t_len - _q_len);
 		_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-		/*fprintf(stdout, "before(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");*/
+		//fprintf(stdout, "before(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");
 		_push_cigar(split_cigar, &split_clen, _cigar, _clen);
 	}
 	else//add cigar
 	{
 		//         ref_left, read_left, ref_rigth,    read_right
 		make_indel_cigar(-1, -1,        line[m_i][1], line[m_i][1]+line[m_i][0], &_clen, &g_cigar);
-		/*fprintf(stdout, "before: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");*/
+		//fprintf(stdout, "before: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
 		_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
 	}
 	//2. fix the region betweed each lines
@@ -1507,7 +1925,7 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 		//generate_mem_cigar(,);
 		if ((line[m_i][i*3+2]+hash_len-1)==0) _clen = 0;
 		else {g_cigar[0] = ((line[m_i][i*3+2]+hash_len-1) << 4) | CMATCH; _clen = 1;}
-		/*fprintf(stdout, "line: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");*/
+		//fprintf(stdout, "line: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
 		_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
 
 		//check blank
@@ -1519,7 +1937,7 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 			_q_len = (line[m_i][(i+1)*3+1]+line[m_i][(i+1)*3]-1) - (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3]); 	//blank exists
 			_b_w = abs(_t_len - _q_len);
 			_score = ksw_global(_q_len, read_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len+line[m_i][i*3])-1, _t_len, ref_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-1), 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-			/*fprintf(stdout, "blank(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");*/
+			//fprintf(stdout, "blank(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");
 			_push_cigar(split_cigar, &split_clen, _cigar, _clen);
 		}
 		else //add cigar
@@ -1528,7 +1946,7 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 			//for overlaps between lines
 			line[m_i][(i+1)*3+1] -= line_off;
 			line[m_i][(i+1)*3+2] += line_off;
-			/*fprintf(stdout, "sv: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");*/
+			//fprintf(stdout, "sv: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
 			_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
 		}
 	}
@@ -1540,23 +1958,150 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 		_b_w = abs(_t_len - _q_len);
 		_score = ksw_global(_q_len, read_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len+line[m_i][i*3]-1), _t_len, ref_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-1), 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
 		//_score = ksw_global(_t_len, ref_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-1), _q_len, read_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len+line[m_i][i*3]-1), 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-		/*fprintf(stdout, "last(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");*/
+		//fprintf(stdout, "last(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");
 		_push_cigar(split_cigar, &split_clen, _cigar, _clen);
 	}
 	else //add cigar
 	{
 		make_indel_cigar((line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2), (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3]), ref_len, read_len, &_clen, &g_cigar);
-		/*fprintf(stdout, "last: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");*/
+		//fprintf(stdout, "last: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
 		_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
 	}
 
 	if (_cigar != NULL) free(_cigar); 
 	free(g_cigar);
-	
+
 	free(start_a); free(len_a);	
-	for (i = 0; i <= ref_len-hash_len+2; ++i) { free(line[i]); free(path[i]); free(h_node[i].line.line_i);}
-	free(line); free(line_end); free(price_n);
+	for (i = 0; i < (ref_len-hash_len+1)*(read_len-hash_len+1)+2; ++i) 
+	{ 
+		free(line[i]); 
+		free(h_node[i].line.line_i);
+	}
+	free(line); free(line_end);
 	free(h_node);
+	return split_clen;
+}
+*/
+int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, int hash_len, int hash_step, int key_len, uint32_t *hash_num, uint64_t **hash_node, int32_t *hash_pos)
+{
+	uint8_t *ref_query;
+	int q_key_int, q_kmer_int, node_i;
+
+	int hash_seed_n = (ref_len-hash_len)/hash_step + 1;
+	int *start_a = (int*)malloc((hash_seed_n + 2) * sizeof(int));	//2: for head and tail
+	int *len_a = (int*)malloc((hash_seed_n + 2) * sizeof(int));
+	if (start_a == NULL || len_a == NULL) {fprintf(stderr, "[hash_split_map] Not enougy memory.\n"); exit(-1);}
+
+	//hash map
+	int i;
+	len_a[0] = 1;		//for head node
+	for (i = 0; i <= ref_len - hash_len; i+=hash_step)
+	{
+		ref_query = ref_seq + i;
+		hash_calcu(&q_key_int, &q_kmer_int, ref_query, hash_len, key_len);
+		if (hash_hit(hash_num, hash_node, &node_i, q_key_int, q_kmer_int, hash_len-key_len) == 1)
+		{
+			start_a[i/hash_step + 1] = ((hash_node[q_key_int][node_i] & 0xffff0000) >> 16);
+			len_a[i/hash_step + 1] = (hash_node[q_key_int][node_i] & 0xffff);
+		}
+		else len_a[i/hash_step + 1] = 0;	//for un-hit seeds
+	}
+	len_a[i/hash_step + 1] = 1;	//for tail node
+
+	//hash-node DP
+	line_node *line = (line_node*)malloc(hash_seed_n * sizeof(line_node));	//store the path of DP result
+	hash_dp_node **h_node = (hash_dp_node **)malloc((hash_seed_n + 2) * sizeof(hash_dp_node*));
+	for (i = 0; i < hash_seed_n+2; ++i)
+		h_node[i] = (hash_dp_node*)malloc(len_a[i] * sizeof(hash_dp_node));
+	if (line == NULL || h_node == NULL) {fprintf(stderr, "[hash_split_map] Not enougy memory.\n"); exit(-1);} 
+
+	int m_len = hash_main_line(hash_pos, start_a, len_a, ref_len, read_len, hash_seed_n, hash_len, hash_step, h_node, line);
+	if (m_len == 0) {fprintf(stderr, "[hash_split_map] error.\n"); return 0;}
+
+	//fill blank with generated SV and SW, return the whole cigar
+	int _q_len, _t_len, _clen, _b_w, _score; 
+	int split_clen=0;
+	uint32_t *_cigar=0;
+	uint32_t *g_cigar;
+	g_cigar = (uint32_t*)malloc(100 * sizeof(uint32_t));
+
+	//1. fix the region between left bound and first line
+		if (h_node[line[0].x][line[0].y].ref_i != 0 && h_node[line[0].x][line[0].y].ref_i + h_node[line[0].x][line[0].y].offset != 0)	//blank exists
+		{
+			_t_len = h_node[line[0].x][line[0].y].ref_i;
+			_q_len = h_node[line[0].x][line[0].y].ref_i + h_node[line[0].x][line[0].y].offset;
+			_b_w = abs(_t_len - _q_len);
+			_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+			/*fprintf(stdout, "before(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");*/
+			_push_cigar(split_cigar, &split_clen, _cigar, _clen);
+			free(_cigar);
+		}
+		else//no blank, add SV cigar
+		{	
+			//         ref_left, read_left, ref_right,           read_right
+			make_indel_cigar(-1, -1,  h_node[line[0].x][line[0].y].ref_i, h_node[line[0].x][line[0].y].ref_i+h_node[line[0].x][line[0].y].offset, &_clen, &g_cigar);
+			/*fprintf(stdout, "before: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");*/
+			_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
+		}
+	//2. fix the region betweed each match-lines
+		int flag, start_i;
+		int overlap = 0;	//UNMATCH seeds' overlap
+		start_i = 0;
+        //XXX here only one node
+		for (i = 0; i < m_len; ++i)
+		{
+			if (i == m_len-1 || h_node[line[i+1].x][line[i+1].y].match_flag != MATCH)
+			{
+				//start -> i
+				g_cigar[0] = (h_node[line[i].x][line[i].y].ref_i - h_node[line[start_i].x][line[start_i].y].ref_i + hash_len - overlap) << 4 | CMATCH;
+				_clen = 1;
+				_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
+
+				if (i == m_len-1) break;
+				//check blank OR generate sv cigar 
+				if (h_node[line[i].x][line[i].y].ref_i + hash_len  < h_node[line[i+1].x][line[i+1].y].ref_i 
+				 && h_node[line[i].x][line[i].y].ref_i + hash_len + h_node[line[i].x][line[i].y].offset < h_node[line[i+1].x][line[i+1].y].ref_i + h_node[line[i+1].x][line[i+1].y].offset)
+				{	//blank exists
+					_t_len = h_node[line[i+1].x][line[i+1].y].ref_i - h_node[line[i].x][line[i].y].ref_i - hash_len;
+					_q_len = _t_len + h_node[line[i+1].x][line[i+1].y].offset - h_node[line[i].x][line[i].y].offset;
+					_b_w = abs(_t_len - _q_len);
+					_score = ksw_global(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len, 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+					/*fprintf(stdout, "before(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");*/
+					_push_cigar(split_cigar, &split_clen, _cigar, _clen);
+					free(_cigar);
+				}
+				else//no blank, add SV cigar
+				{
+					overlap = make_indel_cigar(h_node[line[i].x][line[i].y].ref_i+hash_len-1, h_node[line[i].x][line[i].y].ref_i+hash_len-1+h_node[line[i].x][line[i].y].offset, h_node[line[i+1].x][line[i+1].y].ref_i, h_node[line[i+1].x][line[i+1].y].ref_i+h_node[line[i+1].x][line[i+1].y].offset, &_clen, &g_cigar);
+
+					_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
+				}
+				start_i = i+1;
+			}
+			else continue;
+		}
+	//3. fix the region between last line and right bound	//i = line_end[m_i]-1
+		if (h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len < ref_len && h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset < read_len)//blank exists
+		{
+			_t_len = ref_len - h_node[line[m_len-1].x][line[m_len-1].y].ref_i - hash_len;
+			_q_len = read_len - h_node[line[m_len-1].x][line[m_len-1].y].ref_i - hash_len - h_node[line[m_len-1].x][line[m_len-1].y].offset;
+			_b_w = abs(_t_len - _q_len);
+			_score = ksw_global(_q_len, read_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset+hash_len, _t_len, ref_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len, 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+			_push_cigar(split_cigar, &split_clen, _cigar, _clen);
+			free(_cigar);
+		}
+		else //no blank, add SV cigar
+		{
+			make_indel_cigar(h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len-1, h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len-1+h_node[line[m_len-1].x][line[m_len-1].y].offset, ref_len, read_len, &_clen, &g_cigar);
+			_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
+		}
+	//free variables
+	for (i = 0; i < hash_seed_n+2; ++i)
+        free(h_node[i]);
+	free(h_node); 
+	free(start_a); free(len_a);
+    free(line); free(g_cigar);
+    //printf("counter: %lld\n", (long long)counter);
 	return split_clen;
 }
 
@@ -1787,11 +2332,11 @@ int get_res_cigar(uint8_t *sseq, int slen, int sseq_b1, int sseq_b2, uint8_t *ls
 
 //XXX hash_node: use struct?
 //insertion length = read_len - ref_len
-int split_insert_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, int hash_len, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size)
+int split_insert_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, int hash_len, int hash_step, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size)
 {
 	//fprintf(stdout, "%lld ", (long long)ref_offset);
-	int ref_bound1, ref_bound2, read_bound1, read_bound2;
-	int i;
+	//int ref_bound1, ref_bound2, read_bound1, read_bound2;
+	//int i;
 	int32_t *hash_pos = (int32_t*)malloc(read_len * sizeof(int32_t));
 
 	/*
@@ -1803,7 +2348,7 @@ int split_insert_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int 
 	init_hash(read_seq, read_len, hash_len, hash_num, hash_node, &hash_pos, key_len, hash_size);
 
 	//for multi-breakpoints
-	(*res_len) = hash_split_map(res_cigar, ref_seq, ref_len, read_seq, read_len, hash_len, key_len, *hash_num, *hash_node, hash_pos);
+	(*res_len) = hash_split_map(res_cigar, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos);
 	//printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");
 	// bound1 and bound2
 	/*find_bound(ref_seq, ref_len, read_len, hash_len, key_len, *hash_num, *hash_node, hash_pos, &ref_bound1,&ref_bound2, &read_bound1, &read_bound2);
@@ -1829,12 +2374,12 @@ int split_insert_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int 
 }
 
 //deletion length = ref_len - read_len
-int split_delete_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, int hash_len, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size)
+int split_delete_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, int hash_len, int hash_step, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size)
 {
 	int32_t *hash_pos = (int32_t*)malloc(read_len * sizeof(int32_t));
 	//fprintf(stdout, "%lld ", (long long)ref_offset);
-	int ref_bound1, ref_bound2, read_bound1, read_bound2;
-	int i;
+	//int ref_bound1, ref_bound2, read_bound1, read_bound2;
+	//int i;
 	/*
 	for (i = 0; i < read_len; ++i) fprintf(stdout, %d", read_seq[i]);
 	fprintf(stdout, "\n");
@@ -1844,7 +2389,7 @@ int split_delete_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int 
 	init_hash(read_seq, read_len, hash_len, hash_num, hash_node, &hash_pos, key_len, hash_size);
 
 	//for multi-breakpoints
-	(*res_len) = hash_split_map(res_cigar, ref_seq, ref_len, read_seq, read_len, hash_len, key_len, *hash_num, *hash_node, hash_pos);
+	(*res_len) = hash_split_map(res_cigar, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos);
 	/*printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");*/
 
 	// bound1 and bound2
