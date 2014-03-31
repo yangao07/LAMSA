@@ -7,6 +7,7 @@
 #include "lsat_aln.h"
 #include "bntseq.h"
 #include "frag_check.h"
+#include "split_mapping.h"
 #include "kseq.h"
 KSEQ_INIT(gzFile, gzread)
 
@@ -901,6 +902,8 @@ int frag_main_line(aln_msg *a_msg, int n_seed, int seed_len, line_node **line, i
 		if (line_end[i] != 0) frag_DP_init(f_node, line, line_end, i, (line_node){-1,-1}, a_msg, seed_len);
 	for (i = 1; i < path_n; ++i)
 		if (line_end[i] != 0) frag_update_line(f_node, line, line_end, i, a_msg, seed_len);
+
+
 	//find backtrack node
 	int max_node = -1, max_score = 0;
 	for (i = 0; i < path_n; ++i)
@@ -919,6 +922,13 @@ int frag_main_line(aln_msg *a_msg, int n_seed, int seed_len, line_node **line, i
 			frag_copy_line(line, line_end, f_node[max_node].line_i[i], path_n);
 	}
 
+#ifdef __DEBUG__
+	printf("line:\n");
+	for (i = 0; i < line_end[path_n]; ++i)
+	{
+		printf("%d %d\n", line[path_n][i].x, line[path_n][i].y);
+	}
+#endif
 	//for exist blank gap, use mini_main_line to fill it
 	line_node **_line; int *_line_end; frag_DP_node *_f_node;
 	int line_1, line_2, mini_i;
@@ -957,7 +967,7 @@ int frag_main_line(aln_msg *a_msg, int n_seed, int seed_len, line_node **line, i
 	line_1 = f_node[max_node].line_i[i];
 	if (line[line_1][line_end[line_1]-1].x < n_seed-1)	//blank exists
 	{
-		mini_i = mini_frag_main_line(a_msg, line[line_1][line_end[line_1]-1], (line_node){-1,-1}, seed_len, n_seed, _line, _line_end, _f_node);
+		mini_i = mini_frag_main_line(a_msg, line[line_1][line_end[line_1]-1], (line_node){n_seed,0}, seed_len, n_seed, _line, _line_end, _f_node);
 		if (_line_end[mini_i] != 0)
 			frag_copy_main_line(line, line_end, path_n, _line, _line_end, mini_i);
 	}
@@ -1019,15 +1029,9 @@ int frag_find_path(aln_msg *a_msg, int n_seed, int seed_len, line_node **line, i
 	m_i = frag_main_line(a_msg, n_seed, seed_len, line, line_end, f_node);
 	if (line_end[m_i] == 0) return 0;
 	
-	
-	int i, frag_num = 0, cur_x, cur_y, pre_x, pre_y, con_flag;
-	//frag_set_start/seed/end
-	//first end 
-	/*printf("PATH:\n");
-	for (i = 0; i < line_end[m_i]; ++i)
-		printf("%d %d\n", line[m_i][i].x, line[m_i][i].y);*/
-	frag_num = 0;
-	cur_x = line[m_i][line_end[m_i]-1].x, cur_y = line[m_i][line_end[m_i]-1].y;
+	int i, frag_num = 0, pre_x, pre_y, con_flag;
+	int cur_x = line[m_i][line_end[m_i]-1].x, cur_y = line[m_i][line_end[m_i]-1].y;
+
 	frag_set_msg(a_msg, cur_x, cur_y, FRAG_END, f_msg, frag_num, seed_len);
 #ifdef __DEBUG__
 	fprintf(stdout, "%d %d    end    %d ref %lld read %d\n", cur_x, cur_y, a_msg[cur_x].at[cur_y].nsrand, (long long)a_msg[cur_x].at[cur_y].offset, a_msg[cur_x].read_id);
@@ -1057,7 +1061,6 @@ int frag_find_path(aln_msg *a_msg, int n_seed, int seed_len, line_node **line, i
 			frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, f_msg, frag_num, seed_len);
 			//fprintf(stdout, "%d %d    seed   %d ref %lld read %d\n", pre_x, pre_y, a_msg[pre_x].at[pre_y].nsrand, (long long)a_msg[pre_x].at[pre_y].offset, a_msg[pre_x].read_id);
 		}
-
 	}
 	//i = 0 : START
 	cur_x = line[m_i][0].x;
@@ -1066,6 +1069,262 @@ int frag_find_path(aln_msg *a_msg, int n_seed, int seed_len, line_node **line, i
 #ifdef __DEBUG__
 	fprintf(stdout, "%d %d    start   %d ref %lld read %d\n", cur_x, cur_y, a_msg[cur_x].at[cur_y].nsrand, (long long)a_msg[cur_x].at[cur_y].offset, a_msg[cur_x].read_id);
 #endif
+	return 1;
+}
+
+int frag_dp_init(frag_dp_node **f_node, aln_msg *a_msg, int seed_i, line_node from, int seed_len, int dp_flag)
+{
+	int i;
+	if (from.x == -1)	//UNLIMITED
+	{
+		for (i = 0; i < a_msg[seed_i].n_aln; ++i)
+		{
+			f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, MATCH, dp_flag, 1};
+		}
+	}
+	else
+	{
+		int con_flag;
+		for (i = 0; i < a_msg[seed_i].n_aln; ++i)
+		{
+			get_abs_dis(a_msg, from.x , from.y, seed_i, i, &con_flag, seed_len);
+			if (con_flag != UNCONNECT && con_flag != CHR_DIF)
+				f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, con_flag, dp_flag, 1};
+			else
+				f_node[seed_i][i] = (frag_dp_node){(line_node){-1,0}, seed_i, i, -1, con_flag, 0-dp_flag, 0};
+		}
+	}
+	return 0;
+}
+
+//pruning	XXX
+int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg, int seed_i, int aln_i, int start, int seed_len, int dp_flag)
+{
+	int i, j, con_flag;
+	line_node max_from;
+	int max_score, max_flag;
+
+	max_from = f_node[seed_i][aln_i].from;
+	max_score = f_node[seed_i][aln_i].score;
+
+	for (i = seed_i - 1; i >= start; --i)
+	{
+		for (j = 0; j < a_msg[i].n_aln; ++j)
+		{
+			if (f_node[i][j].dp_flag == dp_flag)
+			{
+				get_abs_dis(a_msg, i, j, seed_i, aln_i, &con_flag, seed_len);
+				if (con_flag == UNCONNECT || con_flag == CHR_DIF)
+					continue;
+				if ((f_node[i][j].score + 1 - (con_flag == MATCH?0:SV_PEN)) > max_score)	
+				{
+					max_from = (line_node){i,j};
+					max_score = f_node[i][j].score + 1 - (con_flag ==MATCH?0:SV_PEN);
+					max_flag = con_flag;
+				}
+			}
+		}
+	}
+	if (max_from.x != f_node[seed_i][aln_i].from.x || max_from.y != f_node[seed_i][aln_i].from.y)
+	{
+		f_node[seed_i][aln_i].from = max_from;
+		f_node[seed_i][aln_i].score = max_score;
+		f_node[seed_i][aln_i].match_flag = max_flag;
+		f_node[seed_i][aln_i].node_n += f_node[max_from.x][max_from.y].node_n;
+	}
+	return 0;
+}
+
+int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg, int seed_len, line_node left, line_node right, line_node *line, int n_seed)
+{
+	int i, j, mini_dp_flag = MULTI_FLAG;
+	//dp init
+	for (i = left.x + 1; i < right.x; ++i)
+	{
+		//mini_dp XXX?
+		frag_dp_init(f_node, a_msg, i, left, seed_len, mini_dp_flag);
+	}
+	//dp update
+	for (i = left.x + 2; i < right.x; ++i)
+	{
+		for (j = 0; j < a_msg[i].n_aln; ++j)
+		{
+			if (f_node[i][j].dp_flag == mini_dp_flag)
+				frag_dp_update(f_node, a_msg, i, j, left.x+1, seed_len, mini_dp_flag);
+		}
+	}
+	//find backtrack start node
+	int max_score = 0, max_n = 0;
+	line_node max_node = left;
+	if (right.x == n_seed)	//UNLIMITED 
+	{
+		for (i = right.x - 1; i > left.x; --i)
+		{
+			for (j = 0; j < a_msg[i].n_aln; ++j)
+			{
+				if (f_node[i][j].dp_flag == mini_dp_flag && f_node[i][j].score > max_score)
+				{
+					max_score = f_node[i][j].score;
+					max_node = (line_node){i, j};
+					max_n = f_node[i][j].node_n;
+				}
+			}
+		}
+	}
+	else
+	{
+		f_node[right.x][right.y].from = left;
+		f_node[right.x][right.y].score = 0;
+		f_node[right.x][right.y].dp_flag = mini_dp_flag;
+		f_node[right.x][right.y].node_n = 0;
+		frag_dp_update(f_node, a_msg, right.x, right.y, left.x+1, seed_len, mini_dp_flag);
+		max_node = f_node[right.x][right.y].from;
+		max_n = f_node[right.x][right.y].node_n;
+	}
+	//backtrack
+	line_node _right = max_node, _left;
+	int node_i = max_n-1;
+	while (_right.x != left.x)
+	{
+		if (node_i < 0) { fprintf(stderr, "[frag mini dp] node_i BUG 1.\n"); exit(0); }
+		line[node_i--] = _right;
+		_left = f_node[_right.x][_right.y].from;
+		_right = _left;
+	}
+	if (node_i >= 0) { fprintf(stderr, "[frag mini dp] node_i BUG 2.\n"); exit(0); }
+	return max_n;
+}
+
+int frag_dp_line(aln_msg *a_msg, int n_seed, int seed_len, line_node *line, frag_dp_node **f_node)
+{
+	int i, j;
+	int min_len = 1, min_exist=0;
+
+	//dp init
+	{
+		for (i = 0; i < n_seed; ++i)
+		{
+			if (a_msg[i].n_aln <= min_len)
+			{
+				frag_dp_init(f_node, a_msg, i, (line_node){-1,0}, seed_len, MIN_FLAG);
+				min_exist = 1;
+			}
+			else
+				frag_dp_init(f_node, a_msg, i, (line_node){-1,0}, seed_len, MULTI_FLAG);
+		}
+	}
+	//dp update and backtrack
+	{
+		if (min_exist)
+		{
+			//min extend
+				/*for (i = 0; i < n_seed; ++i)
+				{
+					if (a_msg[i].n_aln <= min_len)
+					{
+						for (j = 0; j < a_msg[i].n_aln; ++j)
+							frag_min_extend(f_node, i, j, n_seed, min_len, MIN_FLAG, seed_len);
+					}
+				}*/
+			//min update
+				for (i = 1; i < n_seed; ++i)
+				{
+					for (j = 0; j < a_msg[i].n_aln; ++j)
+					{
+						if (f_node[i][j].dp_flag == MIN_FLAG)
+							frag_dp_update(f_node, a_msg, i, j, 0/*update start pos*/, seed_len, MIN_FLAG);
+					}
+				}
+			//find backtrack start node
+				int max_score=0;
+				line_node max_node = (line_node){-1,0};
+				for (i = n_seed-1; i >= 0; --i)
+				{
+					for (j = 0; j < a_msg[i].n_aln; ++j)
+					{
+						if (f_node[i][j].dp_flag == MIN_FLAG && f_node[i][j].score > max_score)
+						{
+							max_score = f_node[i][j].score;
+							max_node = (line_node){i,j};
+						}
+					}
+				}
+			//backtrack
+				int node_i = 0, mini_len;
+				line_node right, left;
+				line_node *_line = (line_node*)malloc(n_seed * sizeof(line_node));
+				if (max_node.x < n_seed - 1)
+				{
+					mini_len = frag_mini_dp_line(f_node, a_msg, seed_len, max_node, (line_node){n_seed, 0}, _line, n_seed);
+					for (i = mini_len-1; i >= 0; --i)
+						line[node_i++] = _line[i];
+				}
+				right = max_node;
+				while (right.x != -1)
+				{
+					line[node_i++] = right;
+					left = f_node[right.x][right.y].from;
+
+					if (left.x < right.x - 1 )//f_node[right.x][right.y].match_flag != MATCH)	//XXX if left.x < right.x-1, match_flag of right node couldn't be match?
+					{
+						//mini frag dp
+							mini_len = frag_mini_dp_line(f_node, a_msg, seed_len, left, right, _line, n_seed);
+							for (i = mini_len-1; i >= 0; --i)
+								line[node_i++] = _line[i];
+					}
+					right = left;
+				}
+				free(_line);
+				//invert line
+				line_node tmp;
+				for (i = 0; i < node_i/2; ++i)
+				{
+					tmp =line[i]; line[i] = line[node_i-i-1]; line[node_i-i-1] = tmp;
+				}
+				return node_i;
+		}
+		else	//whole-multi dp, should not go to here for current data.
+		{
+			;
+		}
+	}
+}
+
+int frag_dp_path(aln_msg *a_msg, int n_seed, int seed_len, frag_msg *f_msg)
+{
+	int i, j;
+	//DP
+	line_node *line = (line_node*)malloc(n_seed * sizeof(line_node));
+	frag_dp_node **f_node = (frag_dp_node**)malloc((n_seed) * sizeof(frag_dp_node*));
+	for (i = 0; i < n_seed; ++i)
+		f_node[i] = (frag_dp_node*)malloc(a_msg[i].n_aln * sizeof(frag_dp_node)); 
+	if (line == NULL || f_node == NULL) { fprintf(stderr, "[frag_dp_path] Not enougy memory.\n"); exit(0); }
+
+	int m_len = frag_dp_line(a_msg, n_seed, seed_len, line, f_node);
+	if (m_len == 0) return 0;
+
+	int frag_num = 0;
+	int cur_x , cur_y , pre_x=line[m_len-1].x, pre_y=line[m_len-1].y;
+
+	//first end
+	frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, f_msg, frag_num, seed_len);
+	for (i = m_len-1; i > 0; --i)
+	{
+		cur_x = pre_x; cur_y = pre_y;
+		pre_x = line[i-1].x; pre_y = line[i-1].y;
+		if (f_node[cur_x][cur_y].match_flag != MATCH && f_node[cur_x][cur_y].match_flag != MISMATCH)
+		{
+			frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, f_msg, frag_num, seed_len);
+			++frag_num;
+			frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, f_msg, frag_num, seed_len);
+		}
+		else	//seed
+			frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, f_msg, frag_num, seed_len);
+	}
+	cur_x = line[0].x; cur_y = line[0].y;
+	frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, f_msg, frag_num, seed_len);
+	//free variables
+	free(line); for (i = 0; i < n_seed; ++i) free(f_node[i]); free(f_node);
 	return 1;
 }
 
@@ -1134,7 +1393,6 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	aln_msg *a_msg; 
 	frag_msg *f_msg;
 	int /***line,*/ *line_end, *price_n;
-    //int *main_line, **main_price, **main_path; path_msg **path; 
 	line_node **line;
 	frag_DP_node *f_node;
 
@@ -1144,41 +1402,27 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	a_msg = aln_init_msg(s_msg->seed_max);
 
 	//line = (int**)malloc(s_msg->seed_max * sizeof(int*));
-	line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
-    line_end = (int*)malloc(s_msg->seed_max * sizeof(int));
-	f_node = (frag_DP_node*)malloc(s_msg->seed_max * sizeof(frag_DP_node));
+	//line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
+    //line_end = (int*)malloc(s_msg->seed_max * sizeof(int));
+	//f_node = (frag_DP_node*)malloc(s_msg->seed_max * sizeof(frag_DP_node));
 	
-
-	/*
-    main_line = (int*)malloc(s_msg->seed_max * sizeof(int));
-    main_price = (int**)malloc(s_msg->seed_max * sizeof(int*));
-    main_path = (int**)malloc(s_msg->seed_max * sizeof(int*));
-	*/
-
-	price_n = (int*)malloc(s_msg->seed_max * sizeof(int));
-	//path = (path_msg**)malloc(s_msg->seed_max * sizeof(path_msg*));
-
 	f_msg = frag_init_msg(s_msg->seed_max);
 	readfp = gzopen(read_prefix, "r");
 	read_seq_t = kseq_init(readfp);
 	//read_seq = (char*)calloc(s_msg->read_max_len+1, sizeof(char));
 
-	for (i = 0; i < s_msg->seed_max; ++i) {
-		//line[i] = (int*)malloc(s_msg->seed_max * sizeof(int));
+	/*for (i = 0; i < s_msg->seed_max; ++i) {
 		line[i] = (line_node*)malloc(s_msg->seed_max * sizeof(line_node));
 		f_node[i].line_i = (int*)malloc(s_msg->seed_max * sizeof(int));
-
-		/* main_price[i] = (int*)malloc(s_msg->seed_max * sizeof(int));
-        main_path[i] = (int*)malloc(s_msg->seed_max * sizeof(int));
-
-		path[i] = (path_msg*)malloc((PER_ALN_N+1) * sizeof(path_msg)); */
-	}
+	}*/
 
 	//alloc mem for hash mapping
 	uint32_t *hash_num;
 	uint64_t **hash_node;
-	hash_num = (uint32_t*)malloc(16 * sizeof(uint32_t));	//16 = pow(4, 2)
-	hash_node = (uint64_t**)malloc(16 * sizeof(uint64_t*));
+	int key_len = 2;
+	int hash_size = (int)pow(NT_N, key_len);
+	hash_num = (uint32_t*)malloc(hash_size * sizeof(uint32_t));	//16 = pow(4, 2)
+	hash_node = (uint64_t**)malloc(hash_size * sizeof(uint64_t*));
     
 	if ((result_p = fopen(seed_result, "r")) == NULL) {
 		fprintf(stderr, "[lsat_aln] Can't open seed result file %s.\n", seed_result); 
@@ -1207,10 +1451,15 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 				if (last_id != 0) {
 				//	fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
 					//if (find_path(a_msg, n_seed, line, path_end, path, price_n, seed_len, bns->n_seqs))
-					if (frag_find_path(a_msg, n_seed, seed_len, line, line_end, f_node, f_msg))
+					//if (frag_find_path(a_msg, n_seed, seed_len, line, line_end, f_node, f_msg))
+					if (frag_dp_path(a_msg, n_seed, seed_len, f_msg))
+					{
 						//if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
 						/* SW-extenging */
-						frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1], f_msg, a_msg, &hash_num, &hash_node, seed_len, s_msg->last_len[n_read]);
+						f_msg->last_len = s_msg->last_len[n_read];
+						f_msg->seed_all = s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1];
+						frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], f_msg, a_msg, &hash_num, &hash_node, seed_len);
+					}
 				}
 				n_seed = 0;
 				while (s_msg->n_seed[n_read] < read_id) {
@@ -1237,25 +1486,28 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	}
 	//fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
 	//if (find_path(a_msg, n_seed, line, path_end, path, price_n, seed_len, bns->n_seqs))
-	if (frag_find_path(a_msg, n_seed, seed_len, line, line_end, f_node, f_msg))
+	//if (frag_find_path(a_msg, n_seed, seed_len, line, line_end, f_node, f_msg))
+	if (frag_dp_path(a_msg, n_seed, seed_len, f_msg))
+	{
 		//if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
 		/* SW-extenging */
-			frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1], f_msg, a_msg, &hash_num, &hash_node, seed_len, s_msg->last_len[n_read]);
+		f_msg->seed_all = s_msg->n_seed[n_read] - s_msg->n_seed[n_read-1];
+		f_msg->last_len = s_msg->last_len[n_read];
+		frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], f_msg, a_msg, &hash_num, &hash_node, seed_len);
 
+	}
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);
-	for (i = 0; i < s_msg->seed_max; ++i) { free(line[i]); free(f_node[i].line_i); /*free(path[i]); free(main_price[i]); free(main_path[i]);*/}
-	free(line); free(price_n); free(line_end); free(f_node);
-    //free(main_price); free(main_path); free(path); 
+	//for (i = 0; i < s_msg->seed_max; ++i) { free(line[i]); free(f_node[i].line_i); /*free(path[i]); free(main_price[i]); free(main_path[i]);*/}
+	//free(line); free(price_n); free(line_end); free(f_node);
 
     //hash map
 	free(hash_num); 
-	for (i = 0; i < 16; ++i) free(hash_node[i]);
+	for (i = 0; i < hash_size; ++i) free(hash_node[i]);
 	free(hash_node);
 
 	frag_free_msg(f_msg);
 	gzclose(readfp); kseq_destroy(read_seq_t);
-	//free(read_seq);
 
 	return 0;
 }

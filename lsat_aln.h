@@ -8,15 +8,19 @@
 #define SEED_LEN 100
 #define PER_ALN_N 100
 
+#define HASH_MIN_LEN 1
+
 #define EDIT_THS 3
 
 #define MATCH 0
-#define INSERT 1
-#define DELETION 2
-#define CHR_DIF 3
-#define REVERSE 4
-#define UNCONNECT 5
-#define PATH_END 6
+#define MISMATCH 1
+#define INSERT 2
+#define DELETION 3
+#define CHR_DIF 4
+#define REVERSE 5
+#define UNCONNECT 6
+#define UNMATCH 7
+#define PATH_END 8
 
 #define DEL_THD 100000	//XXX
 #define THRSHOLD 50
@@ -24,6 +28,10 @@
 #define PRICE_DIF_CHR 100000	//相邻read比对到不同chr上的路径代价
 #define PRICE_LONG_DEL 5000
 #define PRICE_SKIP	20
+
+#define FRAG_START 0
+#define FRAG_SEED 1
+#define FRAG_END 2
 
 #define adjest(dis) (dis>THRSHOLD?THRSHOLD:dis)
 
@@ -67,6 +75,7 @@ typedef struct {	//全部read包含seed数目信息
 	int *last_len;	//last_len                  index from 1
     int seed_max;   //contig中分割成短read的数目最大值	
     int read_max_len;    //max length of read
+	int read_m; 
 } seed_msg;
 
 typedef struct {
@@ -96,14 +105,38 @@ typedef struct {
 } hash_aln_msg;*/
 
 typedef struct {
-	int x;
-	int y;
+	int32_t x;
+	int32_t y;
 } from_t;
 
 typedef struct {
     int flag;   //MATCH INSERT DELETION
     from_t from;
 } path_msg;
+
+#define SV_PEN 2
+typedef struct {
+	int x;		//seed#
+	int y;		//n_aln#
+} line_node;
+
+typedef struct {
+	int seed_num;
+	int n_line;
+	int *line_i;
+	int score;	//score = sum(seed_num) - sum(SV) * SV_PEN
+	int from_i;
+} frag_DP_node;
+
+typedef struct {
+	line_node from;
+	int seed_i;
+	int aln_i;
+	int score;
+	uint8_t match_flag;
+	int dp_flag;
+	int node_n;
+} frag_dp_node;
 
 int lsat_aln(int argc, char* argv[]);
 

@@ -74,6 +74,7 @@ typedef struct {
 	int frag_num;
 	int last_len;
 	int seed_num;	//whole number
+	int seed_all;	//all the seeds from read
 	int per_seed_max;
 	frag_aln_msg *fa_msg;
 } frag_msg;
@@ -82,7 +83,7 @@ typedef struct {
 typedef struct {
 	uint64_t offset;	//1-based
 	int chr;
-	int nsrand;			//1:'+' -1:'-'
+	int nsrand;			//1:'+' 0:'-'
 	uint32_t *cigar;
 	int c_m;
 	int cigar_len;
@@ -94,7 +95,7 @@ extern char nst_nt4_table[256];
 frag_msg *frag_init_msg(int frag_max);
 void frag_free_msg(frag_msg *f_msg);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len);//FLAG 0: start/1:end / 2:seed
-int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_seq, int read_len, int seed_all, frag_msg *f_msg, aln_msg *a_msg, uint32_t **hash_num, uint64_t ***hash_node, int seed_len, int last_len);
+int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_seq, int read_len, frag_msg *f_msg, aln_msg *a_msg, uint32_t **hash_num, uint64_t ***hash_node, int seed_len);
 void printcigar(uint32_t *cigar, int cigar_len);
 
 #define MAXOFTWO(a, b) ((a) > (b) ? (a) : (b))
@@ -112,5 +113,7 @@ void printcigar(uint32_t *cigar, int cigar_len);
 #define UNCOVERED 0
 
 #define MAX_E 3
+
+#define _MAX_K 30
 
 #endif

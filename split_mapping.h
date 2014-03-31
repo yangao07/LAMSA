@@ -1,7 +1,6 @@
 #ifndef SPLIT_MAP_H
 #define SPLIT_MAP_H
-//#define __DEBUG__
-//#define __NEW__
+#define __NEW__
 
 #include "lsat_aln.h"
 #include "frag_check.h"
@@ -61,6 +60,7 @@ typedef struct {
 
 #define MIN_FLAG 1
 #define MULTI_FLAG 2
+#define UNLIMITED_FLAG 3
 
 #define HASH_FRAG_START 1
 #define HASH_FRAG_END 2
@@ -74,9 +74,16 @@ typedef struct {
 extern const int8_t sc_mat[25];
 #define HASH_LEN 10
 #define HASH_STEP 1
+#define NT_N 4	//XXX for N
 
 int split_delete_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, 
 					int hash_len, int hash_step, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size);
 int split_insert_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, 
 					int hash_len, int hash_step, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size);
+int hash_left_bound_map(uint32_t **cigar, int *cigar_len, uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
+		                uint32_t **hash_num, uint64_t ***hash_node, int hash_len, int hash_key, int hash_step);
+
+int hash_right_bound_map(uint32_t **cigar, int *cigar_len, uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
+		                 uint32_t **hash_num, uint64_t ***hash_node, int hash_len, int hash_key, int hash_step);
+
 #endif
