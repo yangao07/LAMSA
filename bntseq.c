@@ -277,7 +277,9 @@ bntseq_t *bns_restore(const char *prefix)
 	return bns_restore_core(ann_filename, amb_filename, pac_filename);
 }
 
-int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_coor, const int64_t len, uint8_t *seq, const int srand)
+//@func: check if 'N' exist in the ref seq
+//@para: b1 and b2 are the left most and right most boundary respectively
+int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_coor, const int64_t len, uint8_t *seq, int *n_len)
 {
 	int i;
 	int32_t offset = bns->anns[seq_n-1].ambs_offset;
@@ -308,6 +310,7 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 		return 0;
 	
 	left = l_amb + 1; right = bns->anns[seq_n-1].n_ambs;
+	*n_len = 0;
 	while (left < right)
 	{
 		mid = (left + right) >> 1;
@@ -324,6 +327,10 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 				left = mid + 1;
 		}
 	}
+	//0-base 
+	//*b1 = pac_coor > bns->ambs[l_amb+offset].offset ? 0 : bns->ambs[l_amb+offset].offset - pac_coor;
+	//*b2 = pac_coor + len > (bns->ambs[r_amb+offset].offset + bns->ambs[r_amb+offset].len) ? 
+	//			bns->ambs[r_amb+offset].offset+bns->ambs[r_amb+offset].len - pac_coor : len;
 	for (i = l_amb; i <= r_amb; i++)
 	{
 		int64_t s, e, j;
@@ -331,28 +338,29 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 		e = pac_coor + len > (bns->ambs[i+offset].offset + bns->ambs[i+offset].len) ? 
 				bns->ambs[i+offset].offset + bns->ambs[i+offset].len : pac_coor+len;
 		//printf("s: %lld e: %lld\n", s, e);
-		if (srand == -1)	//rev
+		/*if (srand == -1)	//rev
 		{
 			for (j = len-e; j < len-s; j++)
-				seq[j+pac_coor] <<= 2;
+				seq[j+pac_coor] <<= 2;	//1->4('C'->'N')
 		}
-		else
+		else*/
 		{
 			for (j = s; j < e; j++)
-				seq[j-pac_coor] <<= 1;	//recover to N
+				seq[j-pac_coor] <<= 1;	//recover to N, 2->4('G'->'N')
+			*n_len += (e-s);
 		}
 	}
-	return 2;
+	return 1;
 }
 
 #define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
 //convert binary seq to 'ACGT' sequence
-int pac2fa_core(const bntseq_t *bns, const uint8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int srand, int *FLAG, uint8_t *seq)
+int pac2fa_core(const bntseq_t *bns, const uint8_t *pac, const int32_t seq_n, const int64_t start/*0-base*/, int32_t *len, const int srand, int *N_FLAG, int *N_len, uint8_t *seq)
 {
 	int64_t pac_coor;
 	int64_t i,k;
 	
-	*FLAG = 0;
+	//*N_FLAG = 0;
 
 	if (start > bns->anns[seq_n-1].len)
 	{
@@ -363,13 +371,14 @@ int pac2fa_core(const bntseq_t *bns, const uint8_t *pac, const int32_t seq_n, co
 	if (start + *len > bns->anns[seq_n-1].len)	//candidate seq is out of range.
 	{
 		*len = bns->anns[seq_n-1].len - start;
-		*FLAG |= 1;	
 	}
 
 	if (srand == -1)	//rev
 	{
-		for (i = *len-1, k = pac_coor; i >= 0; i--, k++)
-			seq[i] = 3-(pac[k>>2] >> ((~k&3) << 1) & 0x3);
+		/*for (i = *len-1, k = pac_coor; i >= 0; i--, k++)
+			seq[i] = 3-(pac[k>>2] >> ((~k&3) << 1) & 0x3);*/
+		fprintf(stderr, "[pac2fa] Error.\n"); 
+		exit(0);
 	}
 	else
 	{
@@ -377,7 +386,7 @@ int pac2fa_core(const bntseq_t *bns, const uint8_t *pac, const int32_t seq_n, co
 			seq[i] = (pac[k>>2] >> ((~k&3) << 1) & 0x3);
 	}
 
-	*FLAG |= n_recover(bns, seq_n, pac_coor, *len, seq, srand);	//0 : no 'N', or 2.
+	*N_FLAG = n_recover(bns, seq_n, pac_coor, *len, seq, N_len);	//0 : no 'N', or 2.
 	return 0;
 }
 

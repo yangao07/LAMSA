@@ -71,7 +71,6 @@ typedef struct {
 	int frag_right_bound;	//read_id of next line's first seed, if NO next line, this will be n_seed+1
 } frag_msg;
 
-
 typedef struct {
 	uint64_t offset;	//1-based
 	int chr;
@@ -79,6 +78,12 @@ typedef struct {
 	uint32_t *cigar;
 	int c_m;
 	int cigar_len;
+} line_aln_res;
+
+typedef struct {
+	int res_m;
+	int cur_res_n;
+	line_aln_res *la;	
 } aln_res;
 
 extern const int8_t sc_mat[25];
