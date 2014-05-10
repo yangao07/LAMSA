@@ -76,14 +76,32 @@ extern const int8_t sc_mat[25];
 #define HASH_STEP 1
 #define NT_N 4	//XXX for N
 
-int split_delete_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, 
-					int hash_len, int hash_step, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size);
-int split_insert_map(uint32_t **res_cigar, int *res_len, uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, int64_t ref_offset, 
-					int hash_len, int hash_step, uint32_t **hash_num, uint64_t ***hash_node, int key_len, int hash_size);
-int hash_left_bound_map(uint32_t **cigar, int *cigar_len, uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
-		                uint32_t **hash_num, uint64_t ***hash_node, int hash_len, int hash_key, int hash_step);
+int split_delete_map(uint32_t **res_cigar, int *res_len, 
+					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
+					 int64_t ref_offset, 
+					 int hash_len, int hash_step, 
+					 uint32_t **hash_num, uint64_t ***hash_node, 
+					 int key_len, int hash_size);
+int split_insert_map(uint32_t **res_cigar, int *res_len, 
+					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
+					 int64_t ref_offset, 
+					 int hash_len, int hash_step, 
+					 uint32_t **hash_num, uint64_t ***hash_node, 
+					 int key_len, int hash_size);
+int hash_left_bound_map(uint32_t **cigar, int *cigar_len, 
+						uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
+		                uint32_t **hash_num, uint64_t ***hash_node, 
+						int hash_len, int hash_key, int hash_step);
 
-int hash_right_bound_map(uint32_t **cigar, int *cigar_len, uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
-		                 uint32_t **hash_num, uint64_t ***hash_node, int hash_len, int hash_key, int hash_step);
+int hash_right_bound_map(uint32_t **cigar, int *cigar_len, 
+						 uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
+		                 uint32_t **hash_num, uint64_t ***hash_node, 
+						 int hash_len, int hash_key, int hash_step);
+
+int hash_both_bound_map(uint32_t **cigar, int *cigar_len, 
+						 uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
+		                 uint32_t **hash_num, uint64_t ***hash_node, 
+						 int hash_len, int hash_key, int hash_step);
+
 
 #endif

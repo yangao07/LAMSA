@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <getopt.h>
 #include <zlib.h>
 #include <unistd.h>
@@ -302,7 +303,9 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 	a_msg[seed_i].at[aln_i].bmax = (int)(bd > bi ? bd : bi);
 }
 
-void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, int chr, int64_t offset, char srand, int edit_dis, char *cigar)
+void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, 
+			 int read_id, int chr, int64_t offset, 
+			 char srand, int edit_dis, char *cigar)
 {   //read_x: (除去unmap和repeat的)read序号, aln_y: read对应的比对结果序号(从1开始)
 	if (aln_y > PER_ALN_N) {
 		fprintf(stderr, "[lsat_aln] setAmsg ERROR!\n");
@@ -695,7 +698,9 @@ int add_path(aln_msg *a_msg, path_msg **path, int *price_n, int start, int end, 
 	return 1;
 }
 
-int frag_add_seed(aln_msg *a_msg, int seed_i, int aln_i, int *path_n, line_node **line, int *line_end, int seed_len)
+int frag_add_seed(aln_msg *a_msg, int seed_i, int aln_i, 
+				  int *path_n, line_node **line, int *line_end, 
+				  int seed_len)
 {
 	int con_flag;
 	if (*path_n > 0)
@@ -719,7 +724,10 @@ int frag_add_seed(aln_msg *a_msg, int seed_i, int aln_i, int *path_n, line_node 
 	return 0;
 }
 
-int frag_DP_init(frag_DP_node *f_node, line_node **line, int *line_end, int path_i, line_node from, aln_msg *a_msg, int seed_len)
+int frag_DP_init(frag_DP_node *f_node, 
+				 line_node **line, int *line_end, 
+				 int path_i, line_node from, 
+				 aln_msg *a_msg, int seed_len)
 {
 	f_node[path_i].seed_num = line_end[path_i];
 	f_node[path_i].n_line = 1;
@@ -727,11 +735,13 @@ int frag_DP_init(frag_DP_node *f_node, line_node **line, int *line_end, int path
 	f_node[path_i].from_i = -1;
 	int con_flag;
 	get_abs_dis(a_msg, from.x, from.y, line[path_i][0].x, line[path_i][0].y, &con_flag, seed_len);
-	f_node[path_i].score = (con_flag == F_MATCH ? (line_end[path_i]):(line_end[path_i] - SV_PEN));
+	f_node[path_i].score = (con_flag == F_MATCH ? (line_end[path_i]):(line_end[path_i] - F_SV_PEN));
 	return 0;
 }
 
-int frag_update_line(frag_DP_node *f_node, line_node **line, int *line_end, int path_i, aln_msg *a_msg, int seed_len)
+int frag_update_line(frag_DP_node *f_node, 
+					 line_node **line, int *line_end, 
+				     int path_i, aln_msg *a_msg, int seed_len)
 {
 	int i, pre, pre_i, cur, cur_i, con_flag;
 	int max_score = f_node[path_i].score, max_from = -1;
@@ -750,15 +760,15 @@ int frag_update_line(frag_DP_node *f_node, line_node **line, int *line_end, int 
 		//2. check if line[i] is the most suitable one
 		if (con_flag == F_MATCH)
 		{
-			if (f_node[i].score + f_node[path_i].seed_num > max_score)
+			if (f_node[i].score + f_node[path_i].seed_num + F_MATCH_SCORE > max_score)
 			{
 				max_from = i;
 				max_score = f_node[i].score + f_node[path_i].seed_num;
 			}
 		}
-		else if (f_node[i].score + f_node[path_i].seed_num - SV_PEN > max_score)
+		else if (f_node[i].score + f_node[path_i].seed_num - F_SV_PEN > max_score)
 		{
-			max_score = f_node[i].score + f_node[path_i].seed_num - SV_PEN;
+			max_score = f_node[i].score + f_node[path_i].seed_num - F_SV_PEN;
 			max_from = i;
 		}
 	}
@@ -787,7 +797,11 @@ int frag_copy_line(line_node **line, int *line_end, int from, int to)
 	return 0;
 }
 
-int mini_frag_main_line(aln_msg *a_msg, line_node left, line_node right, int seed_len, int n_seed, line_node **line, int *line_end, frag_DP_node *f_node)
+int mini_frag_main_line(aln_msg *a_msg, 
+						line_node left, line_node right, 
+						int seed_len, int n_seed, 
+						line_node **line, int *line_end, 
+						frag_DP_node *f_node)
 {
 	//two bounds
 	int start = left.x+1, end = right.x-1;
@@ -1073,14 +1087,38 @@ int frag_main_line(aln_msg *a_msg, int n_seed, int seed_len, line_node **line, i
 	return 1;
 }*/
 
-int frag_dp_init(frag_dp_node **f_node, aln_msg *a_msg, int seed_i, line_node from, int seed_len, int dp_flag)
+void f_node_set(frag_dp_node ***f_node, int f_x, int f_y, 
+				line_node from, int seed_i, int aln_i, int score, 
+				uint8_t match_flag, int dp_flag, int backtrack_flag, 
+				int node_n, int peak_value, line_node peak, 
+				int next_trigger_n, int pre_trigger_n)
+{
+    (*f_node)[f_x][f_y].from = from;
+    (*f_node)[f_x][f_y].seed_i = seed_i;
+    (*f_node)[f_x][f_y].aln_i = aln_i;
+    (*f_node)[f_x][f_y].score = score;
+    (*f_node)[f_x][f_y].match_flag = match_flag;
+    (*f_node)[f_x][f_y].dp_flag = dp_flag;
+    (*f_node)[f_x][f_y].backtrack_flag = backtrack_flag;
+    (*f_node)[f_x][f_y].node_n = node_n;
+    (*f_node)[f_x][f_y].peak_value = peak_value;
+    (*f_node)[f_x][f_y].peak = peak;
+    (*f_node)[f_x][f_y].next_trigger_n = next_trigger_n;
+    (*f_node)[f_x][f_y].pre_trigger_n = pre_trigger_n;
+}
+
+int frag_dp_init(frag_dp_node **f_node, 
+				 aln_msg *a_msg, int seed_i, 
+				 line_node from, int seed_len, int dp_flag)
 {
 	int i;
 	if (from.x == -1)	//UNLIMITED
 	{
 		for (i = 0; i < a_msg[seed_i].n_aln; ++i)
 		{
-			f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, F_MATCH, dp_flag, 1};
+            //init-score: 0 == 1 + 1 - F_SV_PEN
+			//f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, F_MATCH, dp_flag, 1, 1, 0, (line_node){-1,-1}, 0, 0};
+            f_node_set(&f_node, seed_i, i, from, seed_i, i, 0, F_MATCH, dp_flag, 1, 1, 0, (line_node){-1, -1}, 0, 0);
 		}
 	}
 	else
@@ -1090,17 +1128,57 @@ int frag_dp_init(frag_dp_node **f_node, aln_msg *a_msg, int seed_i, line_node fr
 		{
 			get_abs_dis(a_msg, from.x , from.y, seed_i, i, &con_flag, seed_len);
 			if (con_flag != F_UNCONNECT && con_flag != F_CHR_DIF)
-				//f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, con_flag, dp_flag, 1};		XXX MATCH, MISMATCH: same score?
-				f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, (con_flag==F_MATCH||con_flag==F_MISMATCH)?1:0, con_flag, dp_flag, 1};
+				//f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, con_flag, dp_flag, 1};		XXX MATCH, MISMATCH: same score?, init-score XXX
+                //init-score: 3 == 1 + 1 + F_MATCH_SCORE
+                //            0 == 1 + 1 - F_SV_PEN
+				//f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, (con_flag==F_MATCH||con_flag==F_MISMATCH)?3:0, con_flag, dp_flag, 1, 1, 0, (line_node){-1,-1}, 0, 0};
+                f_node_set(&f_node, seed_i, i, from, seed_i, i, (con_flag==F_MATCH||con_flag==F_MISMATCH)?3:0, con_flag, dp_flag, 1, 1, 0, (line_node){-1,-1}, 0, 0);
 			else
-				f_node[seed_i][i] = (frag_dp_node){(line_node){-1,0}, seed_i, i, -1, con_flag, 0-dp_flag, 0};
+				//f_node[seed_i][i] = (frag_dp_node){(line_node){-1,0}, seed_i, i, -1, con_flag, 0-dp_flag, 1, 0, 0, (line_node){-1,-1}, 0, 0};
+                f_node_set(&f_node, seed_i, i, (line_node){-1,0}, seed_i, i, -1, con_flag, 0-dp_flag, 1, 0, 0, (line_node){-1,-1}, 0, 0);
 		}
 	}
 	return 0;
 }
-
+int frag_dp_multi_init(frag_dp_node **f_node, 
+					   aln_msg *a_msg, 
+					   int seed_i, line_node from, 
+					   int seed_len, int dp_flag)
+{
+	int i;
+	if (from.x == -1)	//UNLIMITED
+	{
+		for (i = 0; i < a_msg[seed_i].n_aln; ++i)
+		{
+            //init-score: 0 == 1 + 1 - F_SV_PEN
+			//f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, F_MATCH, dp_flag, 1, 1, 0, (line_node){-1,-1}, 0, 0};
+            f_node_set(&f_node, seed_i, i, from, seed_i, i, 0, F_MATCH, dp_flag, 1, 1, 0, (line_node){-1,-1}, 0, 0);
+		}
+	}
+	else
+	{
+		int con_flag;
+		for (i = 0; i < a_msg[seed_i].n_aln; ++i)
+		{
+			get_abs_dis(a_msg, from.x , from.y, seed_i, i, &con_flag, seed_len);
+			if (con_flag == F_MATCH || con_flag == F_MISMATCH)
+				//f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 0, con_flag, dp_flag, 1};		XXX MATCH, MISMATCH: same score?, init-score XXX
+                //init-score: 3 == 1 + 1 + F_MATCH_SCORE
+                //            0 == 1 + 1 - F_SV_PEN
+				//f_node[seed_i][i] = (frag_dp_node){from, seed_i, i, 2+F_MATCH_SCORE, con_flag, dp_flag, 1, 1, 0, (line_node){-1,-1}, 0, 0};
+                f_node_set(&f_node, seed_i, i, from, seed_i, i, 2+F_MATCH_SCORE, con_flag, dp_flag, 1, 1, 0, (line_node){-1,-1}, 0, 0);
+			else
+				//f_node[seed_i][i] = (frag_dp_node){(line_node){-1,0}, seed_i, i, -1, con_flag, 0-dp_flag, 1, 0, 0, (line_node){-1,-1}, 0, 0};
+                f_node_set(&f_node, seed_i, i, (line_node){-1,0}, seed_i, i, -1, con_flag, 0-dp_flag, 1, 0, 0, (line_node){-1,-1}, 0, 0);
+		}
+	}
+	return 0;
+}
 //pruning	XXX
-int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg, int seed_i, int aln_i, int start, int seed_len, int dp_flag)
+int frag_dp_update(frag_dp_node **f_node, 
+				   aln_msg *a_msg, 
+				   int seed_i, int aln_i, 
+				   int start, int seed_len, int dp_flag)
 {
 	int i, j, con_flag;
 	line_node max_from;
@@ -1119,10 +1197,10 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg, int seed_i, int aln_i,
 				if (con_flag == F_UNCONNECT || con_flag == F_CHR_DIF)
 					continue;
 				//											XXX MATCH, MISMATCH: same score?
-				if ((f_node[i][j].score + 1 - ((con_flag == F_MATCH||con_flag == F_MISMATCH)?0:SV_PEN)) > max_score)	
+				if ((f_node[i][j].score + 1 + ((con_flag == F_MATCH||con_flag == F_MISMATCH)?F_MATCH_SCORE:0-F_SV_PEN)) > max_score)	
 				{
 					max_from = (line_node){i,j};
-					max_score = f_node[i][j].score + 1 - (con_flag==F_MATCH||con_flag ==F_MISMATCH?0:SV_PEN);
+					max_score = f_node[i][j].score + 1 + (con_flag==F_MATCH||con_flag ==F_MISMATCH?F_MATCH_SCORE:0-F_SV_PEN);
 					max_flag = con_flag;
 				}
 			}
@@ -1134,79 +1212,414 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg, int seed_i, int aln_i,
 		f_node[seed_i][aln_i].score = max_score;
 		f_node[seed_i][aln_i].match_flag = max_flag;
 		f_node[seed_i][aln_i].node_n += f_node[max_from.x][max_from.y].node_n;
+
+        if (f_node[max_from.x][max_from.y].backtrack_flag == 1) //local maximum value
+        {
+            if (max_score >= f_node[max_from.x][max_from.y].score)
+            {
+                f_node[max_from.x][max_from.y].backtrack_flag = 0;
+            }
+            else
+            {
+                f_node[seed_i][aln_i].backtrack_flag = 0;
+                f_node[seed_i][aln_i].peak_value = f_node[max_from.x][max_from.y].score;
+                f_node[seed_i][aln_i].peak = max_from;
+            }
+        }
+        else    
+        {
+            if (f_node[max_from.x][max_from.y].peak.x != -1) //there exist a peak node
+            {
+                if (max_score >= f_node[max_from.x][max_from.y].peak_value)
+                {
+                    f_node[f_node[max_from.x][max_from.y].peak.x][f_node[max_from.x][max_from.y].peak.y].backtrack_flag = 0;
+                }
+                else
+                {
+                    f_node[seed_i][aln_i].backtrack_flag = 0;
+                    f_node[seed_i][aln_i].peak_value = f_node[max_from.x][max_from.y].peak_value;
+                    f_node[seed_i][aln_i].peak = f_node[max_from.x][max_from.y].peak;
+                }
+            }
+            else // NO peak node
+            {
+                if (max_score < f_node[max_from.x][max_from.y].score)
+                {
+                    f_node[seed_i][aln_i].backtrack_flag = 0;
+                    f_node[seed_i][aln_i].peak_value = f_node[max_from.x][max_from.y].score;
+                    f_node[seed_i][aln_i].peak = max_from;
+                }
+            }
+        }
 	}
 	return 0;
 }
 
-//for multi-dp-lines
-int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, int seed_len, line_node left, line_node right, line_node *line, int *line_end, /*int _head,0,  int _tail, 0*/ int n_seed)
+int frag_dp_multi_update(frag_dp_node **f_node, 
+						 aln_msg *a_msg, 
+						 int seed_i, int aln_i, 
+						 int start, int seed_len, int dp_flag)
 {
-	//line_node head = ((_head)?left:(line_node){-1,0});
-	line_node head; head.x = -1, head.y = 0;
-	int i, j, mini_dp_flag = MULTI_FLAG;
-	int l_i = 0;
-	int max_score, max_n, node_i;
-	line_node max_node, _right, _left;
+	int i, j, con_flag;
+	line_node max_from;
+	int max_score, max_flag;
 
-	line_end[0] = 0;
+	max_from = f_node[seed_i][aln_i].from;
+	max_score = f_node[seed_i][aln_i].score;
 
-	//first dp int
-	for (i = left.x+1; i < right.x; ++i)
-		frag_dp_init(f_node, a_msg, i, head, seed_len, mini_dp_flag);
-	while (1)
+	for (i = seed_i - 1; i >= start; --i)
 	{
-		//dp update
-		for (i = left.x+2; i < right.x; ++i)
+		for (j = 0; j < a_msg[i].n_aln; ++j)
 		{
-			for (j = 0; j < a_msg[i].n_aln; ++j)
+			if (f_node[i][j].dp_flag == dp_flag)
 			{
-				if (f_node[i][j].dp_flag == mini_dp_flag)
-					frag_dp_update(f_node, a_msg, i, j, left.x+1, seed_len, mini_dp_flag);
-			}
-		}
-		//max node
-		max_score = 0;
-		for (i = right.x-1; i > left.x; --i)
-		{
-			for (j = 0; j < a_msg[i].n_aln; ++j)
-			{
-				if (f_node[i][j].dp_flag == mini_dp_flag && f_node[i][j].score > max_score)
+				get_abs_dis(a_msg, i, j, seed_i, aln_i, &con_flag, seed_len);
+				if (con_flag != F_MISMATCH && con_flag != F_MATCH)
+					continue;
+				//											XXX MATCH, MISMATCH: same score?
+				if ((f_node[i][j].score + 1 + F_MATCH_SCORE) > max_score)	
 				{
-					max_score = f_node[i][j].score;
-					max_node = (line_node){i,j};
-					max_n = f_node[i][j].node_n;
+					max_from = (line_node){i,j};
+					max_score = f_node[i][j].score + 1 + F_MATCH_SCORE;
+					max_flag = con_flag;
 				}
 			}
 		}
-		if (max_score == 0) return l_i;
-		//backtrack
-		_right = max_node;
-		node_i = max_n - 1;
-		line_end[l_i+1] = line_end[l_i] + max_n;
+	}
+	if (max_from.x != f_node[seed_i][aln_i].from.x || max_from.y != f_node[seed_i][aln_i].from.y)
+	{
+		f_node[seed_i][aln_i].from = max_from;
+		f_node[seed_i][aln_i].score = max_score;
+		f_node[seed_i][aln_i].match_flag = max_flag;
+		f_node[seed_i][aln_i].node_n += f_node[max_from.x][max_from.y].node_n;
+
+        if (f_node[max_from.x][max_from.y].backtrack_flag == 1) //local maximum value
+        {
+            if (max_score >= f_node[max_from.x][max_from.y].score)
+            {
+                f_node[max_from.x][max_from.y].backtrack_flag = 0;
+            }
+            else
+            {
+                f_node[seed_i][aln_i].backtrack_flag = 0;
+                f_node[seed_i][aln_i].peak_value = f_node[max_from.x][max_from.y].score;
+                f_node[seed_i][aln_i].peak = max_from;
+            }
+        }
+        else    
+        {
+            if (f_node[max_from.x][max_from.y].peak.x != -1) //there exist a peak node
+            {
+                if (max_score >= f_node[max_from.x][max_from.y].peak_value)
+                {
+                    f_node[f_node[max_from.x][max_from.y].peak.x][f_node[max_from.x][max_from.y].peak.y].backtrack_flag = 0;
+                }
+                else
+                {
+                    f_node[seed_i][aln_i].backtrack_flag = 0;
+                    f_node[seed_i][aln_i].peak_value = f_node[max_from.x][max_from.y].peak_value;
+                    f_node[seed_i][aln_i].peak = f_node[max_from.x][max_from.y].peak;
+                }
+            }
+            else // NO peak node
+            {
+                if (max_score < f_node[max_from.x][max_from.y].score)
+                {
+                    f_node[seed_i][aln_i].backtrack_flag = 0;
+                    f_node[seed_i][aln_i].peak_value = f_node[max_from.x][max_from.y].score;
+                    f_node[seed_i][aln_i].peak = max_from;
+                }
+            }
+        }
+	}
+	return 0;
+}
+//for multi-dp-lines
+//line, line_end: start at 1
+//left and right are 'MIN_FLAG'	XXX
+int frag_mini_dp_multi_line(frag_dp_node **f_node, 
+							aln_msg *a_msg, int seed_len, 
+							line_node left, line_node right, 
+							line_node **line, int *line_end, 
+							int _head,  int _tail, int n_seed)
+{
+	//line_node head = ((_head)?left:(line_node){-1,0});
+	line_node head = (line_node){-1, 0};
+	int start, end;
+	int i, j, k, l, mini_dp_flag = MULTI_FLAG;
+	int l_i, max_score, node_i;
+	line_node max_node, _right, _left;
+	int candi_n; line_node candi[n_seed];
+
+	if (_head) start = left.x; else start = left.x+1;
+	if (_tail) end = right.x; else end = right.x-1;
+
+	//first dp int
+	for (i = start; i <= end; ++i)
+		frag_dp_init(f_node, a_msg, i, head, seed_len, mini_dp_flag);
+	//dp update
+	for (i = start+1; i <= end; ++i)
+	{
+		for (j = 0; j < a_msg[i].n_aln; ++j)
+		{
+			frag_dp_update(f_node, a_msg, i, j, start, seed_len, mini_dp_flag);
+		}
+	}
+
+	//store and sort candidate node
+	candi_n=0;
+	for (i = right.x-1; i > left.x; --i)
+	{
+		for (j = 0; j < a_msg[i].n_aln; ++j)
+		{
+			//candi-nodes
+			if (f_node[i][j].backtrack_flag == 1 && f_node[i][j].dp_flag == mini_dp_flag && f_node[i][j].score > 0)
+			{
+				//sort candi-nodes in 'candi', big->small
+				for (k = 0; k < candi_n; ++k)
+				{
+					if (f_node[i][j].score > f_node[line[0][k].x][line[0][k].y].score)
+						break;
+				}
+				for (l = candi_n; l > k; --l)
+				{
+					candi[l] = candi[l-1];
+				}
+				candi[k].x = i; candi[k].y = j;
+				candi_n++;
+			}
+		}
+	}
+	if (candi_n == 0) return 0;
+
+	//find 'anchor-match' line
+	//store in line[0], line_end[0]
+	line_end[0] = 0;
+	if (_tail)
+	{
+		//right.x, right.y -> left.x, left.y
+		if (_head)
+		{
+			node_i = f_node[right.x][right.y].node_n - 3;
+			if (node_i >= 0) 
+			{
+				line_end[0] = node_i+1;
+				_right = right;
+				_left = f_node[_right.x][_right.x].from;
+				while (_left.x != head.x && _left.x != left.x)
+				{
+					if (node_i < 0) { fprintf(stderr, "[frag mini multi dp] node_i < 0, BUG.\n"); exit(0); }
+					line[0][node_i] = _left;
+					--node_i;
+					_right = _left;
+					_left = f_node[_right.x][_right.y].from;
+				}
+				if (node_i >= 0) { fprintf(stderr, "[frag mini multi dp] node_i >= 0, BUG.\n"); exit(0); }
+				if (_right.x != left.x ||_right.y != left.y)		//'anchor-match' line
+					line_end[0] = 0;
+			}
+		}
+		//right.x, right.y
+		else
+		{
+			node_i = f_node[right.x][right.y].node_n - 2;
+			if (node_i >= 0)
+			{
+				line_end[0] = node_i+1;
+				_right = right;
+				_left = f_node[_right.x][_right.x].from;
+				while (_left.x != head.x)
+				{
+					if (node_i < 0) { fprintf(stderr, "[frag mini multi dp] node_i < 0, BUG.\n"); exit(0); }
+					line[0][node_i] = _left;
+					--node_i;
+					_right = _left;
+					_left = f_node[_right.x][_right.y].from;
+				}
+				if (node_i >= 0) { fprintf(stderr, "[frag mini multi dp] node_i >= 0, BUG.\n"); exit(0); }
+			}
+		}
+	}
+	else if (_head)
+	{
+		i = 0;
+		while (i < candi_n)
+		{
+			node_i = f_node[candi[i].x][candi[i].y].node_n - 2;
+			if (node_i >= 0)
+			{
+				line_end[0] = node_i+1;
+				_right = candi[i];
+				_left = f_node[_right.x][_right.y].from;
+				while (_left.x != head.x && _left.x != left.x)
+				{
+					if (node_i < 0) { fprintf(stderr, "[frag mini multi dp] node_i < 0, BUG.\n"); exit(0); }
+					line[0][node_i] = _left;
+					--node_i;
+					_right = _left;
+					_left = f_node[_right.x][_right.y].from;
+				}
+				if (node_i >= 0) { fprintf(stderr, "[frag mini multi dp] node_i >= 0, BUG.\n"); exit(0); }
+				if (_right.x != left.x || _right.y != left.y)
+					line_end[0] = 0;
+				else break;
+			}
+		}
+	}
+	//backtrack
+    //Uni-Best  or  All-Best
+	l_i = 1;
+	for (i = 0; i < candi_n; ++i)
+	{
+		if (i > 0)	//check for the backtrack_flag
+		{
+			_right = candi[i];
+			while (_right.x != head.x)
+			{
+				if (f_node[_right.x][0].backtrack_flag == 2)
+					goto NextLoop;
+				_left = f_node[_right.x][_right.y].from;
+				_right = _left;
+			}
+		}
+		_right = candi[i];
+		node_i = f_node[_right.x][_right.y].node_n - 1;
+		line_end[l_i] = node_i+1;
 		while (_right.x != head.x)
 		{
-			if (node_i < 0) { fprintf(stderr, "[frag mini dp] node_i < 0, BUG.\n"); exit(0); }
-			line[line_end[l_i] + node_i] = _right;
+			f_node[_right.x][0].backtrack_flag = 2;		//XXX
+			if (node_i < 0) { fprintf(stderr, "[frag mini multi dp] node_i < 0, BUG.\n"); exit(0); }
+			line[l_i][node_i] = _right;
 			--node_i;
 			_left = f_node[_right.x][_right.y].from;
 			_right = _left;
 		}
-		if (node_i >= 0) { fprintf(stderr, "[frag mini dp] node_i >= 0, BUG.\n"); exit(0); }
-		//dp init
-		for (i = left.x+1; i < right.x; ++i)
-			frag_dp_init(f_node, a_msg, i, head, seed_len, mini_dp_flag);	
-		//remove nodes that are already in line
-		for (i = 0; i < line_end[l_i+1]; ++i)
-			f_node[line[i].x][line[i].y].dp_flag = 0-mini_dp_flag;
+		if (node_i >= 0) { fprintf(stderr, "[frag mini multi dp] node_i >= 0, BUG.\n"); exit(0); }
 		l_i++;
-
+		NextLoop:;
 	}
+		/*for (i = 1; i < l_i; ++i)
+		{
+		    fprintf(stdout, "mini line# %d:\n", i);
+		    for (j = 0; j < line_end[i]; ++j)
+		        fprintf(stdout, "(%d,%d)\t", line[i][j].x, line[i][j].y);
+		    printf("\n");
+		}*/
+		int con_flag1, con_flag2, max_l;
+		if (_head && _tail)	// choose the line that matches with anchor(s)
+		{
+			max_score = 0;
+			max_l = 0;
+			//there might be some overlaps????, might not be
+			for (i = 1; i < l_i; ++i)
+			{
+				if (max_score > f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score)
+					break;
+				get_abs_dis(a_msg, left.x, left.y, line[i][0].x, line[i][0].y, &con_flag1, seed_len);	
+				get_abs_dis(a_msg, right.x, right.y, line[i][line_end[i]-1].x, line[i][line_end[i]-1].y, &con_flag2, seed_len);
+				if (con_flag1 == F_UNCONNECT || con_flag1 == F_CHR_DIF || con_flag2 == F_UNCONNECT || con_flag2 == F_CHR_DIF)
+					continue;
+				else if (f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score + F_SV_PEN + ((con_flag1==F_MATCH||con_flag1==F_MISMATCH)?F_MATCH_SCORE:-F_SV_PEN)
+						+ 1 + ((con_flag2==F_MATCH||con_flag2==F_MISMATCH)?F_MATCH_SCORE:-F_SV_PEN) > max_score)
+				{
+					max_score = f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score + F_SV_PEN + ((con_flag1==F_MATCH||con_flag1==F_MISMATCH)?F_MATCH_SCORE:-F_SV_PEN)
+								+ 1 + ((con_flag2==F_MATCH||con_flag2==F_MISMATCH)?F_MATCH_SCORE:F_SV_PEN);
+					max_l = i;
+				}
+			}
+			//move the match line to 'line[0]'
+			if (max_l != 0)
+			{
+				for (i = 0; i < line_end[max_l]; ++i)
+				{
+					line[0][i] = line[max_l][i];
+				}
+				line_end[0] = line_end[max_l];
+				line_end[max_l] = 0;
+			}
+			else line_end[0] = 0;
+		}
+		else if (_head)
+		{
+			max_score = 0;
+			max_l = 0;
+			for (i = 1; i < l_i; ++i)
+			{
+				if (max_score > f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score)
+					break;
+				get_abs_dis(a_msg, left.x, left.y, line[i][0].x, line[i][0].y, &con_flag1, seed_len);	
+				if (con_flag1 == F_UNCONNECT || con_flag1 == F_CHR_DIF)
+					continue;
+				else if (f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score + F_SV_PEN +  ((con_flag1==F_MATCH||con_flag1==F_MISMATCH)?F_MATCH_SCORE:-F_SV_PEN) > max_score)
+				{
+					max_score = f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score + F_SV_PEN + ((con_flag1==F_MATCH||con_flag1==F_MISMATCH)?F_MATCH_SCORE:-F_SV_PEN);
+					max_l = i;
+				}
+			}
+			if (max_l != 0)
+			{
+				for (i = 0; i < line_end[max_l]; ++i)
+				{
+					line[0][i] = line[max_l][i];
+				}
+				line_end[0] = line_end[max_l];
+				line_end[max_l] = 0;
+			}
+			else line_end[0] = 0;
+		}
+		else if (_tail)
+		{
+			max_score = 0;
+			max_l = 0;
+			for (i = 1; i < l_i; ++i)
+			{
+				if (max_score > f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score)
+					break;
+				get_abs_dis(a_msg, right.x, right.y, line[i][line_end[i]-1].x, line[i][line_end[i]-1].y, &con_flag2, seed_len);
+				if (con_flag2 == F_UNCONNECT || con_flag2 == F_CHR_DIF)
+					continue;
+				else if (f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score + 1 + ((con_flag2==F_MATCH||con_flag2==F_MISMATCH)?F_MATCH_SCORE:-F_SV_PEN) > max_score)
+				{
+					max_score = f_node[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].score + 1 + ((con_flag2==F_MATCH||con_flag2==F_MISMATCH)?F_MATCH_SCORE:-F_SV_PEN);
+					max_l = i;
+				}
+			}
+			if (max_l != 0)
+			{
+				for (i = 0; i < line_end[max_l]; ++i)
+				{
+					line[0][i] = line[max_l][i];
+				}
+				line_end[0] = line_end[max_l];
+				line_end[max_l] = 0;
+			}
+			else line_end[0] = 0;
+		}
+	return l_i;
+	
+	//find max-value node, backtrack
+	//find max-value node in rest nodes, backtrack
+	//...
+	//find backtrack start node
+	for (i = left.x+1; i < right.x; ++i)
+	{
+		for (j = 0; j < a_msg[i].n_aln; ++j)
+		{
+			fprintf(stdout, "node:(%d %d)\t%d %d %lld\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tnode_n:%d\n", i, j, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, (long long)a_msg[i].at[j].offset, f_node[i][j].from.x, f_node[i][j].from.y, f_node[i][j].score, "MXIDCRUSE"[f_node[i][j].match_flag], f_node[i][j].dp_flag, f_node[i][j].node_n);
+		}
+	}
+}
+
+/*int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, int seed_len, line_node left, line_node right, line_node **line, int *line_end, int _head, int _tail, int n_seed)
+{
+	line_node head = ((_head)?left:(line_node){-1,0});
+	int i, j, mini_dp_flag = MULTI_FLAG;
 	//dp init
-	/*for (i = left.x + 1; i < right.x; ++i)
+	for (i = left.x + 1; i < right.x; ++i)
 	{
 		//mini_dp XXX?
 		//frag_dp_init(f_node, a_msg, i, left, seed_len, mini_dp_flag);
-		frag_dp_init(f_node, a_msg, i, head, seed_len, mini_dp_flag);
+		frag_dp_multi_init(f_node, a_msg, i, head, seed_len, mini_dp_flag);
 	}
 	//dp update
 	for (i = left.x + 2; i < right.x; ++i)
@@ -1214,56 +1627,156 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, int seed_len,
 		for (j = 0; j < a_msg[i].n_aln; ++j)
 		{
 			if (f_node[i][j].dp_flag == mini_dp_flag)
-				frag_dp_update(f_node, a_msg, i, j, left.x+1, seed_len, mini_dp_flag);
+				frag_dp_multi_update(f_node, a_msg, i, j, left.x+1, seed_len, mini_dp_flag);
 		}
 	}
-
-	//find max-value node, backtrack
-	//find max-value node in rest nodes, backtrack
-	//...
 	//find backtrack start node
-		int max_score = 0, max_n = 0, l_i=0;
-		line_node max_node = head;//left;
-		//UNLIMITED 
-		//if (_tail == 0)
+	int max_score = 0, max_n = 0;
+	line_node max_node = head;//left;
+	//UNLIMITED 
+	if (_tail == 0)
+	{
+		for (i = right.x - 1; i > left.x; --i)
 		{
-			for (i = right.x - 1; i > left.x; --i)
+			for (j = 0; j < a_msg[i].n_aln; ++j)
 			{
-				for (j = 0; j < a_msg[i].n_aln; ++j)
+				if (f_node[i][j].dp_flag == mini_dp_flag && f_node[i][j].score > max_score)
 				{
-					if (f_node[i][j].dp_flag == mini_dp_flag && f_node[i][j].score > max_score)
-					{
-						max_score = f_node[i][j].score;
-						max_node = (line_node){i, j};
-						max_n = f_node[i][j].node_n;
-					}
+					max_score = f_node[i][j].score;
+					max_node = (line_node){i, j};
+					max_n = f_node[i][j].node_n;
 				}
 			}
 		}
-		//backtrack
-		line_node _right = max_node, _left;
-		int node_i = max_n-1;
-		//while (_right.x != left.x)
-		while (_right.x != head.x)
-		{
-			if (node_i < 0) { fprintf(stderr, "[frag mini dp] node_i BUG 1.\n"); exit(0); }
-			line[l_i][node_i--] = _right;
-			_left = f_node[_right.x][_right.y].from;
-			_right = _left;
-		}
-		if (node_i >= 0) { fprintf(stderr, "[frag mini dp] node_i BUG 2.\n"); exit(0); }*/
+	}
+	else
+	{
+		f_node[right.x][right.y].from = head;//left;
+		f_node[right.x][right.y].score = 0;
+		f_node[right.x][right.y].dp_flag = mini_dp_flag;
+		f_node[right.x][right.y].node_n = 0;
+		frag_dp_multi_update(f_node, a_msg, right.x, right.y, left.x+1, seed_len, mini_dp_flag);
+		max_node = f_node[right.x][right.y].from;
+		max_n = f_node[right.x][right.y].node_n;
+	}
+	//backtrack
+	int l_i = 0;
+	line_node _right = max_node, _left;
+	int node_i = max_n-1;
+	line_end[0] = node_i+1;
+	//while (_right.x != left.x)
+	while (_right.x != head.x)
+	{
+		if (node_i < 0) { fprintf(stderr, "[frag mini dp] node_i BUG 1.\n"); exit(0); }
+		line[0][node_i--] = _right;
+		_left = f_node[_right.x][_right.y].from;
+		_right = _left;
+	}
+	if (node_i >= 0) { fprintf(stderr, "[frag mini dp] node_i BUG 2.\n"); exit(0); }
+	++l_i;
 
-	/*for (i = left.x+1; i < right.x; ++i)
+	//new lines
+	if (right.x - left.x - 1 - max_n >= 2)
+	{
+		//dp init
+		if (_head)
+		{
+			head.x = -1; head.y = 0;
+			for (i = left.x + 1; i < right.x; ++i)
+				frag_dp_multi_init(f_node, a_msg, i, head, seed_len, mini_dp_flag);
+		}
+		for (i = 0; i < line_end[0]; ++i)
+		{
+			f_node[line[0][i].x][line[0][i].y].dp_flag = 0-mini_dp_flag;
+			f_node[line[0][i].x][0].backtrack_flag = 2;	//indicate that this seed has been located already 
+		}
+		//dp update
+		for (i = left.x + 2; i < right.x; ++i)
+		{
+			for (j = 0; j < a_msg[i].n_aln; ++j)
+			{
+				if (f_node[i][j].dp_flag == mini_dp_flag)
+					frag_dp_multi_update(f_node, a_msg, i, j, left.x+1, seed_len, mini_dp_flag);
+			}
+		}
+		int k, l, candi_n=0, flag;
+		line_node candi[n_seed];
+		for (i = right.x-1; i > left.x; --i)
+		{
+			for (j = 0; j < a_msg[i].n_aln; ++j)
+			{
+				//candi-nodes
+				if (f_node[i][j].backtrack_flag == 1 && f_node[i][j].dp_flag == mini_dp_flag && f_node[i][j].score > 0)
+				{
+					//sort candi-nodes in 'candi', big->small
+					for (k = 0; k < candi_n; ++k)
+					{
+						if (f_node[i][j].score > f_node[line[0][k].x][line[0][k].y].score)
+							break;
+					}
+					for (l = candi_n; l > k; --l)
+					{
+						candi[l] = candi[l-1];
+					}
+					candi[k].x = i; candi[k].y = j;
+					candi_n++;
+				}
+			}
+		}
+		//XXX terminate early
+		for (i = 0; i < candi_n; ++i)
+		{
+			//check for the backtrack_flag
+			_right = candi[i];
+			flag = 0;
+			while (_right.x != head.x)
+			{
+				if (f_node[_right.x][0].backtrack_flag != 2)
+				{
+					flag = 1;
+					break;
+				}
+				_left = f_node[_right.x][_right.y].from;
+				_right = _left;
+			}
+			if (flag)
+			{
+				_right = candi[i];
+				node_i = f_node[_right.x][_right.y].node_n - 1;
+				line_end[l_i] = node_i+1;
+				while (_right.x != head.x)
+				{
+					f_node[_right.x][0].backtrack_flag = 2;		//XXX
+					if (node_i < 0) { fprintf(stderr, "[frag mini multi dp] node_i < 0, BUG.\n"); exit(0); }
+					line[l_i][node_i] = _right;
+					--node_i;
+					_left = f_node[_right.x][_right.y].from;
+					_right = _left;
+				}
+				if (node_i >= 0) { fprintf(stderr, "[frag mini multi dp] node_i >= 0, BUG.\n"); exit(0); }
+				l_i++;
+			}
+		}
+	}
+
+	for (i = left.x+1; i < right.x; ++i)
 	{
 		for (j = 0; j < a_msg[i].n_aln; ++j)
 		{
 			fprintf(stdout, "node:(%d %d)\t%d %d %d\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tnode_n:%d\n", i, j, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, a_msg[i].at[j].offset, f_node[i][j].from.x, f_node[i][j].from.y, f_node[i][j].score, "MXIDCRUSE"[f_node[i][j].match_flag], f_node[i][j].dp_flag, f_node[i][j].node_n);
 		}
-	}*/
-	return max_n;
-}
+	}
+	return l_i;
+}*/
 
-int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg, int seed_len, line_node left, line_node right, line_node *line, int _head, int _tail, int n_seed)
+//for the uni-best line
+int frag_mini_dp_line(frag_dp_node **f_node, 
+					  aln_msg *a_msg, 
+					  int seed_len, 
+					  line_node left, line_node right, 
+					  line_node *line, 
+					  int _head, int _tail, 
+					  int n_seed)
 {
 	line_node head = ((_head)?left:(line_node){-1,0});
 	int i, j, mini_dp_flag = MULTI_FLAG;
@@ -1335,9 +1848,13 @@ int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg, int seed_len, line_
 	return max_n;
 }
 
-int frag_dp_line(aln_msg *a_msg, int n_seed, int seed_len, line_node *line, frag_dp_node **f_node, line_node *_line)//_headi=0, _tail=0
+int frag_dp_line(aln_msg *a_msg, 
+				 int n_seed, int seed_len, 
+				 line_node **line, int *line_end, 
+				 frag_dp_node ***f_node, 
+				 line_node **_line, int *_line_end)//_headi=0, _tail=0
 {
-	int i, j;
+	int i, j, k;
 	int min_len = 1, min_exist=0;
 
 	//dp init
@@ -1346,18 +1863,18 @@ int frag_dp_line(aln_msg *a_msg, int n_seed, int seed_len, line_node *line, frag
 		{
 			if (a_msg[i].n_aln <= min_len)
 			{
-				frag_dp_init(f_node, a_msg, i, (line_node){-1,0}, seed_len, MIN_FLAG);
+				frag_dp_init(*f_node, a_msg, i, (line_node){-1,0}, seed_len, MIN_FLAG);
 				min_exist = 1;
 			}
 			else
-				frag_dp_init(f_node, a_msg, i, (line_node){-1,0}, seed_len, MULTI_FLAG);
+				frag_dp_init(*f_node, a_msg, i, (line_node){-1,0}, seed_len, MULTI_FLAG);
 		}
 	}
 	//dp update and backtrack
 	{
 		if (min_exist)
 		{
-			//min extend
+			//min extend XXX
 				/*for (i = 0; i < n_seed; ++i)
 				{
 					if (a_msg[i].n_aln <= min_len)
@@ -1371,56 +1888,153 @@ int frag_dp_line(aln_msg *a_msg, int n_seed, int seed_len, line_node *line, frag
 				{
 					for (j = 0; j < a_msg[i].n_aln; ++j)
 					{
-						if (f_node[i][j].dp_flag == MIN_FLAG)
-							frag_dp_update(f_node, a_msg, i, j, 0/*update start pos*/, seed_len, MIN_FLAG);
+						if ((*f_node)[i][j].dp_flag == MIN_FLAG)
+							frag_dp_update(*f_node, a_msg, i, j, 0/*update start pos*/, seed_len, MIN_FLAG);
 					}
 				}
 			//find backtrack start node
-				//_tail=0
-				int max_score=0;
+				int max_score=0, l_i = 0;
 				line_node max_node = (line_node){-1,0};
+				line_node back_node;
+				int node_i=0, mini_len, new_l=1;
+				line_node last_n; int multi_l;
+				line_node right, left;
 				for (i = n_seed-1; i >= 0; --i)
 				{
 					for (j = 0; j < a_msg[i].n_aln; ++j)
 					{
-						if (f_node[i][j].dp_flag == MIN_FLAG && f_node[i][j].score > max_score)
+						if ((*f_node)[i][j].backtrack_flag == 1 && (*f_node)[i][j].dp_flag == MIN_FLAG && (*f_node)[i][j].score > 0)
 						{
-							max_score = f_node[i][j].score;
-							max_node = (line_node){i,j};
+							if ((*f_node)[i][j].score > max_score)
+							{
+								max_score = (*f_node)[i][j].score;
+								max_node = (line_node){i,j};
+							}
 						}
 					}
 				}
-			//backtrack
-				int node_i = 0, mini_len;
-				line_node right, left;
-				//line_node *_line = (line_node*)malloc(n_seed * sizeof(line_node));
+				//backtrack
+				//ONLY one backtrack node.
 				if (max_node.x < n_seed - 1)
 				{
-					mini_len = frag_mini_dp_line(f_node, a_msg, seed_len, max_node, (line_node){n_seed, 0}, _line, 1, 0, n_seed);
-					for (i = mini_len-1; i >= 0; --i)
-						line[node_i++] = _line[i];
+                    //mini-dp with anchors
+					mini_len = frag_mini_dp_line(*f_node, a_msg, seed_len, max_node, (line_node){n_seed, 0}, _line[0], 1, 0, n_seed);
+					for (k = mini_len - 1; k >= 0; --k)
+						line[l_i][node_i++] = _line[0][k];	//_line[0][k] is the last node
+					line[l_i][node_i] = max_node;	//twice write, for the last multi-dp-line	//XXX
+					//add multi-line
+					last_n = (line_node){n_seed, 0};
+					for (k = mini_len; k >= 0; --k)
+					{
+						if (last_n.x - line[l_i][node_i-k].x > 2)
+						{
+							//add multi-line
+							multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, 0, 0, n_seed);
+							for (i = 1; i < multi_l; ++i)
+							{
+								if (_line_end[i] > 0)
+								{
+									for (j = 0; j < _line_end[i]; ++j)
+										line[l_i+new_l][j] = _line[i][j];
+									line_end[l_i+new_l] = _line_end[i];
+									line[l_i+new_l][line_end[l_i+new_l]] = line[l_i][node_i-k];
+									line[l_i+new_l][line_end[l_i+new_l]+1] = last_n;
+									line[l_i+new_l][line_end[l_i+new_l]+2] = (line_node){0, 0};	//need trigger
+									(*f_node)[last_n.x][last_n.y].trigger[(*f_node)[last_n.x][last_n.y].next_trigger_n++] = l_i+new_l;
+									++new_l;
+								}
+							}
+						}
+						last_n = line[l_i][node_i-k];
+					}
+						/*mini_l = frag_mini_dp_multi_line(f_node, a_msg, seed_len, max_node, (line_node){n_seed, 0}, _line, _line_end, 1, 0, n_seed);
+						//might be cut off or not
+						for (k = _line_end[0]-1; k >= 0; --k)
+							line[l_i][node_++] = _line[0][k];
+						for (i = 1; i < mini_l; ++i)
+						{
+							if (_line_end[i] > 0)
+							{
+								for (j = 0; j < _line_end[i]; ++j)
+								{
+									line[l_i+new_l][j] = _line[i][j];
+								}
+								line_end[l_i+new_l] = _line_end[i];
+								line[l_i+new_l][line_end[l_i+new_l]] = max_node;
+								line[l_i+new_l][line_end[l_i+new_l]+1] = (line_node){n_seed, 0};
+								++new_l;
+							}
+						}*/
 				}
 				right = max_node;
 				while (right.x != -1)
 				{
-					line[node_i++] = right;
-					left = f_node[right.x][right.y].from;
+					line[l_i][node_i++] = right;
+					left = (*f_node)[right.x][right.y].from;
 
 					if (left.x < right.x - 1 )//f_node[right.x][right.y].match_flag != F_MATCH)	//XXX if left.x < right.x-1, match_flag of right node couldn't be match?
 					{
-						//mini frag dp
-							mini_len = frag_mini_dp_line(f_node, a_msg, seed_len, left, right, _line, 1, 1, n_seed);
-							for (i = mini_len-1; i >= 0; --i)
-								line[node_i++] = _line[i];
+						//mini-dp with anchors
+						mini_len = frag_mini_dp_line(*f_node, a_msg, seed_len, left, right, _line[0], 1, 1, n_seed);
+						for (k = mini_len-1; k >= 0; --k)
+							line[l_i][node_i++] = _line[0][k];
+						line[l_i][node_i] = left;	//twice write, for the last multi-dp-line	//XXX
+						//add multi-line
+						last_n = right;
+						for (k = mini_len; k >= 0; --k)
+						{
+							if (last_n.x - line[l_i][node_i-k].x > 2)
+							{
+								//add multi-line
+								multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, 0, 0, n_seed);
+								for (i = 1; i < multi_l; ++i)
+								{
+									if (_line_end[i] > 0)
+									{
+										for (j = 0; j < _line_end[i]; ++j)
+											line[l_i+new_l][j] = _line[i][j];
+										line_end[l_i+new_l] = _line_end[i];
+										line[l_i+new_l][line_end[l_i+new_l]] = line[l_i][node_i-k];
+										line[l_i+new_l][line_end[l_i+new_l]+1] = last_n;
+										line[l_i+new_l][line_end[l_i+new_l]+2] = (line_node){0, 0};	//need trigger
+										(*f_node)[last_n.x][last_n.y].trigger[(*f_node)[last_n.x][last_n.y].next_trigger_n + (*f_node)[last_n.x][last_n.y].pre_trigger_n] = l_i+new_l;
+										++(*f_node)[last_n.x][last_n.y].pre_trigger_n;
+										++new_l;
+									}
+								}
+							}
+							last_n = line[l_i][node_i-k];
+						}
+							/*if (left.x == -1)
+								mini_l = frag_mini_dp_multi_line(f_node, a_msg, seed_len, left, right, _line, _line_end, 0, 1, n_seed);
+							else
+								mini_l = frag_mini_dp_multi_line(f_node, a_msg, seed_len, left, right, _line, _line_end, 1, 1, n_seed);
+                            //fprintf(stdout, "left: %d, right: %d\n", left.x, right.x);
+                            //might be cut off or not
+                            for (k = _line_end[0]-1; k >= 0; --k)
+                                line[l_i][node_i++] = _line[0][k];
+                            for (i = 1; i < mini_l; ++i)
+                            {
+                                if (_line_end[i] > 0)
+                                {
+                                    for (j = 0; j < _line_end[i]; ++j)
+                                    {
+                                        line[l_i+new_l][j] = _line[i][j];
+                                    }
+                                    line_end[l_i+new_l] = _line_end[i];
+                                    line[l_i+new_l][line_end[l_i+new_l]] = left;
+                                    line[l_i+new_l][line_end[l_i+new_l]+1] = right;
+                                    ++new_l;
+                                }
+                            }*/
 					}
 					right = left;
 				}
-				//free(_line);
 				//invert line
 				line_node tmp;
-				for (i = 0; i < node_i/2; ++i)
+				for (k = 0; k < node_i/2; ++k)
 				{
-					tmp =line[i]; line[i] = line[node_i-i-1]; line[node_i-i-1] = tmp;
+					tmp =line[l_i][k]; line[l_i][k] = line[l_i][node_i-k-1]; line[l_i][node_i-k-1] = tmp;
 				}
 
 				//print
@@ -1431,17 +2045,36 @@ int frag_dp_line(aln_msg *a_msg, int n_seed, int seed_len, line_node *line, frag
 						fprintf(stdout, "node:(%d %d)\t%d %d %d\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tnode_n:%d\n", i, j, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, a_msg[i].at[j].offset, f_node[i][j].from.x, f_node[i][j].from.y, f_node[i][j].score, "MXIDCRUSE"[f_node[i][j].match_flag], f_node[i][j].dp_flag, f_node[i][j].node_n);
 					}
 				}*/
-
-				return node_i;
+				line_end[l_i] = node_i;
+				line[l_i][line_end[l_i]] = (line_node){-1,0};
+				line[l_i][line_end[l_i]+1] = (line_node){n_seed, 0};
+				line[l_i][line_end[l_i]+2] = (line_node){1,1};	//trigger flag: (1,1) -> no needs for trigger
+																//				(0,0) -> need trigger
+				/*for (i = 0; i < new_l; ++i)
+				{
+					fprintf(stdout, "line #%d:\n", i+1);
+					for (j = 0; j < line_end[i]+2; ++j)
+					{
+						fprintf(stdout, "(%d,%d)\t", line[i][j].x, line[i][j].y);
+					}
+					fprintf(stdout, "\n");
+				}*/
+				return l_i+new_l;
 		}
 		else	//whole-multi dp, should not go to here for current data.
 		{
+			fprintf(stderr, "[frag dp line] No min-seed.\n");
 			return 0;
 		}
 	}
 }
 
-int frag_mini_dp_path(aln_msg *a_msg, int seed_len, frag_msg *f_msg, frag_dp_node **f_node, line_node *line, int m_len)
+int frag_mini_dp_path(aln_msg *a_msg, 
+					  int seed_len, 
+					  frag_msg *f_msg, 
+					  frag_dp_node **f_node, 
+					  line_node *line, 
+					  int m_len)
 {
 	int i, j;
 	int frag_num = 0;
@@ -1473,244 +2106,197 @@ int frag_mini_dp_path(aln_msg *a_msg, int seed_len, frag_msg *f_msg, frag_dp_nod
 	//	f_msg:	be used to store frag-msg
 	//	line_n:	number of lines
 	//	line_m:	max number of lines allowed in mem
-int frag_dp_path(aln_msg *a_msg, int n_seed, int seed_len, frag_msg **f_msg, int *line_n, int *line_m, line_node *line, frag_dp_node **f_node, line_node *_line)
+int frag_dp_path(aln_msg *a_msg, 
+				 int n_seed, int seed_len, 
+				 frag_msg **f_msg, 
+				 int *line_n, int *line_tri, int *line_m, 
+				 line_node **line, int *line_end, 
+				 frag_dp_node ***f_node, 
+				 line_node **_line, int *_line_end)
 {
-	int i, j;
+	int i, j, l;
 	//DP
-	/*line_node *line = (line_node*)malloc(n_seed * sizeof(line_node));
-	frag_dp_node **f_node = (frag_dp_node**)malloc((n_seed) * sizeof(frag_dp_node*));
-	for (i = 0; i < n_seed; ++i)
-		f_node[i] = (frag_dp_node*)malloc(a_msg[i].n_aln * sizeof(frag_dp_node)); 
-	if (line == NULL || f_node == NULL) { fprintf(stderr, "[frag_dp_path] Not enougy memory.\n"); exit(0); }*/
+	int l_n = frag_dp_line(a_msg, n_seed, seed_len, line, line_end, f_node, _line, _line_end);
+	if (l_n == 0) return 0;
 
-	int m_len = frag_dp_line(a_msg, n_seed, seed_len, line, f_node, _line);
-	if (m_len == 0) return 0;
-
-	int frag_num = 0;
-	int cur_x , cur_y , pre_x=line[m_len-1].x, pre_y=line[m_len-1].y;
-
-	//first end
-	/*frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg), frag_num, seed_len);
-	for (i = m_len-1; i > 0; --i)
-	{
-		cur_x = pre_x; cur_y = pre_y;
-		pre_x = line[i-1].x; pre_y = line[i-1].y;
-		if (f_node[cur_x][cur_y].match_flag != F_MATCH && f_node[cur_x][cur_y].match_flag != F_MISMATCH)
-		{
-			frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg), frag_num, seed_len);
-			++frag_num;
-			frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg), frag_num, seed_len);
-		}
-		else	//seed
-			frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, (*f_msg), frag_num, seed_len);
-	}
-	cur_x = line[0].x; cur_y = line[0].y;
-	frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg), frag_num, seed_len);*/
+	int frag_num;
+	int cur_x , cur_y , pre_x, pre_y;
 
 	//for new frags
 	//  cur_line: cur line index, cur_num:  whole lines, *line_num: mem of *f_msg
 	int cur_line=0, cur_num=1, _m_len;
-	//line_node *_line = (line_node*)malloc(n_seed * sizeof(line_node));
+	int left_bound, right_bound;
 
+    (*line_n) = l_n;
+    if (l_n > (*line_m))
+    {
+        (*f_msg) = (frag_msg*)realloc(*f_msg, l_n * sizeof(frag_msg));
+        for (i = (*line_m); i < l_n; ++i)
+        {
+            frag_init_msg((*f_msg)+i, (*f_msg)->frag_max); 
+            frag_copy_msg(*f_msg, (*f_msg)+i);
+        }
+        if ((*f_msg) == NULL) { fprintf(stderr, "[frag_dp_path] Not enough memory.(line_m: %d)\n", l_n); exit(0); }
+        (*line_m)= l_n;
+        fprintf(stderr, "%d\t", l_n);
+    }
 
-	//right bound
-	int right_bound = (*f_msg)[0].seed_all+1;
-	//MIS-MATCH
-	if (abs(n_seed-pre_x) > 1)
+	for (l = 0; l < l_n; ++l)
 	{
-		_m_len = 0;
-		_m_len = frag_mini_dp_line(f_node, a_msg, seed_len, (line_node){pre_x, pre_y}, (line_node){n_seed, 0}, _line, 0, 0, n_seed);
-		if (_m_len != 0)
+        line_tri[l] = line[l][line_end[l]+2].x;
+        frag_num=0;
+        pre_x = line[l][line_end[l]-1].x;
+		pre_y = line[l][line_end[l]-1].y;
+        //fprintf(stdout, "left: %d, right: %d\n", line[l][line_end[l]].x, line[l][line_end[l]+1].x);
+		//right bound
+        right_bound = ((line[l][line_end[l]+1].x == n_seed) ? ((*f_msg)[0].seed_all+1) : (a_msg[line[l][line_end[l]+1].x].read_id));
+		//right_bound = (*f_msg)[0].seed_all+1;
+		//MIS-MATCH
+		/*if (abs(line[l][line_end[l]+1].x-pre_x) > 1)
 		{
-			if (cur_num == (*line_m))
+			_m_len = 0;
+			_m_len = frag_mini_dp_multi_line((*f_node), a_msg, seed_len, (line_node){pre_x, pre_y}, (line_node){n_seed, 0}, _line, _line_end, 0, 0, n_seed);
+			if (_m_len != 0)
+			for (i = 1; i < _m_len; ++i)
 			{
-				(*f_msg) = (frag_msg*)realloc(*f_msg, ((*line_m)+1) * sizeof(frag_msg));
-				if ((*f_msg) == NULL) { fprintf(stderr, "[frag_dp_path] Not enough memory.(line_m: %d)\n", (*line_m)+1); exit(0); }
-				(*line_m)++;
-			}
-			frag_copy_msg(*f_msg, (*f_msg)+cur_num);
-			frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, f_node, _line, _m_len);
-			((*f_msg)+cur_num)->frag_left_bound = a_msg[pre_x].read_id;
-			((*f_msg)+cur_num)->frag_right_bound = (*f_msg)[0].seed_all+1;
-			cur_num++;
-			right_bound = a_msg[_line[0].x].read_id;
-		}
-	}
-	//first end
-	frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-	((*f_msg)+cur_line)->frag_right_bound = right_bound;//(*f_msg)[0].seed_all+1;	//read_id
-	for (i = m_len-1; i > 0; --i)
-	{
-		cur_x = pre_x; cur_y = pre_y;
-		pre_x = line[i-1].x; pre_y = line[i-1].y;
-		//INS
-		if (f_node[cur_x][cur_y].match_flag == F_INSERT)
-		{
-			frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+cur_line, frag_num, seed_len);
-			++frag_num;
-			frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-			if (abs(pre_x - cur_x) > 1)	//INS-res exist; abs(read_id) > 1? -> separate cigar
-			{
-				//new frag for INS-seq XXX
-				_m_len = 0;
-				int *_line_end = (int*)malloc(n_seed * sizeof(line_node));
-				_m_len = frag_mini_dp_multi_line(f_node, a_msg, seed_len, (line_node){pre_x, pre_y}, (line_node){cur_x, cur_y}, _line, _line_end, n_seed);
-				if (_m_len > 0)
+				if (cur_num == (*line_m))
 				{
-					for (j = 0; j < _m_len; ++j)
-					{
-						if (cur_num == (*line_m))
-						{
-							(*f_msg) = (frag_msg*)realloc((*f_msg), ((*line_m)+1) * sizeof(frag_msg));
-							if ((*f_msg) == NULL) { fprintf(stderr, "[frag dp path] Not enough memory.(line_m: %d)\n", (*line_m)+1); exit(0); }
-							(*line_m)++;
-						}
-						frag_copy_msg((*f_msg), (*f_msg)+cur_num);
-						frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, f_node, _line+_line_end[j], _line_end[j+1]-_line_end[j]);
-						((*f_msg)+cur_num)->frag_left_bound = a_msg[pre_x].read_id;
-						((*f_msg)+cur_num)->frag_right_bound = a_msg[cur_x].read_id;
-						cur_num++;
-					}
+					(*f_msg) = (frag_msg*)realloc(*f_msg, ((*line_m)+1) * sizeof(frag_msg));
+					frag_init_msg((*f_msg)+(*line_m), (*f_msg)->frag_max); 
+					if ((*f_msg) == NULL) { fprintf(stderr, "[frag_dp_path] Not enough memory.(line_m: %d)\n", (*line_m)+1); exit(0); }
+					(*line_m)++;
 				}
-				free(_line_end);
+				frag_copy_msg(*f_msg, (*f_msg)+cur_num);
+				frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, *f_node, _line[i], _line_end[i]);
+				((*f_msg)+cur_num)->frag_left_bound = a_msg[pre_x].read_id;
+				((*f_msg)+cur_num)->frag_right_bound = (*f_msg)[0].seed_all+1;
+				cur_num++;
+				//right_bound = a_msg[_line[i][0].x].read_id;	//XXX
 			}
-		}
-		//DEL
-		else if (f_node[cur_x][cur_y].match_flag == F_DELETE)
-		{
-			frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+cur_line, frag_num, seed_len);
-			++frag_num;
-			frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-		}
-		//MIS	XXX
-		/*else if (f_node[cur_x][cur_y].match_flag == F_MISMATCH)//: mis-match/ref-N/INV/TRS
-		{
-			frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+cur_line, frag_num, seed_len);
-			++frag_num;
-			//check for INV/TRS
-			if (abs(pre_x - cur_x) > 1)
-			{
-				//dp-line
-				_m_len = 0;
-				_m_len = frag_mini_dp_line(f_node, a_msg, seed_len, (line_node){pre_x, pre_y}, (line_node){cur_x, cur_y}, _line, 0, 0, n_seed);
-				//new frag for INV/TRS-seq
-				if (_m_len != 0)
-				{
-					if (cur_num == (*line_m))
-					{
-						(*f_msg) = (frag_msg*)realloc((*f_msg), ((*line_m)+1) * sizeof(frag_msg));
-						if ((*f_msg) == NULL) { fprintf(stderr, "frag dp path] Not enough memory.\n"); exit(0); }
-						(*line_m)++;
-					}
-					frag_copy_msg((*f_msg), (*f_msg)+cur_num);
-					cur_line=cur_num; frag_num = 0;
-					//frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-					cur_num++;
-
-					if (cur_num == (*line_m))
-					{
-						(*f_msg) = (frag_msg*)realloc((*f_msg), ((*line_m)+1) * sizeof(frag_msg));
-						 if ((*f_msg) == NULL) { fprintf(stderr, "[frag dp path] Not enough memory.\n"); exit(0); }
-						 (*line_m)++;
-					}
-					frag_copy_msg((*f_msg), (*f_msg)+cur_num);
-					frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, f_node, _line, _m_len);
-					cur_num++;
-				}
-				//else frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-			}
-			frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-			// MIS or REF-N
-			//new frag for REF-N
 		}*/
-		else if (f_node[cur_x][cur_y].match_flag == F_MISMATCH)
+		//first end
+		frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+l, frag_num, seed_len);
+		if ((*f_node)[pre_x][pre_y].next_trigger_n > 0 || (*f_node)[pre_x][pre_y].pre_trigger_n > 0)	//set trigger
+            frag_trigger_set((*f_node)[pre_x][pre_y], (*f_msg)+l, frag_num);
+        ((*f_msg)+l)->frag_right_bound = right_bound;
+		for (i = line_end[l]-1; i > 0; --i)
 		{
-			if (abs(pre_x - cur_x) > 1)
+			cur_x = pre_x; cur_y = pre_y;
+			pre_x = line[l][i-1].x; pre_y = line[l][i-1].y;
+			//INS
+			if ((*f_node)[cur_x][cur_y].match_flag == F_INSERT)
 			{
-				//dp-line for INV/TRS
-				_m_len = 0;
-				_m_len = frag_mini_dp_line(f_node, a_msg, seed_len, (line_node){pre_x, pre_y}, (line_node){cur_x, cur_y}, _line, 0, 0, n_seed);
-				if (_m_len != 0)
+                frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+l, frag_num, seed_len);
+				if ((*f_node)[cur_x][cur_y].next_trigger_n > 0 || (*f_node)[cur_x][cur_y].pre_trigger_n > 0)	//set trigger
+                    frag_trigger_set((*f_node)[cur_x][cur_y], (*f_msg)+l, frag_num);
+                ++frag_num;
+				frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+l, frag_num, seed_len);
+				/*if (abs(pre_x - cur_x) > 1)	//INS-res exist; abs(read_id) > 1? -> separate cigar
 				{
-					frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+cur_line, frag_num, seed_len);
-					((*f_msg)+cur_line)->frag_left_bound = a_msg[_line[_m_len-1].x].read_id;
-					//++frag_num;
-					//new frag for main-line
-					if (cur_num == (*line_m))
+					//new frag for INS-seq XXX
+					_m_len = 0;
+					_m_len = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, (line_node){pre_x, pre_y}, (line_node){cur_x, cur_y}, _line, _line_end, 0, 0, n_seed);
+					if (_m_len > 0)
 					{
-						(*f_msg) = (frag_msg*)realloc((*f_msg), ((*line_m)+1) * sizeof(frag_msg));
-						if ((*f_msg) == NULL) { fprintf(stderr, "frag dp path] Not enough memory.\n"); exit(0); }
-						(*line_m)++;
+						for (j = 0; j < _m_len; ++j)
+						{
+							if (cur_num == (*line_m))
+							{
+								(*f_msg) = (frag_msg*)realloc((*f_msg), ((*line_m)+1) * sizeof(frag_msg));
+								frag_init_msg((*f_msg)+(*line_m), (*f_msg)->frag_max); 
+								if ((*f_msg) == NULL) { fprintf(stderr, "[frag dp path] Not enough memory.(line_m: %d)\n", (*line_m)+1); exit(0); }
+								(*line_m)++;
+							}
+							frag_copy_msg((*f_msg), (*f_msg)+cur_num);
+							frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, *f_node, _line+_line_end[j], _line_end[j+1]-_line_end[j]);
+							((*f_msg)+cur_num)->frag_left_bound = a_msg[pre_x].read_id;
+							((*f_msg)+cur_num)->frag_right_bound = a_msg[cur_x].read_id;
+							cur_num++;
+						}
 					}
-					frag_copy_msg((*f_msg), (*f_msg)+cur_num);
-					cur_line=cur_num; frag_num = 0;
-					frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-					((*f_msg)+cur_line)->frag_right_bound = a_msg[_line[0].x].read_id;
-					cur_num++;
-
-					//new frag for INV/TRS
-					if (cur_num == (*line_m))
-					{
-						(*f_msg) = (frag_msg*)realloc((*f_msg), ((*line_m)+1) * sizeof(frag_msg));
-						 if ((*f_msg) == NULL) { fprintf(stderr, "[frag dp path] Not enough memory.\n"); exit(0); }
-						 (*line_m)++;
-					}
-					frag_copy_msg((*f_msg), (*f_msg)+cur_num);
-					frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, f_node, _line, _m_len);
-					((*f_msg)+cur_num)->frag_left_bound = a_msg[pre_x].read_id;
-					((*f_msg)+cur_num)->frag_right_bound = a_msg[cur_x].read_id;
-					cur_num++;
+				}*/
+			}
+			//DEL
+			else if ((*f_node)[cur_x][cur_y].match_flag == F_DELETE)
+			{
+				frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+l, frag_num, seed_len);
+				if ((*f_node)[cur_x][cur_y].next_trigger_n > 0 || (*f_node)[cur_x][cur_y].pre_trigger_n > 0)	//set trigger
+                    frag_trigger_set((*f_node)[cur_x][cur_y], (*f_msg)+l, frag_num);
+                ++frag_num;
+				frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+l, frag_num, seed_len);
+			}
+			//MIS	XXX
+			else if ((*f_node)[cur_x][cur_y].match_flag == F_MISMATCH)
+			{
+				//XXX take mis-match as NEW-FLAG case
+				//frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, (*f_msg)+cur_line, frag_num, seed_len);
+				frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+l, frag_num, seed_len);
+				if ((*f_node)[cur_x][cur_y].next_trigger_n > 0 || (*f_node)[cur_x][cur_y].pre_trigger_n > 0)	//set trigger
+                    frag_trigger_set((*f_node)[cur_x][cur_y], (*f_msg)+l, frag_num);
+                ++frag_num;
+				frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+l, frag_num, seed_len);
+				//XXX find new flag in mis-match seeds
+				//dp-line for INV/TRS
+				/*
+                    _m_len = 0;
+                    _m_len = frag_mini_dp_line((*f_node), a_msg, seed_len, (line_node){pre_x, pre_y}, (line_node){cur_x, cur_y}, _line, 0, 0, n_seed);
+                    if (_m_len != 0)
+                    {
+                        //new frag for INV/TRS
+                        if (cur_num == (*line_m))
+                        {
+                            (*f_msg) = (frag_msg*)realloc((*f_msg), ((*line_m)+1) * sizeof(frag_msg));
+                            frag_init_msg((*f_msg)+(*line_m), (*f_msg)->frag_max); 
+                            if ((*f_msg) == NULL) { fprintf(stderr, "[frag dp path] Not enough memory.\n"); exit(0); }
+                            (*line_m)++;
+                        }
+                        frag_copy_msg((*f_msg), (*f_msg)+cur_num);
+                        frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, *f_node, _line, _m_len);
+                        ((*f_msg)+cur_num)->frag_left_bound = a_msg[pre_x].read_id;	//bound XXX
+                        ((*f_msg)+cur_num)->frag_right_bound = a_msg[cur_x].read_id;
+                        cur_num++;
+                    }
+                */
+			}
+			else if ((*f_node)[cur_x][cur_y].match_flag == F_MATCH)	//: MATCH
+			{
+				frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, (*f_msg)+l, frag_num, seed_len);
+			}
+			else {fprintf(stderr, "[frag dp path] Error: Unknown flag, \"%d\"", (*f_node)[cur_x][cur_y].match_flag); exit(0);}
+		}
+		//last start
+		cur_x = line[l][0].x; cur_y = line[l][0].y;
+		frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+l, frag_num, seed_len);
+        if ((*f_node)[cur_x][cur_y].next_trigger_n > 0 || (*f_node)[cur_x][cur_y].pre_trigger_n > 0)	//set trigger
+            frag_trigger_set((*f_node)[cur_x][cur_y], (*f_msg)+l, frag_num);
+        left_bound = ((line[l][line_end[l]].x == -1) ? 0 : (a_msg[line[l][line_end[l]].x].read_id));
+        //left_bound = 0;
+		//MIS-MATCH
+		/*if (cur_x > 0)
+		{
+			_m_len = 0;
+			_m_len = frag_mini_dp_line((*f_node), a_msg, seed_len, (line_node){-1, 0}, (line_node){cur_x, cur_y}, _line, 0, 0, n_seed);
+			if (_m_len != 0)
+			{
+				if (cur_num == (*line_m))
+				{
+					(*f_msg) = (frag_msg*)realloc(*f_msg, ((*line_m)+1) * sizeof(frag_msg));
+					frag_init_msg((*f_msg)+(*line_m), (*f_msg)->frag_max); 
+					if ((*f_msg) == NULL) { fprintf(stderr, "[frag_dp_path] Not enough memory.(line_m: %d)\n", (*line_m)+1); exit(0); }
+					(*line_m)++;
 				}
-				//XXX
-				else frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, (*f_msg)+cur_line, frag_num, seed_len);
+				frag_copy_msg(*f_msg, (*f_msg)+cur_num);
+				frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, *f_node, _line, _m_len);
+				((*f_msg)+cur_num)->frag_left_bound = 0;
+				((*f_msg)+cur_num)->frag_right_bound = a_msg[cur_x].read_id;
+				cur_num++;
+				left_bound = a_msg[_line[_m_len-1].x].read_id;
 			}
-			//MIS, REF-N
-			//no seeds' aln-res exist
-			else
-			{
-				//frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+cur_line, frag_num, seed_len);
-				//++frag_num;
-				//frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+cur_line, frag_num, seed_len);
-				frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, (*f_msg)+cur_line, frag_num, seed_len);
-			}
-		}
-		else if (f_node[cur_x][cur_y].match_flag == F_MATCH)	//: MATCH
-		{
-			frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, (*f_msg)+cur_line, frag_num, seed_len);
-		}
-		else {fprintf(stderr, "[frag dp path] Error: Unknown flag, \"%d\"", f_node[cur_x][cur_y].match_flag); exit(0);}
+		}*/
+		((*f_msg)+l)->frag_left_bound = left_bound;
 	}
-	//last start
-	cur_x = line[0].x; cur_y = line[0].y;
-	frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+cur_line, frag_num, seed_len);
-	int left_bound = 0;
-	//MIS-MATCH
-	if (cur_x > 0)
-	{
-		_m_len = 0;
-		_m_len = frag_mini_dp_line(f_node, a_msg, seed_len, (line_node){-1, 0}, (line_node){cur_x, cur_y}, _line, 0, 0, n_seed);
-		if (_m_len != 0)
-		{
-			if (cur_num == (*line_m))
-			{
-				(*f_msg) = (frag_msg*)realloc(*f_msg, ((*line_m)+1) * sizeof(frag_msg));
-				if ((*f_msg) == NULL) { fprintf(stderr, "[frag_dp_path] Not enough memory.(line_m: %d)\n", (*line_m)+1); exit(0); }
-				(*line_m)++;
-			}
-			frag_copy_msg(*f_msg, (*f_msg)+cur_num);
-			frag_mini_dp_path(a_msg, seed_len, (*f_msg)+cur_num, f_node, _line, _m_len);
-			((*f_msg)+cur_num)->frag_left_bound = 0;
-			((*f_msg)+cur_num)->frag_right_bound = a_msg[cur_x].read_id;
-			cur_num++;
-			left_bound = a_msg[_line[_m_len-1].x].read_id;
-		}
-	}
-	((*f_msg)+cur_line)->frag_left_bound = left_bound;
-	//free(_line);
-
-	(*line_n) = cur_num;
-	/*
-	int j, k, s_i, a_i;
+	
+	/*int k, s_i, a_i;
 	fprintf(stdout, "%d line(s)\n", *line_n);
 	for (i = 0; i < *line_n; ++i)
 	{
@@ -1726,9 +2312,7 @@ int frag_dp_path(aln_msg *a_msg, int n_seed, int seed_len, frag_msg **f_msg, int
 			}
 		}
 	}*/
-	//free variables
-	//free(line); for (i = 0; i < n_seed; ++i) free(f_node[i]); free(f_node);
-	return 1;
+    return 1;
 }
 
 //@: remain frags with more than 2 seeds.
@@ -1790,27 +2374,39 @@ int frag_dp_path(aln_msg *a_msg, int n_seed, int seed_len, frag_msg **f_msg, int
 int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
 {
 	FILE *result_p; char readline[1024];
-	int n_read/*start from 1*/, n_seed, i; char srand;
+	int n_read/*start from 1*/, n_seed, i, j; char srand;
 	int read_id, chr, edit_dis; long long offset; char cigar[1024];
 	
 	aln_msg *a_msg; 
-	frag_msg *f_msg; int line_n, line_m;
+	frag_msg *f_msg; int line_n, *line_tri, line_m;
 
 	gzFile readfp; kseq_t *read_seq_t; char *read_seq;
 
 	//alloc mem and initialization
 	a_msg = aln_init_msg(s_msg->seed_max);
 
-	//f_node = (frag_DP_node*)malloc(s_msg->seed_max * sizeof(frag_DP_node));
-	line_node *line = (line_node*)malloc(s_msg->seed_max * sizeof(line_node));
-	line_node *_line = (line_node*)malloc(s_msg->seed_max * sizeof(line_node));
-	frag_dp_node **f_node = (frag_dp_node**)malloc(s_msg->seed_max * sizeof(frag_dp_node*));
+	line_node **line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
+	int *line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
+    line_tri = (int*)malloc((s_msg->seed_max) * sizeof(int));
+	line_node **_line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
+	int *_line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
+    frag_dp_node ***f_node = (frag_dp_node***)malloc(sizeof(frag_dp_node**));
+	(*f_node) = (frag_dp_node**)malloc(s_msg->seed_max * sizeof(frag_dp_node*));
 	for (i = 0; i < s_msg->seed_max; ++i)
-		f_node[i] = (frag_dp_node*)malloc(PER_ALN_N * sizeof(frag_dp_node)); 
-	if (line == NULL || f_node == NULL) { fprintf(stderr, "[frag_dp_path] Not enougy memory.\n"); exit(0); }
+	{
+		line[i] = (line_node*)malloc((s_msg->seed_max+3) * sizeof(line_node));
+		_line[i] = (line_node*)malloc((s_msg->seed_max+3) * sizeof(line_node));
+		(*f_node)[i] = (frag_dp_node*)malloc(PER_ALN_N * sizeof(frag_dp_node)); 
+        for (j = 0; j < PER_ALN_N; ++j)
+        {
+            (*f_node)[i][j].trigger_m = 100;
+            (*f_node)[i][j].trigger = (int*)malloc(100 * sizeof(int));
+        }
+	}
+	if (line == NULL || _line == NULL || f_node == NULL) { fprintf(stderr, "[frag_dp_path] Not enougy memory.\n"); exit(0); }
 	
 	//XXX 
-	f_msg = (frag_msg*)malloc(sizeof(frag_msg));	
+    f_msg = (frag_msg*)malloc(sizeof(frag_msg));	
 	frag_init_msg(&f_msg[0], s_msg->seed_max);
 	line_m = 1;	//size
 	line_n = 0;	//line num
@@ -1856,11 +2452,13 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 					f_msg[0].last_len = s_msg->last_len[n_read];
 					f_msg[0].seed_all = s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1];
 					//fprintf(stdout, "%s\n", s_msg->read_name[n_read]);
-					if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, &line_m, line, f_node, _line))
+					if (strcmp(s_msg->read_name[n_read], "donor1_246723874_246823873_986:0:0_1:0:0_d8/1_0") ==0)
+						printf("debug");
+					if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri, &line_m, line, line_end, f_node, _line, _line_end))
 					{
 						//if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
 						/* SW-extenging */
-						frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, a_msg, &hash_num, &hash_node, seed_len);
+						frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, line_tri, a_msg, &hash_num, &hash_node, seed_len);
 					}
 				}
 				n_seed = 0;
@@ -1892,17 +2490,21 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	f_msg[0].seed_all = s_msg->n_seed[n_read] - s_msg->n_seed[n_read-1];
 	f_msg[0].last_len = s_msg->last_len[n_read];
 	//fprintf(stdout, "%s\n", s_msg->read_name[n_read]);
-	if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, &line_m, line, f_node, _line))
+	if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri,  &line_m, line, line_end, f_node, _line, _line_end))
 	{
 		//if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
 		/* SW-extenging */
-		frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, a_msg, &hash_num, &hash_node, seed_len);
+		frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, line_tri, a_msg, &hash_num, &hash_node, seed_len);
 	}
 	fclose(result_p);
 	aln_free_msg(a_msg, s_msg->seed_max);
-	for (i = 0; i < s_msg->seed_max; ++i) free(f_node[i]); free(f_node);
-	free(line); free(_line);
-
+	for (i = 0; i < s_msg->seed_max; ++i) 
+	{
+        for (j = 0; j < PER_ALN_N; ++j)
+            free((*f_node)[i][j].trigger);
+		free((*f_node)[i]); free(line[i]); free(_line[i]);
+	}
+	free(*f_node); free(f_node); free(line); free(_line); free(line_end); free(line_tri); free(_line_end);
     //hash map
 	free(hash_num); 
 	for (i = 0; i < hash_size; ++i) free(hash_node[i]);

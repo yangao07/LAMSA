@@ -23,6 +23,22 @@
 #define F_UNMATCH 7
 #define F_PATH_END 8
 
+#define F_TRI 10
+#define F_TRI_MISMATCH 11
+#define F_TRI_INSERT 12
+#define F_TRI_DELETE 13
+
+
+#define F_SV_PEN 2
+#define F_MATCH_SCORE 1
+
+#define DP_MIN 1
+#define DP_MULTI 2
+
+#define DP_BACK_NONE 0
+#define DP_BACK_PEAK 1
+#define DP_BACK_LOCATED 2
+
 #define DEL_THD 100000	//XXX
 #define THRSHOLD 50
 
@@ -115,7 +131,6 @@ typedef struct {
     from_t from;
 } path_msg;
 
-#define SV_PEN 2
 typedef struct {
 	int x;		//seed#
 	int y;		//n_aln#
@@ -136,7 +151,14 @@ typedef struct {
 	int score;
 	uint8_t match_flag;
 	int dp_flag;
+	int backtrack_flag;
 	int node_n;
+	int peak_value;
+	line_node peak;
+	int next_trigger_n;
+	int pre_trigger_n;
+    int trigger_m;
+	int *trigger;	//next...pre
 } frag_dp_node;
 
 int lsat_aln(int argc, char* argv[]);

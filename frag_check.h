@@ -57,6 +57,11 @@ typedef struct {
 	int seed_num;	//seed number of per frag
 	int *seed_i;
 	int *seed_aln_i;
+
+    int next_trigger_n;
+    int pre_trigger_n;
+    int trigger_m;
+    int *trigger;
 } frag_aln_msg;
 
 typedef struct {
@@ -92,8 +97,14 @@ extern char nst_nt4_table[256];
 void frag_init_msg(frag_msg *f_msg, int frag_max);
 void frag_free_msg(frag_msg *f_msg, int line_num);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len);//FLAG 0: start/1:end / 2:seed
+int frag_trigger_set(frag_dp_node f_node, frag_msg *f_msg, int frag_i);
 int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg);
-int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_prefix, char *read_seq, int read_len, frag_msg **f_msg, int line_n, aln_msg *a_msg, uint32_t **hash_num, uint64_t ***hash_node, int seed_len);
+int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_prefix, 
+			   char *read_seq, int read_len, 
+			   frag_msg **f_msg, int line_n, int *line_tri, 
+			   aln_msg *a_msg, 
+			   uint32_t **hash_num, uint64_t ***hash_node, 
+			   int seed_len);
 void printcigar(uint32_t *cigar, int cigar_len);
 
 #define MAXOFTWO(a, b) ((a) > (b) ? (a) : (b))
