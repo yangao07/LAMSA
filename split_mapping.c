@@ -1917,7 +1917,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 				line[node_i-1-i] = tmp;	
 			}
 			//DEBUG
-                if (node_i == 0)
+                /*if (node_i == 0)
                 {
                     printf("min-update\n");
                     for (i = 0; i <= hash_seed_n+1; ++i)
@@ -1927,7 +1927,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
                             printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
                         }
                     }
-                }
+                }*/
 				/*{
 					printf("min-update\n");
 					for (i = 0; i < node_i; ++i)
