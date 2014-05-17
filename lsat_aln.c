@@ -1348,7 +1348,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node,
 	int start, end;
 	int i, j, k, l, mini_dp_flag = MULTI_FLAG;
 	int l_i, max_score, node_i;
-	line_node max_node, _right, _left;
+	line_node _right, _left;
 	int candi_n; line_node candi[n_seed];
 
 	if (_head) start = left.x; else start = left.x+1;
@@ -1601,13 +1601,13 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node,
 	//find max-value node in rest nodes, backtrack
 	//...
 	//find backtrack start node
-	for (i = left.x+1; i < right.x; ++i)
+	/*for (i = left.x+1; i < right.x; ++i)
 	{
 		for (j = 0; j < a_msg[i].n_aln; ++j)
 		{
 			fprintf(stdout, "node:(%d %d)\t%d %d %lld\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tnode_n:%d\n", i, j, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, (long long)a_msg[i].at[j].offset, f_node[i][j].from.x, f_node[i][j].from.y, f_node[i][j].score, "MXIDCRUSE"[f_node[i][j].match_flag], f_node[i][j].dp_flag, f_node[i][j].node_n);
 		}
-	}
+	}*/
 }
 
 /*int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, int seed_len, line_node left, line_node right, line_node **line, int *line_end, int _head, int _tail, int n_seed)
@@ -1895,7 +1895,6 @@ int frag_dp_line(aln_msg *a_msg,
 			//find backtrack start node
 				int max_score=0, l_i = 0;
 				line_node max_node = (line_node){-1,0};
-				line_node back_node;
 				int node_i=0, mini_len, new_l=1;
 				line_node last_n; int multi_l;
 				line_node right, left;
@@ -2076,7 +2075,7 @@ int frag_mini_dp_path(aln_msg *a_msg,
 					  line_node *line, 
 					  int m_len)
 {
-	int i, j;
+	int i;
 	int frag_num = 0;
 	int cur_x, cur_y, pre_x = line[m_len-1].x, pre_y = line[m_len-1].y;
 
@@ -2114,7 +2113,7 @@ int frag_dp_path(aln_msg *a_msg,
 				 frag_dp_node ***f_node, 
 				 line_node **_line, int *_line_end)
 {
-	int i, j, l;
+	int i, l;
 	//DP
 	int l_n = frag_dp_line(a_msg, n_seed, seed_len, line, line_end, f_node, _line, _line_end);
 	if (l_n == 0) return 0;
@@ -2124,7 +2123,7 @@ int frag_dp_path(aln_msg *a_msg,
 
 	//for new frags
 	//  cur_line: cur line index, cur_num:  whole lines, *line_num: mem of *f_msg
-	int cur_line=0, cur_num=1, _m_len;
+	//int cur_line=0, cur_num=1, _m_len;
 	int left_bound, right_bound;
 
     (*line_n) = l_n;
@@ -2451,9 +2450,6 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 					//if (frag_find_path(a_msg, n_seed, seed_len, line, line_end, f_node, f_msg))
 					f_msg[0].last_len = s_msg->last_len[n_read];
 					f_msg[0].seed_all = s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1];
-					//fprintf(stdout, "%s\n", s_msg->read_name[n_read]);
-					if (strcmp(s_msg->read_name[n_read], "donor1_246723874_246823873_986:0:0_1:0:0_d8/1_0") ==0)
-						printf("debug");
 					if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri, &line_m, line, line_end, f_node, _line, _line_end))
 					{
 						//if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))

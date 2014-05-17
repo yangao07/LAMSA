@@ -24,6 +24,7 @@ lsat
 cscope.*
 
 #data
+Data/*
 data/*
 out
 
@@ -32,6 +33,7 @@ soap2-dp/*
 
 #output
 output/*
+out*
 
 #eclipse project
 *project

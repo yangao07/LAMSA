@@ -12,16 +12,17 @@
 
 #define EDIT_THS 3
 
-#define FRAG_CON_STR "MXIDCRUSE"
+#define FRAG_CON_STR "MPXIDCRUSE"
 #define F_MATCH 0
-#define F_MISMATCH 1
-#define F_INSERT 2
-#define F_DELETE 3
-#define F_CHR_DIF 4
-#define F_REVERSE 5
-#define F_UNCONNECT 6
-#define F_UNMATCH 7
-#define F_PATH_END 8
+#define F_SPLIT_MATCH 1
+#define F_MISMATCH 2
+#define F_INSERT 3
+#define F_DELETE 4
+#define F_CHR_DIF 5
+#define F_REVERSE 6
+#define F_UNCONNECT 7
+#define F_UNMATCH 8
+#define F_PATH_END 9
 
 #define F_TRI 10
 #define F_TRI_MISMATCH 11

@@ -66,14 +66,24 @@ typedef struct {
 #define HASH_FRAG_END 2
 #define HASH_FRAG_SEED 3
 
-#define HASH_SV_PEN 10
+#define HASH_SV_PEN 2 
+
+//for un-overlap seed, HASH_STEP >= HASH_LEN
+#define HASH_INIT_SCORE(node_N, CON_PEN) (node_N - CON_PEN)
+#define HASH_DP_SCORE(init_score, node_N, CON_PEN) (init_score+node_N-CON_PEN)
 
 //XXX
 //64-slen or 32-slen
 #define LAST_SHIFT(x, slen) ((x<<slen)>>slen)
 extern const int8_t sc_mat[25];
+
+//XXX	seed_len:	100
+//		hash_len:	10
+//		hash_step:	15
+//		100 / 15 = 6 ... 10
 #define HASH_LEN 10
-#define HASH_STEP 1
+//#define HASH_STEP 1
+#define HASH_STEP 15 //for un-overlap
 #define NT_N 4	//XXX for N
 
 int split_delete_map(uint32_t **res_cigar, int *res_len, 
