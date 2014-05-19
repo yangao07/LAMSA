@@ -2968,18 +2968,36 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len,
 	}
 	int res;
 	res = hash_split_map(cigar, cigar_len, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 1, 0);
-	int i, readINcigar=0;
+	int i, readINcigar=0, refINcigar=0;
 	for (i = 0; i < (*cigar_len); ++i)
 	{
-		if (((*cigar)[i] & 0xf) == CMATCH || ((*cigar)[i] & 0xf) == CINS)
-			readINcigar += ((*cigar)[i] >> 4);
+		if (((*cigar)[i] & 0xf) == CMATCH) readINcigar += ((*cigar)[i] >> 4), refINcigar += ((*cigar)[i] >> 4);
+		else if (((*cigar)[i] & 0xf) == CINS) readINcigar += ((*cigar)[i] >> 4);
+		else if (((*cigar)[i] & 0xf) == CDEL) refINcigar += ((*cigar)[i] >> 4);
+		else fprintf(stderr, "[hash_right_bound_map] cigar error.\n"), exit(-1);
 	}
-	if (readINcigar < read_len)     //'S' exists
+	if (readINcigar < read_len)     
 	{
-		(*cigar)[(*cigar_len)] = (((read_len - readINcigar) << 4) | CSOFT_CLIP);
-		(*cigar_len)++;
+		int qlen = read_len-readINcigar;
+		int tlen = read_len -readINcigar + ((hash_len+read_len-readINcigar)*bwasw_sc_mat[0]-5-1)/2;
+		tlen = tlen < (ref_len - refINcigar) ? tlen : (ref_len - refINcigar);
+		int read_end, ref_end, n_cigar_;
+		uint32_t *cigar_= NULL;
+		//
+		//printf("ref:\t");for (i = 0; i < tlen; ++i) printf("%c", "ACGT"[(ref_seq+refINcigar)[i]]);printf("\n");
+		//printf("read:\t");for (i =0; i < qlen; ++i) printf("%c", "ACGT"[(read_seq+readINcigar)[i]]);printf("\n");
+		ksw_extend2(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, bwasw_sc_mat, 5, 2, abs(read_len-readINcigar-ref_len + refINcigar)+3, hash_len*bwasw_sc_mat[0], &read_end, &ref_end, &n_cigar_, &cigar_);
+		if (cigar_ != NULL)
+		{
+			_push_cigar(cigar, cigar_len, cigar_, n_cigar_);
+			//for (i = 0; i < n_cigar_; ++i) (*cigar)[(*cigar_len)++] = cigar_[i];
+			//printf("tail:\t"); printcigar(cigar_, n_cigar_); printf("\n");
+			free(cigar_);
+		}
+		if (read_end < read_len - readINcigar) 
+			(*cigar)[(*cigar_len)++] = (((read_len - readINcigar-read_end) << 4) | CSOFT_CLIP); //'S' exist
+		//(*cigar)[(*cigar_len)++] = ((read_len - readINcigar) << 4) | CSOFT_CLIP;
 	}
-
 	free(hash_pos);
 	return res;
 }
@@ -2999,21 +3017,57 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len,
 	}
 	int res;
 	res = hash_split_map(cigar, cigar_len, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 0, 1);
-	int i, readINcigar=0;
+	int i, readINcigar=0, refINcigar=0;
 	for (i = 0; i < (*cigar_len); ++i)
 	{
-		if (((*cigar)[i] & 0xf) == CMATCH || ((*cigar)[i] & 0xf) == CINS)
-			readINcigar+=((*cigar)[i] >> 4);
+		if (((*cigar)[i] & 0xf) == CMATCH) readINcigar+=((*cigar)[i] >> 4), refINcigar+=((*cigar)[i] >> 4);
+		else if (((*cigar)[i] & 0xf) == CINS) readINcigar += ((*cigar)[i] >> 4);
+		else if (((*cigar)[i] & 0xf) == CDEL) refINcigar += ((*cigar)[i] >> 4);
+		else fprintf(stderr, "[hash_left_bound_map] cigar error.\n"), exit(-1);
 	}
 	if (readINcigar < read_len)     //'S' exists
 	{
-		//LV?
-		for (i = (*cigar_len); i > 0; --i)
+		int qlen = read_len - readINcigar;
+		int tlen = read_len - readINcigar + ((hash_len+read_len-readINcigar)*bwasw_sc_mat[0]-5-1)/2;
+		tlen = tlen < (ref_len -refINcigar) ? tlen : (ref_len - refINcigar);
+		uint8_t *qseq = (uint8_t*)malloc(qlen * sizeof(uint8_t));
+		uint8_t *tseq = (uint8_t*)malloc(tlen * sizeof(uint8_t));
+		int read_end, ref_end, n_cigar_;
+		uint32_t *cigar_= 0;
+		for (i = 0; i < qlen; ++i) qseq[i] = read_seq[qlen-i-1];
+		for (i = 0; i < tlen; ++i) tseq[i] = ref_seq[ref_len-refINcigar-i-1];
+
+		//printf("ref:\t");for (i = 0; i < tlen; ++i) printf("%c", "ACGT"[tseq[i]]);printf("\n");
+		//printf("read:\t");for (i =0; i < qlen; ++i) printf("%c", "ACGT"[qseq[i]]);printf("\n");
+		ksw_extend2(qlen, qseq, tlen, tseq, 5, bwasw_sc_mat, 5, 2, abs(qlen-tlen)+3, hash_len*bwasw_sc_mat[0], &read_end, &ref_end, &n_cigar_, &cigar_);
+
+		if (cigar_ != NULL)
 		{
-			(*cigar)[i] = (*cigar)[i-1];
+			//printf("head:\t"); printcigar(cigar_, n_cigar_); printf("\n");
+			if (read_end < read_len - readINcigar) 
+				cigar_[n_cigar_++] = (((read_len -readINcigar - read_end) << 4) | CSOFT_CLIP); //'S' exsit
+
+			//XXX push_cigar
+			for (i = (*cigar_len)+n_cigar_-1; i >= n_cigar_; --i)
+				(*cigar)[i] = (*cigar)[i-n_cigar_];
+			for (i = 0; i < n_cigar_; ++i)
+				(*cigar)[i] = cigar_[n_cigar_-i-1]; 
+			(*cigar_len) += n_cigar_;
+			free(cigar_);
 		}
-		(*cigar)[0] = (((read_len - readINcigar) << 4) | CSOFT_CLIP);
-		(*cigar_len)++;
+		else
+		{
+			for (i = (*cigar_len); i > 0; --i)
+				(*cigar)[i] = (*cigar)[i-1];
+			(*cigar)[0] = ((read_len - readINcigar) << 4 | CSOFT_CLIP);
+			++(*cigar_len);
+		}
+
+		free(tseq); free(qseq); 
+		/*for (i = (*cigar_len); i > 0; --i)
+			(*cigar)[i] = (*cigar)[i-1];
+		(*cigar)[0] = ((read_len - readINcigar) << 4 | CSOFT_CLIP);
+		++(*cigar_len);*/
 	}
 
 	free(hash_pos);
