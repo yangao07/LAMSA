@@ -576,12 +576,13 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	// DP loop
 	max = h0, max_i = max_j = -1;
 	// E() && H()
-		//beg = 0, end = 1;//qlen;
-	beg = 0, end = qlen;
+		beg = 0, end = 1;//qlen;
+	//beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
 		int f = 0, h1, m = 0, mj = -1;
 		int8_t *q = &qp[target[i] * qlen];
 		uint8_t *zi = &z[i * n_col];
+		int d_beg = i > w ? i - w : 0;
 		// compute the first column
 		h1 = h0 - (gapo + gape * (i + 1));
 		if (h1 < 0) h1 = 0;
@@ -601,12 +602,13 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			p->h = h1;          // set H(i,j-1) for the next row
 			h += q[j];
 			// F()
-				/*if (end < (j + 1 + (int)((double)(h - gapo - 1) / gape)))
+				if (end < (j + 1 + (int)((double)(h - gapo - 1) / gape)))
 				{
 					end = (j + 1 + (int)((double)(h - gapo - 1) / gape));
 					if (end > i + w + 1) end = i + w + 1;
 					if (end > qlen) end = qlen;
-				}*/
+				}
+				//printf("be\t(%d %d) : %d %d\n", i, j, beg, end);
 			d = h > e? 0 : 1;
 			h = h > e? h : e;
 			d = h > f? d : 2;
@@ -623,13 +625,14 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			f -= gape;
 			d |= f > h? 2<<4 : 0;
 			f = f > h? f : h;   // computed F(i,j+1)
-			zi[j - beg] = d;
+			zi[j - d_beg] = d;
+			//printf("%d %d : %d %d\n", i, j, h1, m);
 		}
 		eh[end].h = h1; eh[end].e = 0;
 		if (m == 0) break;
 		if (m > max) max = m, max_i = i, max_j = mj;
 		// update beg and end for the next round
-			/*int _beg, _end;
+			int _beg, _end;
 			// E()
 			for (j = mj; j >= beg && (eh[j].h > gapoe || eh[j].e > gape); --j);
 			_beg = j + 1;
@@ -639,9 +642,9 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			for (j = _beg - 1; j >= beg && eh[j].h; --j);
 			beg = j + 1;
 			for (j = _end; j <= end && eh[j].h; ++j);
-			end = j;*/
+			end = j;
 
-		beg = 0; end = qlen; // uncomment this line for debugging
+		//beg = 0; end = qlen; // uncomment this line for debugging
 	}
 	//score = max;
 	if (n_cigar_ && cigar_) {	//backtarck
