@@ -1450,31 +1450,6 @@ int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right,
 	return (dlen > ilen ? dlen : ilen); 
 }
 
-int _push_cigar(uint32_t **res_cigar, int *res_clen, uint32_t *cigar, int clen)
-{
-	if (clen == 0) return 0;
-	int i, j;
-	i = *res_clen;
-	if (((i-1) >= 0) && (((*res_cigar)[i-1] & 0xf) == (cigar[0] & 0xf)))
-	{
-		(*res_cigar)[i-1] += ((cigar[0] >> 4) << 4);
-		j = 1;
-	}
-	else j = 0;
-
-	for (; j < clen; ++i,++j) {
-		/*if (i == *fcmax) {	//XXX cigar_len ???
-		  (*fcmax) <<= 1;
-		  (*fcigar) = (uint32_t*)realloc(*fcigar, (*fcmax) * sizeof (uint32_t));
-		  if ((*fcigar) == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(-1);}
-		  }	*/
-		(*res_cigar)[i] = cigar[j];
-	}
-	*res_clen = i;
-	//fprintf(stderr, "res_len %d\n", i);
-	return 0;
-}
-
 // init for dp node, head and tail node NOT include
 int hash_dp_init(hash_dp_node **h_node, 
 				 int *hash_pos, int *start_a, int *len_a, 
@@ -2340,7 +2315,7 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 	return split_clen;
 }
 */
-int hash_split_map(uint32_t **split_cigar, int *split_clen,
+int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 				   uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 				   int hash_len, int hash_step, int key_len, 
 				   uint32_t *hash_num, uint64_t **hash_node, int32_t *hash_pos, 
@@ -2467,7 +2442,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 						_cigar[3] = CSOFT_CLIP;
 						_clen = 4;
 					}
-					_push_cigar(split_cigar, split_clen, _cigar, _clen);
+					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					/*if ((*split_cigar)[*split_clen-1] & 0xf != CMATCH) tail_out = 0;
 					else
 					{
@@ -2482,7 +2457,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 				{	
 					//         ref_left, read_left, ref_right,           read_right
 					make_indel_cigar(-1, -1,  h_node[line[0].x][line[0].y].ref_i, h_node[line[0].x][line[0].y].ref_i+h_node[line[0].x][line[0].y].offset, &_clen, &g_cigar);
-					_push_cigar(split_cigar, split_clen, g_cigar, _clen);
+					_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
 					tail_in = 0;
 				}
 			}
@@ -2500,7 +2475,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 					//tail_in
 					g_cigar[0] = (h_node[line[i].x][line[i].y].ref_i - h_node[line[start_i].x][line[start_i].y].ref_i + hash_len - tail_in - overlap) << 4 | CMATCH;
 					_clen = 1;
-					_push_cigar(split_cigar, split_clen, g_cigar, _clen);
+					_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
 						if (g_cigar[0] >>4 > 10000) { fprintf(stderr, "match both tail:%d overlap: %d\t", tail_in, overlap); printcigar(g_cigar, _clen); printf("\n"); }
 
 					if (i == m_len-1) break;
@@ -2563,7 +2538,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 							_cigar[3] = CSOFT_CLIP;
 							_clen = 4;
 						}
-						_push_cigar(split_cigar, split_clen, _cigar, _clen);
+						_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 						overlap = 0;
 						free(_cigar);
 					}
@@ -2571,7 +2546,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 					{
 						tail_in = 0;
 						overlap = make_indel_cigar(h_node[line[i].x][line[i].y].ref_i+hash_len-1, h_node[line[i].x][line[i].y].ref_i+hash_len-1+h_node[line[i].x][line[i].y].offset, h_node[line[i+1].x][line[i+1].y].ref_i, h_node[line[i+1].x][line[i+1].y].ref_i+h_node[line[i+1].x][line[i+1].y].offset, &_clen, &g_cigar);
-						_push_cigar(split_cigar, split_clen, g_cigar, _clen);
+						_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
 					}
 					start_i = i+1;
 				}
@@ -2636,13 +2611,13 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 						_cigar[3] = CSOFT_CLIP;
 						_clen = 4;
 					}
-					_push_cigar(split_cigar, split_clen, _cigar, _clen);
+					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					free(_cigar);
 				}
 				else //no blank, add SV cigar
 				{
 					make_indel_cigar(h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len-1, h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len-1+h_node[line[m_len-1].x][line[m_len-1].y].offset, ref_len, read_len, &_clen, &g_cigar);
-					_push_cigar(split_cigar, split_clen, g_cigar, _clen);
+					_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
 				}
 			}
 		//free variables
@@ -2664,7 +2639,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 				_cigar[3] = CSOFT_CLIP;
 				_clen = 4;
 			}
-			_push_cigar(split_cigar, split_clen, _cigar, _clen);
+			_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 			free(_cigar);
 		}
 	}
@@ -2902,7 +2877,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen,
 
 //XXX hash_node: use struct?
 //insertion length = read_len - ref_len
-int split_insert_map(uint32_t **res_cigar, int *res_len, 
+int split_insert_map(uint32_t **res_cigar, int *res_len, int *res_m,
 					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
 					 int64_t ref_offset, 
 					 int hash_len, int hash_step, 
@@ -2920,7 +2895,7 @@ int split_insert_map(uint32_t **res_cigar, int *res_len,
 
 	int res;
 	//for multi-breakpoints
-	res = hash_split_map(res_cigar, res_len, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos, 1, 1);
+	res = hash_split_map(res_cigar, res_len, res_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos, 1, 1);
 	//printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");
 	
 	free(hash_pos);
@@ -2928,7 +2903,7 @@ int split_insert_map(uint32_t **res_cigar, int *res_len,
 }
 
 //deletion length = ref_len - read_len
-int split_delete_map(uint32_t **res_cigar, int *res_len, 
+int split_delete_map(uint32_t **res_cigar, int *res_len, int *res_m,
 					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
 					 int64_t ref_offset, 
 					 int hash_len, int hash_step, 
@@ -2946,14 +2921,14 @@ int split_delete_map(uint32_t **res_cigar, int *res_len,
 
 	int res;
 	//for multi-breakpoints
-	res = hash_split_map(res_cigar, res_len, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos, 1, 1);
+	res = hash_split_map(res_cigar, res_len, res_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos, 1, 1);
 	/*printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");*/
 
 	free(hash_pos);
 	return res;
 }
 
-int hash_right_bound_map(uint32_t **cigar, int *cigar_len, 
+int hash_right_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 						 uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 						 uint32_t **hash_num, uint64_t ***hash_node, 
 						 int hash_len, int hash_key, int hash_step)
@@ -2967,7 +2942,7 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len,
 		return 1;
 	}
 	int res;
-	res = hash_split_map(cigar, cigar_len, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 1, 0);
+	res = hash_split_map(cigar, cigar_len, cigar_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 1, 0);
 	int i, readINcigar=0, refINcigar=0;
 	for (i = 0; i < (*cigar_len); ++i)
 	{
@@ -2989,7 +2964,7 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len,
 		ksw_extend2(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, bwasw_sc_mat, 5, 2, abs(read_len-readINcigar-ref_len + refINcigar)+3, hash_len*bwasw_sc_mat[0], &read_end, &ref_end, &n_cigar_, &cigar_);
 		if (cigar_ != NULL)
 		{
-			_push_cigar(cigar, cigar_len, cigar_, n_cigar_);
+			_push_cigar(cigar, cigar_len, cigar_m, cigar_, n_cigar_);
 			//for (i = 0; i < n_cigar_; ++i) (*cigar)[(*cigar_len)++] = cigar_[i];
 			//printf("tail:\t"); printcigar(cigar_, n_cigar_); printf("\n");
 			free(cigar_);
@@ -3002,12 +2977,15 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len,
 	return res;
 }
 
-int hash_left_bound_map(uint32_t **cigar, int *cigar_len, 
+int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 						uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 						uint32_t **hash_num, uint64_t ***hash_node, 
 						int hash_len, int hash_key, int hash_step)
 {
+	int hash_cigar_len=0, hash_cigar_m=100;
+	uint32_t *hash_cigar = (uint32_t*)malloc(hash_cigar_m * sizeof(uint32_t));;
 	int32_t *hash_pos = (int32_t*)malloc(read_len * sizeof(int32_t));
+	(*cigar_len) = 0;
 	int hash_size = (int)pow((double)NT_N, (double)hash_key);	
 	if (init_hash(read_seq, read_len, hash_len, hash_num, hash_node, &hash_pos, hash_key, hash_size) != 0)
 	{
@@ -3015,14 +2993,14 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len,
 		free(hash_pos);
 		return 1;
 	}
-	int res;
-	res = hash_split_map(cigar, cigar_len, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 0, 1);
+	int res = hash_split_map(&hash_cigar, &hash_cigar_len, &hash_cigar_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 0, 1);
+	//res = hash_split_map(cigar, cigar_len, cigar_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 0, 1);
 	int i, readINcigar=0, refINcigar=0;
-	for (i = 0; i < (*cigar_len); ++i)
+	for (i = 0; i < hash_cigar_len; ++i)
 	{
-		if (((*cigar)[i] & 0xf) == CMATCH) readINcigar+=((*cigar)[i] >> 4), refINcigar+=((*cigar)[i] >> 4);
-		else if (((*cigar)[i] & 0xf) == CINS) readINcigar += ((*cigar)[i] >> 4);
-		else if (((*cigar)[i] & 0xf) == CDEL) refINcigar += ((*cigar)[i] >> 4);
+		if ((hash_cigar[i] & 0xf) == CMATCH) readINcigar+=(hash_cigar[i] >> 4), refINcigar+=(hash_cigar[i] >> 4);
+		else if ((hash_cigar[i] & 0xf) == CINS) readINcigar += (hash_cigar[i] >> 4);
+		else if ((hash_cigar[i] & 0xf) == CDEL) refINcigar += (hash_cigar[i] >> 4);
 		else fprintf(stderr, "[hash_left_bound_map] cigar error.\n"), exit(-1);
 	}
 	if (readINcigar < read_len)     //'S' exists
@@ -3047,35 +3025,26 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len,
 			if (read_end < read_len - readINcigar) 
 				cigar_[n_cigar_++] = (((read_len -readINcigar - read_end) << 4) | CSOFT_CLIP); //'S' exsit
 
-			//XXX push_cigar
-			for (i = (*cigar_len)+n_cigar_-1; i >= n_cigar_; --i)
-				(*cigar)[i] = (*cigar)[i-n_cigar_];
-			for (i = 0; i < n_cigar_; ++i)
-				(*cigar)[i] = cigar_[n_cigar_-i-1]; 
-			(*cigar_len) += n_cigar_;
+			//reverse_cigar
+			uint32_t tmp;
+			for (i = 0; i < n_cigar_/2; ++i)
+				tmp = cigar_[i], cigar_[i] = cigar_[n_cigar_-i-1], cigar_[n_cigar_-i-1] = tmp;
+			_push_cigar(cigar, cigar_len, cigar_m, cigar_, n_cigar_);
 			free(cigar_);
 		}
 		else
-		{
-			for (i = (*cigar_len); i > 0; --i)
-				(*cigar)[i] = (*cigar)[i-1];
-			(*cigar)[0] = ((read_len - readINcigar) << 4 | CSOFT_CLIP);
-			++(*cigar_len);
-		}
+			(*cigar)[(*cigar_len)++] = (((read_len - readINcigar) << 4) | CSOFT_CLIP); //'S' exsit
 
 		free(tseq); free(qseq); 
-		/*for (i = (*cigar_len); i > 0; --i)
-			(*cigar)[i] = (*cigar)[i-1];
-		(*cigar)[0] = ((read_len - readINcigar) << 4 | CSOFT_CLIP);
-		++(*cigar_len);*/
 	}
+	_push_cigar(cigar, cigar_len, cigar_m, hash_cigar, hash_cigar_len);
 
-	free(hash_pos);
+	free(hash_pos); free(hash_cigar);
 	return res;
 }
 
 //for 'MIS-MATCH' case
-int hash_both_bound_map(uint32_t **cigar, int *cigar_len, 
+int hash_both_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 						uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 						uint32_t **hash_num, uint64_t ***hash_node, 
 						int hash_len, int hash_key, int hash_step)
@@ -3089,7 +3058,7 @@ int hash_both_bound_map(uint32_t **cigar, int *cigar_len,
 		return 1;
 	}
 	int res;
-	res = hash_split_map(cigar, cigar_len, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 1, 1);
+	res = hash_split_map(cigar, cigar_len, cigar_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, hash_key, *hash_num, *hash_node, hash_pos, 1, 1);
 	/*int i, readINcigar=0;
 	for (i = 0; i < (*cigar_len); ++i)
 	{

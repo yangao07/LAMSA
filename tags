@@ -5,7 +5,7 @@
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.9~svn20110310	//
 AC_KSEQ_H	kseq.h	31;"	d
-BAD_ALIGN	frag_check.h	116;"	d
+BAD_ALIGN	frag_check.h	117;"	d
 BNTSEQ_H	bntseq.h	2;"	d
 BUILD_REF_H	build_ref.h	2;"	d
 CBACK	lsat_aln.h	82;"	d
@@ -20,7 +20,7 @@ CIGAR_SHIFT	lsat_aln.h	84;"	d
 CIGAR_STR	lsat_aln.h	59;"	d
 CINS	lsat_aln.h	66;"	d
 CMATCH	lsat_aln.h	64;"	d
-COVERED	frag_check.h	121;"	d
+COVERED	frag_check.h	122;"	d
 CPAD	lsat_aln.h	77;"	d
 CREF_SKIP	lsat_aln.h	70;"	d
 CSOFT_CLIP	lsat_aln.h	73;"	d
@@ -53,7 +53,7 @@ F_TRI_INSERT	lsat_aln.h	29;"	d
 F_TRI_MISMATCH	lsat_aln.h	28;"	d
 F_UNCONNECT	lsat_aln.h	23;"	d
 F_UNMATCH	lsat_aln.h	24;"	d
-GOOD_ALIGN	frag_check.h	115;"	d
+GOOD_ALIGN	frag_check.h	116;"	d
 H0	ksw.c	/^	__m128i *qp, *H0, *H1, *E, *Hmax;$/;"	m	struct:_kswq_t	file:
 H1	ksw.c	/^	__m128i *qp, *H0, *H1, *E, *Hmax;$/;"	m	struct:_kswq_t	file:
 HASH_DP_SCORE	split_mapping.h	73;"	d
@@ -78,19 +78,19 @@ KS_SEP_MAX	kseq.h	39;"	d
 KS_SEP_SPACE	kseq.h	37;"	d
 KS_SEP_TAB	kseq.h	38;"	d
 LAST_SHIFT	split_mapping.h	77;"	d
-LEFT	frag_check.h	119;"	d
+LEFT	frag_check.h	120;"	d
 LIB	Makefile	/^LIB=		-lm -lz$/;"	m
 LIKELY	ksw.c	33;"	d	file:
 LIKELY	ksw.c	36;"	d	file:
 LIKELY	ssw.c	47;"	d	file:
 LIKELY	ssw.c	50;"	d	file:
 LSAT_ALN_H	lsat_aln.h	2;"	d
-MAXOFTWO	frag_check.h	110;"	d
-MAX_E	frag_check.h	124;"	d
-MAX_FRAG	frag_check.h	112;"	d
-MAX_LINE_LEN	frag_check.h	113;"	d
+MAXOFTWO	frag_check.h	111;"	d
+MAX_E	frag_check.h	125;"	d
+MAX_FRAG	frag_check.h	113;"	d
+MAX_LINE_LEN	frag_check.h	114;"	d
 MAX_MIS	extend_ssw.c	18;"	d	file:
-MINOFTWO	frag_check.h	111;"	d
+MINOFTWO	frag_check.h	112;"	d
 MINUS_INF	ksw.c	446;"	d	file:
 MIN_FLAG	split_mapping.h	61;"	d
 MULTI_FLAG	split_mapping.h	62;"	d
@@ -103,19 +103,19 @@ PRICE_LONG_DEL	lsat_aln.h	47;"	d
 PRICE_SKIP	lsat_aln.h	48;"	d
 PROG	Makefile	/^PROG=		lsat$/;"	m
 READ_INIT_MAX	lsat_aln.h	5;"	d
-RIGHT	frag_check.h	118;"	d
+RIGHT	frag_check.h	119;"	d
 SEED_LEN	lsat_aln.h	8;"	d
 SOAP2_DP_DIR	lsat_aln.h	56;"	d
 SPLIT_MAP_H	split_mapping.h	2;"	d
 SSW_H	ssw.h	12;"	d
 THRSHOLD	lsat_aln.h	44;"	d
-UNCOVERED	frag_check.h	122;"	d
+UNCOVERED	frag_check.h	123;"	d
 UNLIKELY	ksw.c	34;"	d	file:
 UNLIKELY	ksw.c	37;"	d	file:
 UNLIKELY	ssw.c	48;"	d	file:
 UNLIKELY	ssw.c	51;"	d	file:
 UNLIMITED_FLAG	split_mapping.h	63;"	d
-_MAX_K	frag_check.h	126;"	d
+_MAX_K	frag_check.h	127;"	d
 __AC_KSW_H	ksw.h	2;"	d
 __KSEQ_BASIC	kseq.h	145;"	d
 __KSEQ_READ	kseq.h	170;"	d
@@ -131,8 +131,7 @@ __max_8	ksw.c	231;"	d	file:
 __rpac	bntseq.c	356;"	d	file:
 _kswq_t	ksw.c	/^struct _kswq_t {$/;"	s	file:
 _profile	ssw.c	/^struct _profile{$/;"	s	file:
-_push_cigar	split_mapping.c	/^int _push_cigar(uint32_t **res_cigar, int *res_clen, uint32_t *cigar, int clen)$/;"	f
-_push_cigar	split_tmp.c	/^int _push_cigar(uint32_t **res_cigar, int *res_clen, uint32_t *cigar, int clen)$/;"	f
+_push_cigar	frag_check.c	/^void _push_cigar(uint32_t **cigar, int *cigar_len, int *cigar_m, uint32_t *_cigar, int _cigar_len)$/;"	f
 add_path	lsat_aln.c	/^int add_path(aln_msg *a_msg, path_msg **path, int *price_n, int start, int end, int rev, int seed_len)$/;"	f
 adjest	lsat_aln.h	54;"	d
 align_destroy	ssw.c	/^void align_destroy (s_align* a) {$/;"	f
@@ -250,49 +249,31 @@ gi	bntseq.h	/^	uint32_t gi;$/;"	m	struct:__anon1
 h	ksw.c	/^	int32_t h, e;$/;"	m	struct:__anon8	file:
 hash_DP_node	split_mapping.h	/^} hash_DP_node;$/;"	t	typeref:struct:__anon23
 hash_blank_t	split_mapping.h	/^}hash_blank_t;$/;"	t	typeref:struct:__anon20
-hash_both_bound_map	split_mapping.c	/^int hash_both_bound_map(uint32_t **cigar, int *cigar_len, $/;"	f
-hash_both_bound_map	split_tmp.c	/^int hash_both_bound_map(uint32_t **cigar, int *cigar_len, $/;"	f
+hash_both_bound_map	split_mapping.c	/^int hash_both_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,$/;"	f
 hash_calcu	split_mapping.c	/^int hash_calcu(int *key_int, int *kmer_int, uint8_t *seed, int hash_len, int key_len)$/;"	f
-hash_calcu	split_tmp.c	/^int hash_calcu(int *key_int, int *kmer_int, uint8_t *seed, int hash_len, int key_len)$/;"	f
 hash_calcu_pos_start	split_mapping.c	/^int hash_calcu_pos_start(int hash_size, uint64_t ***hash_node, uint32_t *hash_num)$/;"	f
-hash_calcu_pos_start	split_tmp.c	/^int hash_calcu_pos_start(int hash_size, uint64_t ***hash_node, uint32_t *hash_num)$/;"	f
 hash_dp_init	split_mapping.c	/^int hash_dp_init(hash_dp_node **h_node, $/;"	f
-hash_dp_init	split_tmp.c	/^int hash_dp_init(hash_dp_node **h_node, $/;"	f
 hash_dp_node	split_mapping.h	/^} hash_dp_node;$/;"	t	typeref:struct:__anon24
 hash_dp_update	split_mapping.c	/^int hash_dp_update(hash_dp_node **h_node, int *len_a, $/;"	f
-hash_dp_update	split_tmp.c	/^int hash_dp_update(hash_dp_node **h_node, int *len_a, $/;"	f
 hash_frag	split_mapping.h	/^} hash_frag;$/;"	t	typeref:struct:__anon19
 hash_frag_aln	split_mapping.h	/^} hash_frag_aln;$/;"	t	typeref:struct:__anon18
 hash_hit	split_mapping.c	/^int hash_hit(uint32_t *hash_num, uint64_t **hash_node, int *node_i, int key_int, int kmer_int, int kmer_len)$/;"	f
-hash_hit	split_tmp.c	/^int hash_hit(uint32_t *hash_num, uint64_t **hash_node, int *node_i, int key_int, int kmer_int, int kmer_len)$/;"	f
-hash_left_bound_map	split_mapping.c	/^int hash_left_bound_map(uint32_t **cigar, int *cigar_len, $/;"	f
-hash_left_bound_map	split_tmp.c	/^int hash_left_bound_map(uint32_t **cigar, int *cigar_len, $/;"	f
+hash_left_bound_map	split_mapping.c	/^int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,$/;"	f
 hash_line	split_mapping.h	/^}hash_line;$/;"	t	typeref:struct:__anon22
 hash_line_t	split_mapping.h	/^}hash_line_t;$/;"	t	typeref:struct:__anon21
 hash_main_dis	split_mapping.c	/^int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, $/;"	f
-hash_main_dis	split_tmp.c	/^int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, $/;"	f
 hash_main_line	split_mapping.c	/^int hash_main_line(int *hash_pos, int *start_a, int *len_a, $/;"	f
-hash_main_line	split_tmp.c	/^int hash_main_line(int *hash_pos, int *start_a, int *len_a, $/;"	f
 hash_min_extend	split_mapping.c	/^int hash_min_extend(hash_dp_node **h_node, int *len_a, $/;"	f
 hash_min_extend	split_mapping.c	/^int hash_min_extend(hash_dp_node **h_node, int *len_a, int node_i, int h_len, int min_len, int dp_flag, int hash_len, int hash_step, int split_offset)$/;"	f
-hash_min_extend	split_tmp.c	/^int hash_min_extend(hash_dp_node **h_node, int *len_a, $/;"	f
-hash_min_extend	split_tmp.c	/^int hash_min_extend(hash_dp_node **h_node, int *len_a, int node_i, int h_len, int min_len, int dp_flag, int hash_len, int hash_step, int split_offset)$/;"	f
 hash_mini_dp_init	split_mapping.c	/^int hash_mini_dp_init(hash_dp_node **h_node, int *len_a, $/;"	f
-hash_mini_dp_init	split_tmp.c	/^int hash_mini_dp_init(hash_dp_node **h_node, int *len_a, $/;"	f
-hash_right_bound_map	split_mapping.c	/^int hash_right_bound_map(uint32_t **cigar, int *cigar_len, $/;"	f
-hash_right_bound_map	split_tmp.c	/^int hash_right_bound_map(uint32_t **cigar, int *cigar_len, $/;"	f
+hash_right_bound_map	split_mapping.c	/^int hash_right_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,$/;"	f
 hash_search	split_mapping.c	/^int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kmer_int, int kmer_len, int *EQUAL_FLAG)$/;"	f
-hash_search	split_tmp.c	/^int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kmer_int, int kmer_len, int *EQUAL_FLAG)$/;"	f
-hash_split_map	split_mapping.c	/^int hash_split_map(uint32_t **split_cigar, int *split_clen,$/;"	f
-hash_split_map	split_tmp.c	/^int hash_split_map(uint32_t **split_cigar, int *split_clen,$/;"	f
+hash_split_map	split_mapping.c	/^int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,$/;"	f
 hfa	split_mapping.h	/^	hash_frag_aln *hfa;$/;"	m	struct:__anon19
 init_destroy	ssw.c	/^void init_destroy (s_profile* p) {$/;"	f
 init_hash	split_mapping.c	/^int init_hash(uint8_t *read_seq, int read_len, int hash_len, $/;"	f
-init_hash	split_tmp.c	/^int init_hash(uint8_t *read_seq, int read_len, int hash_len, $/;"	f
 init_hash_core	split_mapping.c	/^int init_hash_core(uint8_t *hash_seq, int hash_offset, $/;"	f
-init_hash_core	split_tmp.c	/^int init_hash_core(uint8_t *hash_seq, int hash_offset, $/;"	f
 init_hash_pos_num	split_mapping.c	/^int init_hash_pos_num(uint8_t *hash_seq, int hash_len, int key_len, uint32_t **hash_num, uint64_t ***hash_node)$/;"	f
-init_hash_pos_num	split_tmp.c	/^int init_hash_pos_num(uint8_t *hash_seq, int hash_len, int key_len, uint32_t **hash_num, uint64_t ***hash_node)$/;"	f
 kroundup32	kseq.h	89;"	d
 kroundup32	ssw.c	65;"	d	file:
 ks_eof	kseq.h	48;"	d
@@ -331,7 +312,6 @@ main	ksw.c	/^int main(int argc, char *argv[])$/;"	f
 main	main.c	/^int main(int argc, char *argv[])$/;"	f
 main_line_deter	lsat_aln.c	/^int main_line_deter(aln_msg *a_msg, int n_seed, int seed_len, int *m_i, int **line, int *path_end)$/;"	f
 make_indel_cigar	split_mapping.c	/^int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right, int *clen, uint32_t **cigar)$/;"	f
-make_indel_cigar	split_tmp.c	/^int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right, int *clen, uint32_t **cigar)$/;"	f
 mat	ssw.c	/^	const int8_t* mat;$/;"	m	struct:_profile	file:
 match_flag	lsat_aln.h	/^	uint8_t match_flag;$/;"	m	struct:__anon17
 match_flag	split_mapping.h	/^	uint8_t match_flag;$/;"	m	struct:__anon24
@@ -342,7 +322,6 @@ mdiff	ksw.c	/^	uint8_t shift, mdiff, max, size;$/;"	m	struct:_kswq_t	file:
 merge_cigar	frag_check.c	/^void merge_cigar(frag_msg *f_msg, int f_i, $/;"	f
 mini_frag_main_line	lsat_aln.c	/^int mini_frag_main_line(aln_msg *a_msg, $/;"	f
 mini_hash_main_line	split_mapping.c	/^int mini_hash_main_line(hash_dp_node **h_node, $/;"	f
-mini_hash_main_line	split_tmp.c	/^int mini_hash_main_line(hash_dp_node **h_node, $/;"	f
 mis_match	split_mapping.h	/^	int32_t mis_match;	\/\/XXX$/;"	m	struct:__anon23
 n	ssw.c	/^	int32_t n;$/;"	m	struct:_profile	file:
 n_aln	lsat_aln.h	/^	int8_t n_aln;$/;"	m	struct:__anon12
@@ -383,7 +362,6 @@ printcigar	frag_check.c	/^void printcigar(uint32_t *cigar, int cigar_len)$/;"	f
 printnst	frag_check.c	/^void printnst(char *msg1, uint8_t *seq, int len, char *msg2)$/;"	f
 profile_byte	ssw.c	/^	__m128i* profile_byte;	\/\/ 0: none$/;"	m	struct:_profile	file:
 profile_word	ssw.c	/^	__m128i* profile_word;	\/\/ 0: none$/;"	m	struct:_profile	file:
-push_cigar	frag_check.c	/^void push_cigar(uint32_t **fcigar, int *fcigar_len, int *fcmax, uint32_t *cigar, int cigar_len)$/;"	f
 push_cigar	ksw.c	/^static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, int op, int len)$/;"	f	file:
 qP_byte	ssw.c	/^__m128i* qP_byte (const int8_t* read_num,$/;"	f
 qP_word	ssw.c	/^__m128i* qP_word (const int8_t* read_num,$/;"	f
@@ -452,11 +430,9 @@ size	ksw.c	/^	uint8_t shift, mdiff, max, size;$/;"	m	struct:_kswq_t	file:
 skip	lsat_aln.h	/^	int skip;$/;"	m	struct:__anon12
 slen	ksw.c	/^	int qlen, slen;$/;"	m	struct:_kswq_t	file:
 soap_bulid	build_ref.c	/^int soap_bulid(char *prefix, char *path)$/;"	f
-split_delete_map	split_mapping.c	/^int split_delete_map(uint32_t **res_cigar, int *res_len, $/;"	f
-split_delete_map	split_tmp.c	/^int split_delete_map(uint32_t **res_cigar, int *res_len, $/;"	f
-split_insert_map	split_mapping.c	/^int split_insert_map(uint32_t **res_cigar, int *res_len, $/;"	f
-split_insert_map	split_tmp.c	/^int split_insert_map(uint32_t **res_cigar, int *res_len, $/;"	f
-split_mapping	frag_check.c	/^void split_mapping(uint32_t **split_cigar, int *split_len, $/;"	f
+split_delete_map	split_mapping.c	/^int split_delete_map(uint32_t **res_cigar, int *res_len, int *res_m,$/;"	f
+split_insert_map	split_mapping.c	/^int split_insert_map(uint32_t **res_cigar, int *res_len, int *res_m,$/;"	f
+split_mapping	frag_check.c	/^void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,$/;"	f
 split_seed	lsat_aln.c	/^int split_seed(const char *prefix, seed_msg *s_msg, int seed_len)$/;"	f
 split_seed_info	lsat_aln.c	/^int split_seed_info(const char *prefix, seed_msg *s_msg, int *seed_len)$/;"	f
 srand	frag_check.h	/^	int srand;$/;"	m	struct:__anon4
