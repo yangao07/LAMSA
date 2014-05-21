@@ -662,7 +662,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 		//read_start: '-' srand XXX
 		f_msg->fa_msg[f_i].cigar_read_start = (a_msg[last_i].read_id - 1) * 2 * seed_len+1 + seed_len;		//1-based
 		f_msg->fa_msg[f_i].cigar_read_end = f_msg->fa_msg[f_i].cigar_read_start - 1 + seed_len;	//1-based
-		f_msg->fa_msg[f_i].edit_dis = a_msg[last_i].at[last_aln_i].edit_dis;	
+		//f_msg->fa_msg[f_i].edit_dis = a_msg[last_i].at[last_aln_i].edit_dis;	
 
 		//XXX f_msg->fa_msg[f_i].cigar_ref_start = a_msg[last_i].at[last_aln_i].offset + seed_len -1 + a_msg[last_i].at[last_aln_i].len_dif;
 		//_msg->fa_msg[f_i].cigar_ref_end = a_msg[last_i].at[last_aln_i].offset;

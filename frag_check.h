@@ -47,7 +47,7 @@ typedef struct {
 	uint32_t *cigar;		//frag's cigar
 	int cigar_len;			//frag's cigar length
 	int cigar_max;			//size of cigar[]
-	int edit_dis;			//frag's edit-dis
+	//int edit_dis;			//frag's edit-dis
 	int len_dif;			//length difference between ref and read. eg, ref=101, read=100, then len_dif = 101-100 = 1.
 
 	int per_n;

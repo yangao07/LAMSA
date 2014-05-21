@@ -10,7 +10,11 @@
 #include "frag_check.h"
 #include "split_mapping.h"
 #include "kseq.h"
+#include "kstring.h"
+#include "./lsat_sam_parse/sam.h"
+
 KSEQ_INIT(gzFile, gzread)
+//KSTREAM_INIT(gzFile, gzread, 16384)
 
 int usage(void )		//aln usage
 {
@@ -219,6 +223,16 @@ int split_seed_info(const char *prefix, seed_msg *s_msg, int *seed_len)
     return 0;
 }
 
+sam_msg *sam_init_msg(void)
+{
+	sam_msg *s = (sam_msg*)malloc(sizeof(sam_msg));
+	s->sam_n = 0;
+	s->sam_m = 1;
+	s->sam = (sam_t*)malloc(sizeof(sam_t));
+	s->sam->cigar_s = (kstring_t*)calloc(1, sizeof(kstring_t));
+	return s;
+}
+
 aln_msg *aln_init_msg(int seed_max)
 {
 	aln_msg *msg;
@@ -305,7 +319,7 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 
 void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, 
 			 int read_id, int chr, int64_t offset, 
-			 char srand, int edit_dis, char *cigar)
+			 char srand, /*int edit_dis,*/ char *cigar)
 {   //read_x: (除去unmap和repeat的)read序号, aln_y: read对应的比对结果序号(从1开始)
 	if (aln_y > PER_ALN_N) {
 		fprintf(stderr, "[lsat_aln] setAmsg ERROR!\n");
@@ -315,7 +329,7 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y,
 	a_msg[read_x-1].at[aln_y-1].chr = chr;
 	a_msg[read_x-1].at[aln_y-1].offset = offset;	//1-base
 	a_msg[read_x-1].at[aln_y-1].nsrand = ((srand=='+')?1:-1);
-	a_msg[read_x-1].at[aln_y-1].edit_dis = edit_dis;
+	//a_msg[read_x-1].at[aln_y-1].edit_dis = edit_dis;
 	a_msg[read_x-1].n_aln = aln_y;
 	setCigar(a_msg, read_x-1, aln_y-1,  cigar);
 }
@@ -344,7 +358,8 @@ int get_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, int see
 
     dis=(dis>0?dis:(0-dis)); //Absolute value
 	//dis = offset_dis + pre.edit_dis + pre.cigar_len
-	dis += (a_msg[pre].at[pre_a].edit_dis + a_msg[pre].at[pre_a].cigar_len);
+	//dis += (a_msg[pre].at[pre_a].edit_dis + a_msg[pre].at[pre_a].cigar_len);
+	dis += a_msg[pre].at[pre_a].cigar_len;
     return adjest(dis);
 }
 
@@ -381,9 +396,8 @@ int get_abs_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, int
     dis=abs(dis);//(dis>0?dis:(0-dis)); //Absolute value
 	//dis = offset_dis + pre.edit_dis + pre.cigar_len
 	//dis += (a_msg[pre].at[pre_a].edit_dis + a_msg[pre].at[pre_a].cigar_len);
-	dis += (a_msg[i].at[j].edit_dis + a_msg[i].at[j].cigar_len);
-	//printf("dis %d ",dis); printcigar(a_msg[pre].at[pre_a].cigar, a_msg[pre].at[pre_a].cigar_len); printf("\n");
-
+	//dis += (a_msg[i].at[j].edit_dis + a_msg[i].at[j].cigar_len);
+	dis += a_msg[i].at[j].cigar_len;
     return dis;
 }
 
@@ -2370,11 +2384,14 @@ int frag_dp_path(aln_msg *a_msg,
 	return 1;
 }*/
 
-int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
+int frag_cluster_old(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
 {
 	FILE *result_p; char readline[1024];
 	int n_read/*start from 1*/, n_seed, i, j; char srand;
 	int read_id, chr, edit_dis; long long offset; char cigar[1024];
+	
+	sam_msg *m_msg;
+	samfile_t *samf = 0;
 	
 	aln_msg *a_msg; 
 	frag_msg *f_msg; int line_n, *line_tri, line_m;
@@ -2382,6 +2399,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	gzFile readfp; kseq_t *read_seq_t; char *read_seq;
 
 	//alloc mem and initialization
+	m_msg = sam_init_msg();
 	a_msg = aln_init_msg(s_msg->seed_max);
 
 	line_node **line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
@@ -2429,10 +2447,11 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 	n_read = 0;
 	n_seed = 0;
 	int multi_aln = 1, last_id = 0, REPEAT = 0, FLAG=0;
+
+	//while (sam_parse(
 	//get seed msg of every read
-	while (fgets(readline, 1024, result_p) != NULL)
-	{
-		//XXX for new-out.0 add 'cigar'
+	while (fgets(readline, 1024, result_p) != NULL) {
+		//sam_parse();
 		sscanf(readline, "%d %d %lld %c %d %s", &read_id, &chr, &offset, &srand, &edit_dis, cigar);
 		if (read_id == last_id) {		// seeds from same read
 			if (++multi_aln > PER_ALN_N) {
@@ -2441,26 +2460,19 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 					REPEAT = 1;
 				}
 				continue;
-			} else setAmsg(a_msg, n_seed, multi_aln, read_id - s_msg->n_seed[n_read-1], chr, (int64_t)offset, srand, edit_dis, cigar);
-		} else {		//get a new seed
-			REPEAT = 0;
+			} else setAmsg(a_msg, n_seed, multi_aln, read_id - s_msg->n_seed[n_read-1], chr, (int64_t)offset, srand, cigar); } else {		//get a new seed REPEAT = 0;
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
 					//if (find_path(a_msg, n_seed, line, path_end, path, price_n, seed_len, bns->n_seqs))
 					//if (frag_find_path(a_msg, n_seed, seed_len, line, line_end, f_node, f_msg))
-					f_msg[0].last_len = s_msg->last_len[n_read];
-					f_msg[0].seed_all = s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1];
-					if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri, &line_m, line, line_end, f_node, _line, _line_end))
-					{
-						//if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
+					f_msg[0].last_len = s_msg->last_len[n_read]; f_msg[0].seed_all = s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1];
+					if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri, &line_m, line, line_end, f_node, _line, _line_end)) 
 						/* SW-extenging */
 						frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, line_tri, a_msg, &hash_num, &hash_node, seed_len);
-					}
 				}
 				n_seed = 0;
 				while (s_msg->n_seed[n_read] < read_id) {
 					if (FLAG == 0) FLAG = 1;
-					//else fprintf(stdout, "read %d n_seed 0\nfrag: 0\n\n", n_read);
 					++n_read;
 					if (kseq_read(read_seq_t) < 0) {
 						fprintf(stderr, "[lsat_aln] Read file ERROR.\n");
@@ -2477,37 +2489,149 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 				exit(-1);
 			}
 			++n_seed;
-			setAmsg(a_msg, n_seed, multi_aln, read_id-s_msg->n_seed[n_read-1], chr, offset, srand, edit_dis, cigar);
+			setAmsg(a_msg, n_seed, multi_aln, read_id-s_msg->n_seed[n_read-1], chr, offset, srand, cigar);
 		}
 	}
-	//fprintf(stdout, "read %d start %d n_seed %d\n", n_read, s_msg->n_seed[n_read-1]+1, n_seed);
 	//if (find_path(a_msg, n_seed, line, path_end, path, price_n, seed_len, bns->n_seqs))
 	//if (frag_find_path(a_msg, n_seed, seed_len, line, line_end, f_node, f_msg))
 	f_msg[0].seed_all = s_msg->n_seed[n_read] - s_msg->n_seed[n_read-1];
 	f_msg[0].last_len = s_msg->last_len[n_read];
-	//fprintf(stdout, "%s\n", s_msg->read_name[n_read]);
 	if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri,  &line_m, line, line_end, f_node, _line, _line_end))
-	{
-		//if (backtrack(a_msg, path, n_seed, price_n, seed_len, f_msg))
 		/* SW-extenging */
 		frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, line_tri, a_msg, &hash_num, &hash_node, seed_len);
-	}
-	fclose(result_p);
-	aln_free_msg(a_msg, s_msg->seed_max);
-	for (i = 0; i < s_msg->seed_max; ++i) 
-	{
-        for (j = 0; j < PER_ALN_N; ++j)
-            free((*f_node)[i][j].trigger);
-		free((*f_node)[i]); free(line[i]); free(_line[i]);
-	}
-	free(*f_node); free(f_node); free(line); free(_line); free(line_end); free(line_tri); free(_line_end);
-    //hash map
-	free(hash_num); 
-	for (i = 0; i < hash_size; ++i) free(hash_node[i]);
-	free(hash_node);
 
-	frag_free_msg(f_msg, line_m);
-	gzclose(readfp); kseq_destroy(read_seq_t);
+	//free variables and close file handles
+		fclose(result_p);
+		for (i = 0; i < m_msg->sam_m; ++i) {
+			if (m_msg->sam[i].cigar_s->s) free(m_msg->sam[i].cigar_s->s);
+			free(m_msg->sam[i].cigar_s);
+		} 
+		free(m_msg->sam); free(m_msg);
+		aln_free_msg(a_msg, s_msg->seed_max);
+		for (i = 0; i < s_msg->seed_max; ++i) {
+			for (j = 0; j < PER_ALN_N; ++j)
+				free((*f_node)[i][j].trigger);
+			free((*f_node)[i]); free(line[i]); free(_line[i]);
+		}
+		free(*f_node); free(f_node); free(line); free(_line); free(line_end); free(line_tri); free(_line_end);
+		//hash map
+		free(hash_num); 
+		for (i = 0; i < hash_size; ++i) free(hash_node[i]);
+		free(hash_node);
+
+		frag_free_msg(f_msg, line_m);
+		gzclose(readfp); kseq_destroy(read_seq_t);
+		samclose(samf);
+
+	return 0;
+}
+
+int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
+{
+	char readline[1024];
+	int n_read/*start from 1*/, n_seed, i, j; char srand;
+	int read_id, chr, edit_dis; long long offset; char cigar[1024];
+	
+	sam_msg *m_msg;
+	samfile_t *samf = 0;
+	
+	aln_msg *a_msg; 
+	frag_msg *f_msg; int line_n, *line_tri, line_m;
+
+	gzFile readfp; kseq_t *read_seq_t; char *read_seq;
+
+	//alloc mem and initialization
+	m_msg = sam_init_msg();
+	a_msg = aln_init_msg(s_msg->seed_max);
+
+	line_node **line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
+	int *line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
+    line_tri = (int*)malloc((s_msg->seed_max) * sizeof(int));
+	line_node **_line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
+	int *_line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
+    frag_dp_node ***f_node = (frag_dp_node***)malloc(sizeof(frag_dp_node**));
+	(*f_node) = (frag_dp_node**)malloc(s_msg->seed_max * sizeof(frag_dp_node*));
+	for (i = 0; i < s_msg->seed_max; ++i)
+	{
+		line[i] = (line_node*)malloc((s_msg->seed_max+3) * sizeof(line_node));
+		_line[i] = (line_node*)malloc((s_msg->seed_max+3) * sizeof(line_node));
+		(*f_node)[i] = (frag_dp_node*)malloc(PER_ALN_N * sizeof(frag_dp_node)); 
+        for (j = 0; j < PER_ALN_N; ++j)
+        {
+            (*f_node)[i][j].trigger_m = 100;
+            (*f_node)[i][j].trigger = (int*)malloc(100 * sizeof(int));
+        }
+	}
+	if (line == NULL || _line == NULL || f_node == NULL) { fprintf(stderr, "[frag_dp_path] Not enougy memory.\n"); exit(0); }
+	
+	//XXX 
+    f_msg = (frag_msg*)malloc(sizeof(frag_msg));	
+	frag_init_msg(&f_msg[0], s_msg->seed_max);
+	line_m = 1;	//size
+	line_n = 0;	//line num
+
+	readfp = gzopen(read_prefix, "r");
+	read_seq_t = kseq_init(readfp);
+
+	//alloc mem for hash mapping
+	uint32_t *hash_num;
+	uint64_t **hash_node;
+	int key_len = 2;
+	int hash_size = (int)pow(NT_N, key_len);
+	hash_num = (uint32_t*)malloc(hash_size * sizeof(uint32_t));	//16 = pow(4, 2)
+	hash_node = (uint64_t**)malloc(hash_size * sizeof(uint64_t*));
+    
+	if ((samf = samopen(seed_result, "r")) == 0) {
+		fprintf(stderr, "[lsat_aln] Can't open seed result sam file %s.\n", seed_result);
+		exit(-1);
+	}
+	if (samf->header == 0) {
+		fprintf(stderr, "[lsat_aln] Can't read the header of result sam file %s.\n", seed_result);
+		exit(-1);
+	}
+
+	int r;
+	read_id = n_seed = 0;
+	n_read = 1;
+
+	while ((r = sam_read1(samf->x.tamr, samf->header, m_msg, PER_ALN_N)) >= 0) { // get seed msg of every read
+		++read_id;
+		if (r == 0) continue;
+		else ++n_seed;
+		for (i = 0; i < m_msg->sam_n; ++i) setAmsg(a_msg, n_seed, i+1, read_id - s_msg->n_seed[n_read-1], m_msg->sam[i].chr, m_msg->sam[i].offset, m_msg->sam[i].nsrand, m_msg->sam[i].cigar_s->s);
+
+		if (read_id == s_msg->n_seed[n_read]) { // get a whole-read
+			if (kseq_read(read_seq_t) < 0) { fprintf(stderr, "[lsat_aln] Read file ERROR.\n"); exit(-1); }
+			// XXX no seed is 'setAmsg'ed
+			read_seq = read_seq_t->seq.s;
+			f_msg[0].last_len = s_msg->last_len[n_read]; f_msg[0].seed_all = s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1];
+			if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri, &line_m, line, line_end, f_node, _line, _line_end))
+				frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, line_tri, a_msg, &hash_num, &hash_node, seed_len);
+			n_seed = 0;
+			++n_read;
+		}
+	}
+	//free variables and close file handles
+		for (i = 0; i < m_msg->sam_m; ++i) {
+			if (m_msg->sam[i].cigar_s->s) free(m_msg->sam[i].cigar_s->s);
+			free(m_msg->sam[i].cigar_s);
+		} 
+		free(m_msg->sam); free(m_msg);
+		aln_free_msg(a_msg, s_msg->seed_max);
+		for (i = 0; i < s_msg->seed_max; ++i) {
+			for (j = 0; j < PER_ALN_N; ++j)
+				free((*f_node)[i][j].trigger);
+			free((*f_node)[i]); free(line[i]); free(_line[i]);
+		}
+		free(*f_node); free(f_node); free(line); free(_line); free(line_end); free(line_tri); free(_line_end);
+		//hash map
+		free(hash_num); 
+		for (i = 0; i < hash_size; ++i) free(hash_node[i]);
+		free(hash_node);
+
+		frag_free_msg(f_msg, line_m);
+		gzclose(readfp); kseq_destroy(read_seq_t);
+		samclose(samf);
 
 	return 0;
 }

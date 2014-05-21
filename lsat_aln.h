@@ -2,6 +2,7 @@
 #define LSAT_ALN_H
 
 #include <stdint.h>
+#include "kstring.h"
 #define READ_INIT_MAX 3000
 //#define SEED_INIT_MAX 1000
 
@@ -100,7 +101,7 @@ typedef struct {
 	int32_t chr;
 	int64_t offset;	//1-base
 	int8_t nsrand;
-	int8_t edit_dis;
+	//int8_t edit_dis;
 
 	uint32_t *cigar;
 	int cigar_len;  //default: 7 for 3-ed
@@ -109,12 +110,31 @@ typedef struct {
 	int bmax;		//max band-width, NOT for this seed-aln, for this in-del case.
 					//max of the number of inserts and the number of dels
 } aln_t;
+
 typedef struct {
 	int32_t read_id;
 	int8_t n_aln;
 	int skip;
 	aln_t *at;	
 } aln_msg;
+
+typedef struct {
+	int readid;		// qname
+	char nsrand;	// flag
+	int chr;		// tid
+	int64_t offset;	// 1-base
+
+	kstring_t *cigar_s;
+	//char *cigar;	// cigar
+	//int cigar_cl;	// cigar len
+	//int cigar_cm;	// cigar m
+} sam_t;
+
+typedef struct {
+	sam_t *sam;
+	int sam_n;
+	int sam_m;
+} sam_msg;
 
 /*typedef struct {
 	int same;		//
