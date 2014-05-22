@@ -26,10 +26,10 @@ samfile_t *samopen(const char *fn, const char *mode)
 			fp->x.tamr = sam_open(fn);
 			if (fp->x.tamr == 0) goto open_err_ret;
 			fp->header = sam_header_read(fp->x.tamr);
-			if (fp->header->n_targets == 0) { // no @SQ fields
+			/*if (fp->header->n_targets == 0) { // no @SQ fields
 				if (fp->header->n_targets == 0 && bam_verbose >= 1)
 					fprintf(stderr, "[samopen] no @SQ lines in the header.\n");
-			} else if (bam_verbose >= 2) fprintf(stderr, "[samopen] SAM header is present: %d sequences.\n", fp->header->n_targets);
+			} else if (bam_verbose >= 2) fprintf(stderr, "[samopen] SAM header is present: %d sequences.\n", fp->header->n_targets);*/
 		}
 	} 
 	return fp;

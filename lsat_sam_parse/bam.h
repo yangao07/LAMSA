@@ -46,7 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "/home/gaoyan/program/LSAT-master/lsat_aln.h"
+#include "../lsat_aln.h"
 
 #ifndef BAM_LITE
 #define BAM_VIRTUAL_OFFSET16

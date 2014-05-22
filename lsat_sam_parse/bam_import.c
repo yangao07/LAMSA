@@ -283,7 +283,7 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 			} else fprintf(stderr, "[sam_read1] reference '%s' is recognized as '*'.\n", str->s);
 		}
 		ret = ks_getuntil(ks, KS_SEP_TAB, str, &dret);
-		pos = isdigit(str->s[0])? atoi(str->s) - 1 : -1;
+		pos = isdigit(str->s[0])? atoi(str->s) : -1;    // 1-base
         //printf("%d\t", pos);
 		m->sam->offset = pos;
 		ret = ks_getuntil(ks, KS_SEP_TAB, str, &dret);
@@ -324,7 +324,7 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 						if (str->s[i] != ';')
 							s[j++] = str->s[i];
 						else {	//get a whole sam_msg
-							if (alloc_sam(m, xa_limit)) return m->sam_n;
+							if (alloc_sam(m, xa_limit)) { m->sam_n = 0; return 0; }
 							s[j] = '\0';
 							if ((sscanf(s, "%[^,],%c%lld,%[^,],%d", ts, &csrand, &offset, cigar, &ed)) != 5) return m->sam_n;
 

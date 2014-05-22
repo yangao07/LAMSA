@@ -325,6 +325,7 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y,
 		fprintf(stderr, "[lsat_aln] setAmsg ERROR!\n");
 		exit(0);
 	}
+    //printf("%d %d: %d %d %lld %c %s\n", read_x, aln_y, read_id, chr, offset, srand, cigar);
 	a_msg[read_x-1].read_id = read_id;			//from 1
 	a_msg[read_x-1].at[aln_y-1].chr = chr;
 	a_msg[read_x-1].at[aln_y-1].offset = offset;	//1-base
@@ -2151,7 +2152,7 @@ int frag_dp_path(aln_msg *a_msg,
         }
         if ((*f_msg) == NULL) { fprintf(stderr, "[frag_dp_path] Not enough memory.(line_m: %d)\n", l_n); exit(0); }
         (*line_m)= l_n;
-        fprintf(stderr, "%d\t", l_n);
+        fprintf(stderr, "line-num: %d\t", l_n);
     }
 
 	for (l = 0; l < l_n; ++l)
@@ -2384,7 +2385,8 @@ int frag_dp_path(aln_msg *a_msg,
 	return 1;
 }*/
 
-int frag_cluster_old(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
+#ifdef PLAIN_IN
+int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
 {
 	FILE *result_p; char readline[1024];
 	int n_read/*start from 1*/, n_seed, i, j; char srand;
@@ -2460,7 +2462,8 @@ int frag_cluster_old(const char *read_prefix, char *seed_result, seed_msg *s_msg
 					REPEAT = 1;
 				}
 				continue;
-			} else setAmsg(a_msg, n_seed, multi_aln, read_id - s_msg->n_seed[n_read-1], chr, (int64_t)offset, srand, cigar); } else {		//get a new seed REPEAT = 0;
+			} else setAmsg(a_msg, n_seed, multi_aln, read_id - s_msg->n_seed[n_read-1], chr, (int64_t)offset, srand, cigar); } else {		//get a new seed 
+            REPEAT = 0;
 			if (read_id > s_msg->n_seed[n_read]) {	//new read
 				if (last_id != 0) {
 					//if (find_path(a_msg, n_seed, line, path_end, path, price_n, seed_len, bns->n_seqs))
@@ -2525,12 +2528,13 @@ int frag_cluster_old(const char *read_prefix, char *seed_result, seed_msg *s_msg
 
 	return 0;
 }
+#endif
 
+#ifdef SAM_IN
 int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, int seed_len, bntseq_t *bns, uint8_t *pac)
 {
-	char readline[1024];
-	int n_read/*start from 1*/, n_seed, i, j; char srand;
-	int read_id, chr, edit_dis; long long offset; char cigar[1024];
+	int n_read/*start from 1*/, n_seed, i, j;
+	int read_id;
 	
 	sam_msg *m_msg;
 	samfile_t *samf = 0;
@@ -2596,9 +2600,11 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 
 	while ((r = sam_read1(samf->x.tamr, samf->header, m_msg, PER_ALN_N)) >= 0) { // get seed msg of every read
 		++read_id;
-		if (r == 0) continue;
-		else ++n_seed;
-		for (i = 0; i < m_msg->sam_n; ++i) setAmsg(a_msg, n_seed, i+1, read_id - s_msg->n_seed[n_read-1], m_msg->sam[i].chr, m_msg->sam[i].offset, m_msg->sam[i].nsrand, m_msg->sam[i].cigar_s->s);
+
+		if (r > 0) {
+            ++n_seed;
+            for (i = 0; i < m_msg->sam_n; ++i) setAmsg(a_msg, n_seed, i+1, read_id - s_msg->n_seed[n_read-1], m_msg->sam[i].chr, m_msg->sam[i].offset, m_msg->sam[i].nsrand, m_msg->sam[i].cigar_s->s);
+        }
 
 		if (read_id == s_msg->n_seed[n_read]) { // get a whole-read
 			if (kseq_read(read_seq_t) < 0) { fprintf(stderr, "[lsat_aln] Read file ERROR.\n"); exit(-1); }
@@ -2635,6 +2641,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 
 	return 0;
 }
+#endif
 
 /* relative path convert for soap2-dp */
 void relat_path(const char *ref_path, const char *soap_dir, char *relat_ref_path)	
@@ -2723,7 +2730,12 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
 	if (!strcmp(seed_result, ""))
 	{
 		strcpy(seed_result, read_prefix);
+#ifdef PLAIN_IN
 		strcat(seed_result, ".seed.out.0");
+#endif
+#ifdef SAM_IN
+		strcat(seed_result, ".seed.sam.out.0");
+#endif
 	}
 	//excute soap2-dp program
 	if (!no_soap2_dp) lsat_soap2_dp(ref_prefix, read_prefix, opt_m);
