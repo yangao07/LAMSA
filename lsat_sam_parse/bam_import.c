@@ -268,7 +268,6 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 			//printf("%ld +\t", flag);
 			m->sam->nsrand = '+';
 		}
-		m->sam_n = 1;
 	}
 	{ // tid, pos, qual
 		int tid, pos;//, qual;
@@ -293,6 +292,15 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 	{ // cigar
 		if (ks_getuntil(ks, KS_SEP_TAB, m->sam->cigar_s, &dret) < 0) return -3;
         //printf("%s\n", m->sam->cigar_s->s);
+        // XXX cigar filter
+        int i, id=0;
+        for (i = 0; i < m->sam->cigar_s->l; ++i)
+        {
+            if (m->sam->cigar_s->s[i] == 'I' ||m->sam->cigar_s->s[i] == 'D') ++id;
+            else if (m->sam->cigar_s->s[i] == 'S') {id = 3; break;}
+        }
+        if (id < 3)
+            m->sam_n = 1;
 	}
 	{ // mtid, mpos, isize
 		ret = ks_getuntil(ks, KS_SEP_TAB, str, &dret);
@@ -327,7 +335,17 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 							if (alloc_sam(m, xa_limit)) { m->sam_n = 0; return 0; }
 							s[j] = '\0';
 							if ((sscanf(s, "%[^,],%c%lld,%[^,],%d", ts, &csrand, &offset, cigar, &ed)) != 5) return m->sam_n;
-
+							int d, id=0;
+                            for (d = 0; d < strlen(cigar); ++d)
+                            {
+                                if (cigar[d] == 'I' || cigar[d] == 'D') ++id;
+                                else if (cigar[d] == 'S')
+                                {
+                                    id = 3;
+                                    break;
+                                }
+                            }
+                            if (id >= 3) continue;
 							m->sam[m->sam_n].chr = bam_get_tid(header, ts) + 1;
 							m->sam[m->sam_n].nsrand = csrand;
 							m->sam[m->sam_n].offset = offset;

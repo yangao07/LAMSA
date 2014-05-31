@@ -774,8 +774,8 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset,
 	return 0;
 }*/
 
-/*
-int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int ref_end, int read_start, int read_end, int hash_len, int **line, int *line_end, hash_DP_node *h_node)
+
+/*int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int ref_end, int read_start, int read_end, int hash_len, int **line, int *line_end, hash_DP_node *h_node)
 {
     if (((ref_end - ref_start) < hash_len) || ((read_end - read_start) < hash_len))
         return -1;
@@ -866,8 +866,8 @@ int mini_main_line(int *hash_pos, int *start_a, int *len_a, int ref_start, int r
 	}
 
 	return path_n;
-}
-*/
+}*/
+
 
 /*int hash_copy_main_line(int **line, int *line_end, int m_i, int **mini_line, int *mini_line_end, int mini_i)
 {
@@ -2643,7 +2643,6 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 			free(_cigar);
 		}
 	}
-		
 //_FREE_V:
 	for (i = 0; i < hash_seed_n+2; ++i) free(h_node[i]);
 	free(h_node); free(line); 
@@ -2898,6 +2897,7 @@ int split_insert_map(uint32_t **res_cigar, int *res_len, int *res_m,
 	res = hash_split_map(res_cigar, res_len, res_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos, 1, 1);
 	//printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");
 	
+    //printf("hash ins:\t"); printcigar(*res_cigar, *res_len); printf("\n");
 	free(hash_pos);
 	return res;
 }
@@ -2924,6 +2924,7 @@ int split_delete_map(uint32_t **res_cigar, int *res_len, int *res_m,
 	res = hash_split_map(res_cigar, res_len, res_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_pos, 1, 1);
 	/*printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");*/
 
+	//printf("hash del:\t"); printcigar(*res_cigar, *res_len); printf("\n");
 	free(hash_pos);
 	return res;
 }
@@ -2973,6 +2974,8 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 			(*cigar)[(*cigar_len)++] = (((read_len - readINcigar-read_end) << 4) | CSOFT_CLIP); //'S' exist
 		//(*cigar)[(*cigar_len)++] = ((read_len - readINcigar) << 4) | CSOFT_CLIP;
 	}
+
+	//printf("right bound:\t"); printcigar(*cigar, *cigar_len); printf("\n");
 	free(hash_pos);
 	return res;
 }
@@ -3039,6 +3042,7 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 	}
 	_push_cigar(cigar, cigar_len, cigar_m, hash_cigar, hash_cigar_len);
 
+	//printf("left bound:\t"); printcigar(*cigar, *cigar_len); printf("\n");
 	free(hash_pos); free(hash_cigar);
 	return res;
 }
@@ -3075,7 +3079,8 @@ int hash_both_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 		(*cigar)[0] = (((read_len - readINcigar) << 4) | CSOFT_CLIP);
 		(*cigar_len)++;
 	}*/
-
+	
+	//printf("both_bound:\t"); printcigar(*cigar, *cigar_len); printf("\n");
 	free(hash_pos);
 	return res;
 }

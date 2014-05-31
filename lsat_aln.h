@@ -169,13 +169,18 @@ typedef struct {
 	line_node from;
 	int seed_i;
 	int aln_i;
-	int score;
+
+	int score; int dis_pen; // score: for connect, dis_pen: for SV/indel penalty
+
 	uint8_t match_flag;
 	int dp_flag;
 	int backtrack_flag;
+
 	int node_n;
+
 	int peak_value;
 	line_node peak;
+
 	int next_trigger_n;
 	int pre_trigger_n;
     int trigger_m;

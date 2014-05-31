@@ -512,7 +512,7 @@ void merge_cigar(frag_msg *f_msg, int f_i,
 						len21 += (int)((*fcigar)[*fc_len-1] >> 4); len_dif -= (int)((*fcigar)[*fc_len-1] >> 4); b += (int)((*fcigar)[*fc_len-1]>>4); --(*fc_len); }
 					else if (((*fcigar)[*fc_len-1] & 0xf) == CDEL) {
 						len_dif += (int)((*fcigar)[*fc_len-1] >> 4); b += (int)((*fcigar)[*fc_len-1] >> 4); --(*fc_len); }
-					else { fprintf(stderr, "[merge cigar] Unexpected: "); printcigar((*fcigar), (*fc_len)); exit(-1);}
+					else { fprintf(stderr, "[merge cigar] Unexpected(1): "); printcigar((*fcigar), (*fc_len)); exit(-1);}
 				}
 				/*
 				if (((*fcigar)[*fc_len-1] & 0xf) == CMATCH) {
@@ -551,7 +551,7 @@ void merge_cigar(frag_msg *f_msg, int f_i,
 						len22 += (int)(cigar[ci] >> 4); len_dif -= (int)(cigar[ci]>>4); b += (int)(cigar[ci]>>4); ++ci; }
 					else if ((cigar[ci] & 0xf) == CDEL) {
 						len_dif += (int)(cigar[ci] >> 4); b += (int)(cigar[ci]>>4); ++ci; }
-					else { fprintf(stderr, "[merge cigar] Unexpected: "); printcigar((cigar+ci), cigar_len-ci); exit(-1);}
+					else { fprintf(stderr, "[merge cigar] Unexpected(2): "); printcigar((cigar+ci), cigar_len-ci); exit(-1);}
 				}
 				/*if ((cigar[ci] & 0xf) == CMATCH) {
 					if ((int)(cigar[ci] >> 4) > 3) { 
@@ -1035,8 +1035,6 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 		//ref XXX check for 'N'
 		pac2fa_core(bns, pac, a_msg[seed_i].at[aln_i].chr, ref_start-1/*0-base*/, &ref_len, 1, &N_flag, &N_len, seq2);
 
-
-		//printf("read: %s\nref: %s\n", re_read, re_ref);
 		if (hash_left_bound_map(cigar, cigar_len, cigar_m, seq2, ref_len, seq1, read_len, hash_num, hash_node, hash_len, hash_key, hash_step) == 1)
 		{
 			if (f_msg->fa_msg[0].srand == 1)	//'+' srand
@@ -1166,7 +1164,6 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 	uint64_t offset;
 	cigar_m = 100;
 	cigar = (uint32_t*)malloc(cigar_m * sizeof(uint32_t));
-	read_len = 100000;
 	// check for every line
 	for (j = 0; j < line_n; ++j)
 	{
