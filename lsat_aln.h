@@ -34,6 +34,11 @@
 #define F_SV_PEN 2
 #define F_MATCH_SCORE 1
 
+// BCC score principle
+#define F_MATCH_SCORE 1
+#define F_INDEL_PEN -2
+#define F_UNCON_PEN -3
+
 #define DP_MIN 1
 #define DP_MULTI 2
 
