@@ -2947,10 +2947,16 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 	int i, readINcigar=0, refINcigar=0;
 	for (i = 0; i < (*cigar_len); ++i)
 	{
-		if (((*cigar)[i] & 0xf) == CMATCH) readINcigar += ((*cigar)[i] >> 4), refINcigar += ((*cigar)[i] >> 4);
+		if (((*cigar)[i] & 0xf) == CMATCH || ((*cigar)[i] & 0xf) == CSOFT_CLIP) readINcigar += ((*cigar)[i] >> 4), refINcigar += ((*cigar)[i] >> 4);
 		else if (((*cigar)[i] & 0xf) == CINS) readINcigar += ((*cigar)[i] >> 4);
 		else if (((*cigar)[i] & 0xf) == CDEL) refINcigar += ((*cigar)[i] >> 4);
-		else fprintf(stderr, "[hash_right_bound_map] cigar error.\n"), exit(-1);
+		else 
+        {
+            fprintf(stderr, "[hash_right_bound_map] cigar error: ");
+            printcigar(*cigar, *cigar_len);
+            fprintf(stderr, "\n");
+            exit(-1);
+        }
 	}
 	if (readINcigar < read_len)     
 	{
@@ -3001,10 +3007,10 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 	int i, readINcigar=0, refINcigar=0;
 	for (i = 0; i < hash_cigar_len; ++i)
 	{
-		if ((hash_cigar[i] & 0xf) == CMATCH) readINcigar+=(hash_cigar[i] >> 4), refINcigar+=(hash_cigar[i] >> 4);
+		if ((hash_cigar[i] & 0xf) == CMATCH || (*cigar)[i] & 0xf == CSOFT_CLIP) readINcigar+=(hash_cigar[i] >> 4), refINcigar+=(hash_cigar[i] >> 4);
 		else if ((hash_cigar[i] & 0xf) == CINS) readINcigar += (hash_cigar[i] >> 4);
 		else if ((hash_cigar[i] & 0xf) == CDEL) refINcigar += (hash_cigar[i] >> 4);
-		else fprintf(stderr, "[hash_left_bound_map] cigar error.\n"), exit(-1);
+		else fprintf(stderr, "[hash_left_bound_map] cigar error: "), printcigar(*cigar, *cigar_len), fprintf(stderr, "\n"), exit(-1);
 	}
 	if (readINcigar < read_len)     //'S' exists
 	{

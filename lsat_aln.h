@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include "kstring.h"
-#define READ_INIT_MAX 3000
+#define READ_INIT_MAX 1000
 //#define SEED_INIT_MAX 1000
 
 #define SEED_LEN 100
@@ -13,17 +13,17 @@
 
 #define EDIT_THS 3
 
-#define FRAG_CON_STR "MPXIDCRUSE"
+#define FRAG_CON_STR "MPXLIDCRUS"
 #define F_MATCH 0
 #define F_SPLIT_MATCH 1
 #define F_MISMATCH 2
-#define F_INSERT 3
-#define F_DELETE 4
-#define F_CHR_DIF 5
-#define F_REVERSE 6
-#define F_UNCONNECT 7
-#define F_UNMATCH 8
-#define F_PATH_END 9
+#define F_LONG_MISMATCH 3
+#define F_INSERT 4
+#define F_DELETE 5
+#define F_CHR_DIF 6
+#define F_REVERSE 7
+#define F_UNCONNECT 8
+#define F_UNMATCH 9
 
 #define F_TRI 10
 #define F_TRI_MISMATCH 11
