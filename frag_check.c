@@ -429,13 +429,13 @@ int get_read_intv(uint8_t *seq2, char *read_seq,
 	return 0;
 }*/
 
-void printcigar(uint32_t *cigar, int cigar_len)
+void printcigar(FILE *outp, uint32_t *cigar, int cigar_len)
 {
 	int i;
 
     //fprintf(stdout, "cigar %d: ", cigar_len);
 	for (i = 0; i < cigar_len; i++)
-		fprintf(stdout, "%d%c", (int)(cigar[i]>>4), "MIDNSHP=X"[(int)(cigar[i] & 0xf)]);
+		fprintf(outp, "%d%c", (int)(cigar[i]>>4), "MIDNSHP=X"[(int)(cigar[i] & 0xf)]);
 	//fprintf(stdout, "\t");
 }
 
@@ -464,10 +464,21 @@ void _push_cigar(uint32_t **cigar, int *cigar_len, int *cigar_m, uint32_t *_ciga
 			(*cigar_m) <<= 1;
 			(*cigar) = (uint32_t*)realloc(*cigar, (*cigar_m) * sizeof (uint32_t));
 			if ((*cigar) == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(-1);}
-		}	
+		}
 		(*cigar)[i] = _cigar[j];
 	}
 	*cigar_len = i;
+}
+
+void _deQueue_cigar(uint32_t **cigar, int *cigar_len, int de_len)
+{
+    if (de_len == 0) return;
+    if (de_len >= *cigar_len) { *cigar_len = 0; return; }
+
+    int i;
+    for (i = de_len; i < *cigar_len; ++i)
+        (*cigar)[i - de_len] = (*cigar)[i];
+    (*cigar_len) -= de_len;
 }
 
 //pop_mode: 0 pop_len -> cigar_len
@@ -531,6 +542,108 @@ void _invert_cigar(uint32_t **cigar, int cigar_len)
     }
 }
 
+//return 'MIS' length in cigar
+int readInCigar(uint32_t *cigar, int cigar_len)
+{
+    int i, read_len;
+    read_len = 0;
+    for (i = 0; i < cigar_len; ++i)
+    {
+        if ((cigar[i] & 0xf) == CMATCH || (cigar[i] & 0xf) == CINS || (cigar[i] & 0xf) == CSOFT_CLIP)
+            read_len += (cigar[i]  >> 4);
+        else if ((cigar[i] & 0xf) != CDEL)
+        {
+            fprintf(stderr, "[readInCigar] Cigar Error.\n");
+            printcigar(stderr, cigar, cigar_len); 
+            exit(0);
+        }
+    }
+    return read_len;
+}
+
+int cut_cigar(uint32_t **cigar, int *cigar_len, aln_res *a_res)
+{
+    //cut aln-cigar into split-cigar on 'nSmH' 
+    //TODO: multi-'nSmH', S len, '+/-' strand 
+    int i;
+    uint32_t pre_soft_cigar, next_soft_cigar;
+    int pre_clen, next_clen, cut_flag;
+    int next_soft_len, pre_soft_len;
+    uint64_t next_offset, tmp_offset;
+
+    while (1) // for multi-'nSmH'
+    {
+        pre_clen = 0, next_clen = 0, cut_flag = 0;
+        next_soft_len = 0, pre_soft_len = 0;
+        next_soft_len += readInCigar(a_res->la[a_res->cur_res_n].cigar, a_res->la[a_res->cur_res_n].cigar_len);
+        tmp_offset = a_res->la[a_res->cur_res_n].offset;
+        for (i = 0; i < *cigar_len; ++i)
+        {
+            if ((((*cigar)[i]) & 0xf) == CSOFT_CLIP && (((*cigar)[i+1]) & 0xf) == CHARD_CLIP)
+            {
+                //pre
+                pre_clen = i+1;
+                _push_cigar(&(a_res->la[a_res->cur_res_n].cigar), &(a_res->la[a_res->cur_res_n].cigar_len), 
+                        &(a_res->la[a_res->cur_res_n].c_m), *cigar, pre_clen);
+
+                //next
+                next_offset = tmp_offset;
+                next_offset += (((*cigar)[i+1]) >> 4);
+                next_soft_len += (((*cigar)[i]) >> 4);
+                cut_flag = 1;
+                _deQueue_cigar(cigar, cigar_len, pre_clen+1);
+                break;
+            }
+            else if ((((*cigar)[i]) & 0xf) == CMATCH)
+            {
+                tmp_offset += (((*cigar)[i]) >> 4);
+                next_soft_len += (((*cigar)[i]) >> 4);
+            }
+            else if ((((*cigar)[i]) & 0xf) == CSOFT_CLIP || (((*cigar)[i]) & 0xf) == CINS)
+            {
+                next_soft_len += (((*cigar)[i]) >> 4);
+            }
+            else if ((((*cigar)[i]) & 0xf) ==  CDEL)
+            {
+                tmp_offset += (((*cigar)[i]) >> 4);
+            }
+            else
+            {
+                fprintf(stderr, "[split_mapping] Cigar Error.\n");
+                printcigar(stderr, *cigar, *cigar_len);
+                exit(0);
+            }
+        }
+        if (cut_flag)
+        {
+            //pre
+            pre_soft_len = a_res->read_len - readInCigar(a_res->la[a_res->cur_res_n].cigar, a_res->la[a_res->cur_res_n].cigar_len);
+            pre_soft_cigar = ((pre_soft_len << 4) | CSOFT_CLIP);
+            _push_cigar(&(a_res->la[a_res->cur_res_n].cigar), &(a_res->la[a_res->cur_res_n].cigar_len), &(a_res->la[a_res->cur_res_n].c_m), &pre_soft_cigar, 1);
+            //next
+            ++(a_res->cur_res_n);
+            if (a_res->cur_res_n == a_res->res_m)
+            {
+                a_res->res_m <<= 1;
+                a_res->la = (line_aln_res*)realloc(a_res->la, a_res->res_m * sizeof(line_aln_res));
+                for (i = a_res->res_m >> 1; i < a_res->res_m; ++i)
+                {
+                    a_res->la[i].c_m = 100;
+                    a_res->la[i].cigar = (uint32_t*)malloc(100 * sizeof(uint32_t));
+                }
+            }
+            a_res->la[a_res->cur_res_n].offset = next_offset;
+            a_res->la[a_res->cur_res_n].chr = a_res->la[a_res->cur_res_n-1].chr;
+            a_res->la[a_res->cur_res_n].nsrand = a_res->la[a_res->cur_res_n-1].nsrand;
+            a_res->la[a_res->cur_res_n].cigar_len = 0;
+            next_soft_cigar = (next_soft_len << 4 | CSOFT_CLIP);
+            _push_cigar(&(a_res->la[a_res->cur_res_n].cigar), &(a_res->la[a_res->cur_res_n].cigar_len), &(a_res->la[a_res->cur_res_n].c_m), &next_soft_cigar, 1);
+        }
+        else break;
+    }
+    return 0;
+}
+
 //merge interval and seed to frag
 //Before, frag has the first seed's msg already
 void merge_cigar(frag_msg *f_msg, int f_i, 
@@ -573,7 +686,7 @@ void merge_cigar(frag_msg *f_msg, int f_i,
 						len21 += (int)((*fcigar)[*fc_len-1] >> 4); len_dif -= (int)((*fcigar)[*fc_len-1] >> 4); b += (int)((*fcigar)[*fc_len-1]>>4); --(*fc_len); }
 					else if (((*fcigar)[*fc_len-1] & 0xf) == CDEL) {
 						len_dif += (int)((*fcigar)[*fc_len-1] >> 4); b += (int)((*fcigar)[*fc_len-1] >> 4); --(*fc_len); }
-					else { fprintf(stderr, "[merge cigar] Unexpected(1): "); printcigar((*fcigar), (*fc_len)); exit(-1);}
+					else { fprintf(stderr, "[merge cigar] Unexpected(1): "); printcigar(stderr, (*fcigar), (*fc_len)); exit(-1);}
 				}
 				/*
 				if (((*fcigar)[*fc_len-1] & 0xf) == CMATCH) {
@@ -612,7 +725,7 @@ void merge_cigar(frag_msg *f_msg, int f_i,
 						len22 += (int)(cigar[ci] >> 4); len_dif -= (int)(cigar[ci]>>4); b += (int)(cigar[ci]>>4); ++ci; }
 					else if ((cigar[ci] & 0xf) == CDEL) {
 						len_dif += (int)(cigar[ci] >> 4); b += (int)(cigar[ci]>>4); ++ci; }
-					else { fprintf(stderr, "[merge cigar] Unexpected(2): "); printcigar((cigar+ci), cigar_len-ci); exit(-1);}
+					else { fprintf(stderr, "[merge cigar] Unexpected(2): "); printcigar(stderr, (cigar+ci), cigar_len-ci); exit(-1);}
 				}
 				/*if ((cigar[ci] & 0xf) == CMATCH) {
 					if ((int)(cigar[ci] >> 4) > 3) { 
@@ -686,7 +799,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 				bntseq_t *bns, uint8_t *pac, char *read_seq, 
 				uint8_t *seq1, uint8_t *seq2, 
 				int seed_len, 
-				int **line_tri)
+				int **line_tri, aln_res *a_res)
 {
 	int i, seed_i, seed_aln_i, last_i, last_aln_i;
 	int len1, len2;
@@ -774,6 +887,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			free(cigar);
 		}
 	}
+    _push_cigar(&(a_res->la[a_res->cur_res_n].cigar), &(a_res->la[a_res->cur_res_n].cigar_len), &(a_res->la[a_res->cur_res_n].c_m), f_msg->fa_msg[f_i].cigar, f_msg->fa_msg[f_i].cigar_len);
 	
 	return 0;
 }
@@ -851,7 +965,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 				   uint32_t **hash_num, uint64_t ***hash_node, 
 				   int f1_i, int f2_i, 
 				   int seed_len, 
-				   int **line_tri)
+				   int **line_tri, aln_res *a_res)
 {
     int i;
     int nsrand, s1_i, s1_aln_i, seed_num, s2_i, s2_aln_i;
@@ -920,17 +1034,30 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 				//XXX s1/s2???
 				//else ref_offset = a_msg[s2_i].at[s2_aln_i].offset + seed_len + a_msg[s2_i].at[s2_aln_i].len_dif; 
 				pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &split_ref_len, 1/*+-*/, &N_flag, &N_len, split_ref_seq);
-				split_delete_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size);
-			}
-			//else	//dis > split_read_len
-		}
-		else if (dis < -10) 
-		{
+				if (split_delete_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size) == 1)
+                {
+                    if (nsrand == 1)
+                    {
+                        for(i = 0; i < f_msg->fa_msg[f2_i].pre_trigger_n; ++i)
+                            (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                    }
+                    else
+                    {
+                        for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
+                            (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                    }
+                    cut_cigar(split_cigar, split_len, a_res);
+                }
+            }
+            //else	//dis > split_read_len
+        }
+        else if (dis < -10) 
+        {
 #ifdef __DEBUG__
-			fprintf(stdout, "%d\t%lld\t%d\tINS\n", a_msg[s1_i].at[s1_aln_i].chr, (long long)pos, (0-dis));
+            fprintf(stdout, "%d\t%lld\t%d\tINS\n", a_msg[s1_i].at[s1_aln_i].chr, (long long)pos, (0-dis));
 #endif
 			split_ref_len = split_read_len + dis;
-            if (split_ref_len <= 0) // overlap ins
+            if (split_ref_len < 0) // overlap ins
             {
                 fprintf(stderr, "[split_map] error breakpoint.\n");
                 exit(0);
@@ -942,7 +1069,20 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                 split_ref_seq = (uint8_t*)malloc(split_ref_len * sizeof(uint8_t));
                 ref_offset = a_msg[s1_i].at[s1_aln_i].offset;
                 pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &split_ref_len, 1, &N_flag, &N_len, split_ref_seq);
-                split_insert_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size);
+                if (split_insert_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size) == 1)
+                {
+                    if (nsrand == 1)
+                    {
+                        for(i = 0; i < f_msg->fa_msg[f2_i].pre_trigger_n; ++i)
+                            (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                    }
+                    else
+                    {
+                        for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
+                            (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                    }
+                    cut_cigar(split_cigar, split_len, a_res);
+                }
 
                 //construct overlap-ins cigar
                 uint32_t _c;
@@ -962,7 +1102,11 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                         split_ref_seq = (uint8_t*)malloc(split_ref_len * sizeof(uint8_t));
                         ref_offset = a_msg[s1_i].at[s1_aln_i].offset + seed_len + a_msg[s1_i].at[s1_aln_i].len_dif;
                         pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &split_ref_len, 1, &N_flag, &N_len, split_ref_seq);
-                        int score = ksw_global(split_read_len, split_read_seq, split_ref_len, split_ref_seq, 5, bwasw_sc_mat, 5, 2, abs(split_ref_len-split_read_len)+3, split_len, split_cigar);
+                        uint32_t *k_cigar=0;
+                        int k_clen;
+                        int score = ksw_global(split_read_len, split_read_seq, split_ref_len, split_ref_seq, 5, bwasw_sc_mat, 5, 2, abs(split_ref_len-split_read_len)+3, &k_clen, &k_cigar);
+                        *split_len = 0;
+                        _push_cigar(split_cigar, split_len, split_m, k_cigar, k_clen);
                         //fprintf(stderr, "[frag check] split ref is too short: %d (<= key_len, 2).\n", split_ref_len);
                         //exit(-1);
                     }
@@ -973,7 +1117,20 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                         ref_offset = a_msg[s1_i].at[s1_aln_i].offset + seed_len + a_msg[s1_i].at[s1_aln_i].len_dif;
                         //else ref_offset = a_msg[s2_i].at[s2_aln_i].offset + seed_len + a_msg[s2_i].at[s2_aln_i].len_dif;
                         pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &split_ref_len, 1, &N_flag, &N_len, split_ref_seq);
-                        split_insert_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size);
+                        if (split_insert_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size) == 1)
+                        {
+                            if (nsrand == 1)
+                            {
+                                for(i = 0; i < f_msg->fa_msg[f2_i].pre_trigger_n; ++i)
+                                    (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                            }
+                            else
+                            {
+                                for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
+                                    (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                            }
+                            cut_cigar(split_cigar, split_len, a_res);
+                        }
                     }
                 }
                 else
@@ -983,7 +1140,20 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                     ref_offset = a_msg[s1_i].at[s1_aln_i].offset + seed_len + a_msg[s1_i].at[s1_aln_i].len_dif;
                     //else ref_offset = a_msg[s2_i].at[s2_aln_i].offset + seed_len + a_msg[s2_i].at[s2_aln_i].len_dif;
                     pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &split_ref_len, 1, &N_flag, &N_len, split_ref_seq);
-                    split_insert_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size);
+                    if (split_insert_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size) == 1)
+                    {
+                        if (nsrand == 1)
+                        {
+                            for(i = 0; i < f_msg->fa_msg[f2_i].pre_trigger_n; ++i)
+                                (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                        }
+                        else
+                        {
+                            for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
+                                (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                        }    
+                        cut_cigar(split_cigar, split_len, a_res);
+                    }
                 }
             }
 		}
@@ -996,16 +1166,14 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 			ref_offset = a_msg[s1_i].at[s1_aln_i].offset + seed_len + a_msg[s1_i].at[s1_aln_i].len_dif;
 			pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &split_ref_len, 1, &N_flag, &N_len, split_ref_seq);
 			int min_b = abs(dis)+3;
-			uint32_t *cigar=0;
-			int score = ksw_global(split_read_len, split_read_seq, split_ref_len, split_ref_seq, 5, bwasw_sc_mat, 5, 2, min_b, split_len, &cigar);
+			uint32_t *cigar=0; int c_len;
+			int score = ksw_global(split_read_len, split_read_seq, split_ref_len, split_ref_seq, 5, bwasw_sc_mat, 5, 2, min_b, &c_len, &cigar);
+
 			//XXX 'spurious MATCH'
 			if (score < 0) 
 			{
-				//fprintf(stdout, "cigar:\t"); printcigar(cigar, *split_len); fprintf(stdout, "band: %d\n", min_b);
-				//fprintf(stdout, "ref:\t"); for (i = 0; i < split_ref_len; ++i) fprintf(stdout, "%c", "ACGT"[split_ref_seq[i]]); fprintf(stdout, "\n");
-				//fprintf(stdout, "read:\t");for (i = 0; i < split_read_len; ++i) fprintf(stdout, "%c", "ACGT"[split_read_seq[i]]); *split_len = 0; fprintf(stdout, "\n");
-
-				if (hash_both_bound_map(split_cigar, split_len, split_m, split_ref_seq, split_ref_len, split_read_seq, split_read_len, hash_num, hash_node, HASH_LEN, 2, HASH_STEP) == 1)//XXX pull trigger
+                if (hash_both_bound_map(split_cigar, split_len, split_m, split_ref_seq, split_ref_len, split_read_seq, split_read_len, 
+                                        hash_num, hash_node, HASH_LEN, 2, HASH_STEP) == 1)//XXX pull trigger, multi triggers
 				{
 					if (nsrand == 1)
 					{
@@ -1017,39 +1185,16 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 						for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
 							(*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
 					}
-				}
-				//fprintf(stdout, "both: "); printcigar(*split_cigar, *split_len); fprintf(stdout, "\n");
 
-				//cut cigar, fix right bound of 1'st half read
-				/*hash_right_bound_map(&b_cigar, &cigar_len, split_ref_seq, split_ref_len, split_read_seq, split_read_len, hash_num, hash_node, HASH_LEN, 2, HASH_STEP);
-				for (i = 0; i < cigar_len; ++i)
-				{
-					if ((b_cigar[i] & 0xf) != CSOFT_CLIP)
-					{
-						(*split_cigar)[*split_len] = b_cigar[i];
-						(*split_len)++;
-					}
-				}
-				fprintf(stdout, "1st: "); printcigar(b_cigar, cigar_len); fprintf(stdout, "\n");
-				(*split_cigar)[*split_len] = CSOFT_CLIP;
-				(*split_len)++;
+                    //cut aln-cigar into split-cigar on 'nSmH' 
+                    cut_cigar(split_cigar, split_len, a_res);
 
-				//fix left bound of 2'nd half read
-				hash_left_bound_map(&b_cigar, &cigar_len, split_ref_seq, split_ref_len, split_read_seq, split_read_len, hash_num, hash_node, HASH_LEN, 2, HASH_STEP);
-				for (i = 0; i < cigar_len; ++i)
-				{
-					if ((b_cigar[i] & 0xf) != CSOFT_CLIP)
-					{
-						(*split_cigar)[*split_len] = b_cigar[i];
-						(*split_len)++;
-					}
-				}
-				fprintf(stdout, "2nd: "); printcigar(b_cigar, cigar_len); fprintf(stdout, "\n");*/
-			}
+                }
+            }
 			else
 			{
-				for (i = 0; i < *split_len; ++i)
-					(*split_cigar)[i] = cigar[i];
+                *split_len = 0;
+                _push_cigar(split_cigar, split_len, split_m, cigar, c_len);
 			}
 			free(cigar);
 		}
@@ -1066,6 +1211,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 		fprintf(stderr, "%d\t%d\tcomplex SV\n", a_msg[s1_i].at[s1_aln_i].chr, pos1);
 		fprintf(stderr, "%d\t%d\tcomplex SV\n", a_msg[s2_i].at[s2_aln_i].chr, pos2);
 	}
+    _push_cigar(&(a_res->la[a_res->cur_res_n].cigar), &(a_res->la[a_res->cur_res_n].cigar_len), &(a_res->la[a_res->cur_res_n].c_m), *split_cigar, *split_len);
 	free(split_read_seq); free(split_ref_seq);
 }
 
@@ -1087,7 +1233,7 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 						char *read_seq, uint8_t *seq1, uint8_t *seq2, 
 						int seed_len, 
 						uint32_t **hash_num, uint64_t ***hash_node, 
-						int **line_tri)
+						int **line_tri, aln_res *a_res)
 {
 	int left_bound = f_msg->frag_left_bound;
 	int frag_i, seed_x, seed_i, aln_i, i;
@@ -1110,6 +1256,8 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 		{
 			(*cigar_len) = 0;
 			*offset = a_msg[seed_i].at[aln_i].offset;
+            a_res->la[a_res->cur_res_n].offset = a_msg[seed_i].at[aln_i].offset;
+            a_res->la[a_res->cur_res_n].cigar_len = 0;
 			return 0;
 		}
 	}
@@ -1126,6 +1274,7 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 		//XXX un-overlap
 		int hash_len = HASH_LEN, hash_step = HASH_STEP, hash_key = 2;
 		(*offset) = a_msg[seed_i].at[aln_i].offset;
+        a_res->la[a_res->cur_res_n].offset = a_msg[seed_i].at[aln_i].offset;
 		ref_len = read_len + hash_step * 2;	//XXX
 		//read	XXX check for 'N'
 		for (i = 0; i < read_len; ++i)
@@ -1148,13 +1297,19 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 				for (i = 0; i < f_msg->fa_msg[0].next_trigger_n; ++i)
 					(*line_tri)[f_msg->fa_msg[0].trigger[i]] = 1;
 			}
+            //cut aln-cigar into split-cigar on 'nSmH' 
+            cut_cigar(cigar, cigar_len, a_res); 
 		}
 		//*offset XXX
 		for (i = 0; i < *cigar_len; ++i)
 		{
 			if (((*cigar)[i] & 0xf) == CMATCH || ((*cigar)[i] & 0xf) == CDEL)
-				(*offset) -= ((*cigar)[i]>>4);
-		}
+            {
+				(*offset) -= ((*cigar)[i]>>4); 
+                (a_res->la[a_res->cur_res_n].offset) -= ((*cigar)[i]>>4);
+            }
+        }
+        _push_cigar(&(a_res->la[a_res->cur_res_n].cigar), &(a_res->la[a_res->cur_res_n].cigar_len), &(a_res->la[a_res->cur_res_n].c_m), *cigar, *cigar_len);
 	}
 
 	return 0;
@@ -1166,7 +1321,7 @@ int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 						char *read_seq, uint8_t *seq1, uint8_t *seq2, 
 						int seed_len, 
 						uint32_t **hash_num, uint64_t ***hash_node, 
-						int **line_tri)
+						int **line_tri, aln_res *a_res)
 {
 	int right_bound = f_msg->frag_right_bound;
 	int frag_i, seed_x, seed_i, aln_i, i;
@@ -1203,7 +1358,6 @@ int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 	{
 		//XXX un-overlap
 		int hash_len = HASH_LEN, hash_step = HASH_STEP, hash_key = 2;
-		//if (read_len > 20000){ (*cigar_len) = 0;  fprintf(stderr, "long tail boundary.\t"); return 0;}
 		ref_len = read_len + hash_step * 2;
 		//read
 		for (i = 0; i < read_len; ++i)
@@ -1226,7 +1380,11 @@ int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 				for (i = 0; i < f_msg->fa_msg[frag_i].pre_trigger_n; ++i)
 					(*line_tri)[f_msg->fa_msg[frag_i].trigger[f_msg->fa_msg[frag_i].next_trigger_n+i]] = 1;
 			}
+            //cut aln-cigar into split-cigar on 'nSmH' 
+            cut_cigar(cigar, cigar_len, a_res); 
 		}
+
+        _push_cigar(&(a_res->la[a_res->cur_res_n].cigar), &(a_res->la[a_res->cur_res_n].cigar_len), &(a_res->la[a_res->cur_res_n].c_m), *cigar, *cigar_len);
 	}
 
 	return 0;
@@ -1240,11 +1398,11 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 			   uint32_t **hash_num, uint64_t ***hash_node, 
 			   int seed_len)
 {
-	//if (strcmp(read_name, "donor1_188697065_188702064_35:0:0_0:0:0_f62/1_0") ==0)// && strcmp(read_name, "donor1_247131951_247231950_0:0:0_989:0:0_f1/1_1")!=0)
-		//printf("debug");
+	//if (strcmp(read_name, "donor1_102509407_102514406_1:0:0_43:0:0_f27/1_1") ==0)// && strcmp(read_name, "donor1_247131951_247231950_0:0:0_989:0:0_f1/1_1")!=0)
+	//	printf("debug");
 	//	return 0;
 	int i, j;
-	//XXX len
+
 	int max_len = read_len;
 	uint8_t *seq1 = (uint8_t*)malloc((max_len+1)*sizeof(uint8_t));
 	uint8_t *seq2 = (uint8_t*)malloc((max_len+1)*sizeof(uint8_t));
@@ -1254,6 +1412,7 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 	a_res.res_m = line_n;
 	a_res.cur_res_n = 0;
 	a_res.la = (line_aln_res*)malloc(line_n * sizeof(line_aln_res));
+    a_res.read_len = read_len;
 	for (i = 0; i < line_n; ++i)
 	{
 		a_res.la[i].c_m = 100;
@@ -1264,11 +1423,23 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 	int cigar_len, cigar_m;
 	uint64_t offset;
 	cigar_m = 100;
+    cigar_len = 0;
 	cigar = (uint32_t*)malloc(cigar_m * sizeof(uint32_t));
 	// check for every line
 	for (j = 0; j < line_n; ++j)
 	{
         if (line_tri[j] == 0) continue;
+
+        if (a_res.cur_res_n == a_res.res_m)
+        {
+            a_res.res_m <<= 1;
+            a_res.la = (line_aln_res*)realloc(a_res.la, a_res.res_m * sizeof(line_aln_res));
+            for (i = a_res.res_m >> 1; i < a_res.res_m; ++i)
+            {
+                a_res.la[i].c_m = 100;
+                a_res.la[i].cigar = (uint32_t*)malloc(100 * sizeof(uint32_t));
+            }
+        }
 		//res	XXX for multi-line
 		a_res.la[a_res.cur_res_n].cigar_len = 0;
 		a_res.la[a_res.cur_res_n].nsrand = (((*f_msg)+j)->fa_msg[0].srand == 1)?1:0;
@@ -1287,24 +1458,25 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 					_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 				}
 			//fix the boundary blank before first frag, if it is existed
-			frag_head_bound_fix((*f_msg)+j, a_msg, &cigar, &cigar_len, &cigar_m, &offset, bns, pac, read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri);
-			a_res.la[a_res.cur_res_n].offset = offset;
-			//if (cigar_len != 0) {printf("head:\t"); printcigar(cigar, cigar_len); printf("\t");}
-			_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
+			frag_head_bound_fix((*f_msg)+j, a_msg, &cigar, &cigar_len, &cigar_m, &offset, bns, pac, read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri, &a_res);
+                //frag_head_bound_fix((*f_msg)+j, a_msg, &cigar, &cigar_len, &cigar_m, &offset, bns, pac, read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri);
+                //a_res.la[a_res.cur_res_n].offset = offset;
+                //if (cigar_len != 0) {printf("head:\t"); printcigar(cigar, cigar_len); printf("\t");}
+                //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 			for (i = ((*f_msg)+j)->frag_num-1; i > 0; --i)
 			{
-				frag_extend((*f_msg)+j, a_msg, i, bns, pac, read_seq, seq1, seq2, seed_len, &line_tri);
-				_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), 
-						&(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
-				split_mapping(&cigar, &cigar_len, &cigar_m, bns, pac, read_seq, ((*f_msg)+j), a_msg, hash_num, hash_node, i, i-1, seed_len, &line_tri);
-				_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
+				frag_extend((*f_msg)+j, a_msg, i, bns, pac, read_seq, seq1, seq2, seed_len, &line_tri, &a_res);
+                    //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), 
+                            //&(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
+				split_mapping(&cigar, &cigar_len, &cigar_m, bns, pac, read_seq, ((*f_msg)+j), a_msg, hash_num, hash_node, i, i-1, seed_len, &line_tri, &a_res);
+                    //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 			}
-			frag_extend((*f_msg)+j, a_msg, i, bns, pac, read_seq, seq1, seq2, seed_len, &line_tri);
-			_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
+			frag_extend((*f_msg)+j, a_msg, i, bns, pac, read_seq, seq1, seq2, seed_len, &line_tri, &a_res);
+                //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
 			//fix the boundary blank after the last frag
-			frag_tail_bound_fix((*f_msg)+j, a_msg, &cigar, &cigar_len, &cigar_m, bns, pac, read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri);
+			frag_tail_bound_fix((*f_msg)+j, a_msg, &cigar, &cigar_len, &cigar_m, bns, pac, read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri, &a_res);
 			//if (cigar_len != 0) {printf("tail:\t"); printcigar(cigar, cigar_len); printf("\t");}
-			_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
+                //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 			//tail 'S'
 				if (((*f_msg)+j)->frag_right_bound <= ((*f_msg)+j)->seed_all)
 				{
@@ -1331,23 +1503,23 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 					_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 				}
 			//fix the boundary blank before first frag
-			frag_head_bound_fix((*f_msg)+j, a_msg, &cigar, &cigar_len, &cigar_m, &offset, bns, pac, reco_read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri);
-			//if (cigar_len != 0) {printf("head:\t"); printcigar(cigar, cigar_len); printf("\t");}
-			a_res.la[a_res.cur_res_n].offset = offset;
-			_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
+			frag_head_bound_fix((*f_msg)+j, a_msg, &cigar, &cigar_len, &cigar_m, &offset, bns, pac, reco_read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri, &a_res);
+                //if (cigar_len != 0) {printf("head:\t"); printcigar(cigar, cigar_len); printf("\t");}
+                //a_res.la[a_res.cur_res_n].offset = offset;
+                //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 			for (i = 0; i < ((*f_msg)+j)->frag_num-1; ++i)
 			{
-				frag_extend((*f_msg)+j, a_msg, i, bns, pac, reco_read_seq, seq1, seq2, seed_len, &line_tri);
-				_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
-				split_mapping(&cigar, &cigar_len, &cigar_m, bns, pac, reco_read_seq, (*f_msg)+j, a_msg, hash_num, hash_node, i, i+1, seed_len, &line_tri);
-				_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
+				frag_extend((*f_msg)+j, a_msg, i, bns, pac, reco_read_seq, seq1, seq2, seed_len, &line_tri, &a_res);
+                    //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
+				split_mapping(&cigar, &cigar_len, &cigar_m, bns, pac, reco_read_seq, (*f_msg)+j, a_msg, hash_num, hash_node, i, i+1, seed_len, &line_tri, &a_res);
+                    //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 			}
-			frag_extend(((*f_msg)+j), a_msg, i, bns, pac, reco_read_seq, seq1, seq2, seed_len, &line_tri);
-			_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
+			frag_extend(((*f_msg)+j), a_msg, i, bns, pac, reco_read_seq, seq1, seq2, seed_len, &line_tri, &a_res);
+                //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), ((*f_msg)+j)->fa_msg[i].cigar, ((*f_msg)+j)->fa_msg[i].cigar_len);
 			//fix the boundary blank after the last frag
-			frag_tail_bound_fix(((*f_msg)+j), a_msg, &cigar, &cigar_len, &cigar_m, bns, pac, reco_read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri);
+			frag_tail_bound_fix(((*f_msg)+j), a_msg, &cigar, &cigar_len, &cigar_m, bns, pac, reco_read_seq, seq1, seq2, seed_len, hash_num, hash_node, &line_tri, &a_res);
 			//if (cigar_len != 0) {printf("tail:\t"); printcigar(cigar, cigar_len); printf("\t");}
-			_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
+                //_push_cigar(&(a_res.la[a_res.cur_res_n].cigar), &(a_res.la[a_res.cur_res_n].cigar_len), &(a_res.la[a_res.cur_res_n].c_m), cigar, cigar_len);
 			//tail 'S'
 				if (((*f_msg)+j)->frag_right_bound <= ((*f_msg)+j)->seed_all)
 				{
@@ -1358,7 +1530,6 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 			free(reco_read_seq);
 			for (i = 0; i < ((*f_msg)+j)->seed_all; ++i) a_msg[i].read_id = (((*f_msg)+j)->seed_all + 1 - a_msg[i].read_id);
 		}
-		
 		//fprintf(stdout, "%s\t%d\t%c\t%lld\t", read_name, a_res.chr, "-++"[a_res.nsrand], (long long)a_res.offset); printcigar(a_res.cigar, a_res.cigar_len); check_cigar(a_res.cigar, a_res.cigar_len); 
 		//fprintf(stdout, "\n"); 
 		++a_res.cur_res_n;
@@ -1368,11 +1539,9 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 	//if (a_res.cur_res_n > 1) fprintf(stdout, "multi\t");
 	for (i = 0; i < a_res.cur_res_n; ++i)
 	{
-		fprintf(stdout, "%s\t%d\t%c\t%lld\t", read_name, a_res.la[i].chr, "-++"[a_res.la[i].nsrand], (long long)a_res.la[i].offset); printcigar(a_res.la[i].cigar, a_res.la[i].cigar_len); check_cigar(a_res.la[i].cigar, a_res.la[i].cigar_len); 
+		fprintf(stdout, "%s\t%d\t%c\t%lld\t", read_name, a_res.la[i].chr, "-++"[a_res.la[i].nsrand], (long long)a_res.la[i].offset); printcigar(stdout, a_res.la[i].cigar, a_res.la[i].cigar_len); check_cigar(a_res.la[i].cigar, a_res.la[i].cigar_len); 
 		fprintf(stdout, "\n"); 
 	}
-
-
 	free(seq1); free(seq2); free(cigar);
 	for (i = 0; i < a_res.res_m; ++i) free(a_res.la[i].cigar); free(a_res.la);
 	return 0;

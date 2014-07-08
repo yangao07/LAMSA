@@ -89,6 +89,7 @@ typedef struct {
 	int res_m;
 	int cur_res_n;
 	line_aln_res *la;	
+    int read_len;
 } aln_res;
 
 extern const int8_t sc_mat[25];
@@ -106,7 +107,7 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 			   aln_msg *a_msg, 
 			   uint32_t **hash_num, uint64_t ***hash_node, 
 			   int seed_len);
-void printcigar(uint32_t *cigar, int cigar_len);
+void printcigar(FILE *outp, uint32_t *cigar, int cigar_len);
 
 #define MAXOFTWO(a, b) ((a) > (b) ? (a) : (b))
 #define MINOFTWO(a, b) ((a) < (b) ? (a) : (b))

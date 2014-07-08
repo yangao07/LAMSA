@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <emmintrin.h>
 #include "ksw.h"
+#include "frag_check.h"
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -541,8 +542,11 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
  * and then make some modification        *
  ******************************************/
 
-int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle, int *n_cigar_, uint32_t **cigar_)
+int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, uint32_t **cigar_)
 {
+    //int soft_p = 2;
+    int soft_score;
+    int soft_max;
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
 	int i, j, k, gapoe = gapo + gape, n_col;
@@ -574,6 +578,7 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	n_col = qlen < 2 * w + 1 ? qlen : 2 * w + 1;
 	z = malloc(n_col * tlen);
 	// DP loop
+    soft_max = 0 - soft_p * qlen;
 	max = h0, max_i = max_j = -1;
 	// E() && H()
 		beg = 0, end = 1;//qlen;
@@ -630,7 +635,16 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 		}
 		eh[end].h = h1; eh[end].e = 0;
 		if (m == 0) break;
-		if (m > max) max = m, max_i = i, max_j = mj;
+		/*if (m > max)
+        {
+            max = m, max_i = i, max_j = mj;
+        }*/
+        soft_score = m - (qlen - mj - 1) * soft_p;
+        if (soft_score > soft_max)
+        {
+            max_i = i, max_j = mj;
+            soft_max = soft_score;
+        }
 		// update beg and end for the next round
 			int _beg, _end;
 			// E()
@@ -670,6 +684,76 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	return max;
 }
 
+/***************************************
+ * Extend both left and right boundary *
+ ***************************************/
+
+int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, uint32_t **cigar_)
+{
+    int i;
+//    fprintf(stderr, "target: ");
+//    for (i = 0; i < tlen; ++i)
+//        fprintf(stderr, "%c", "ACGTN"[target[i]]);
+//    fprintf(stderr, "\nquery : ");
+//    for (i = 0; i < qlen; ++i)
+//        fprintf(stderr, "%c", "ACGTN"[query[i]]);
+//    fprintf(stderr, "\n");
+    if (*n_cigar_) *n_cigar_ = 0;
+    int lqe, lte;
+    uint32_t *lcigar=0;
+    int ln_cigar;
+    //left boundary extension
+    ksw_extend2(qlen, query, tlen, target, m, mat, gapo, gape, w, 0, 0, &lqe, &lte, &ln_cigar, &lcigar);
+//    printf("left:\t"); printcigar(lcigar, ln_cigar); printf("\n");
+
+    //right boundary extension
+    uint8_t *r_query = (uint8_t*)malloc(qlen * sizeof(uint8_t));
+    uint8_t *r_target = (uint8_t*)malloc(tlen * sizeof(uint8_t));
+    uint32_t *rcigar=0;
+    int rqe, rte, rn_cigar;
+    for (i = 0; i < qlen; ++i) r_query[i] = query[qlen-i-1];
+    for (i = 0; i < tlen; ++i) r_target[i] = target[tlen-i-1];
+    ksw_extend2(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, 0, 0, &rqe, &rte, &rn_cigar, &rcigar);
+ //   printf("right:\t"); printcigar(rcigar, rn_cigar); printf("\n");
+    free(r_query), free(r_target);
+
+    //merge and construct result-cigar
+    int Sn = qlen - lqe - rqe; 
+    int Hn = tlen - lte - rte;
+    if (Sn < 0 || Hn < 0)
+    {
+        fprintf(stderr, "[ksw_both_extend] Overlap exist.\n");
+        fprintf(stderr, "target: ");
+        for (i = 0; i < tlen; ++i)
+            fprintf(stderr, "%c", "ACGTN"[target[i]]);
+        fprintf(stderr, "\nquery : ");
+        for (i = 0; i < qlen; ++i)
+            fprintf(stderr, "%c", "ACGTN"[query[i]]);
+        fprintf(stderr, "\n");
+        return 0;
+    }
+    uint32_t Scigar, Hcigar;
+    uint32_t *cigar = (uint32_t*)malloc(10 * sizeof(uint32_t));
+    int cigar_n = 0, cigar_m = 10;
+
+    _push_cigar(&cigar, &cigar_n, &cigar_m, lcigar, ln_cigar);
+
+    Scigar = Sn << 4 | CSOFT_CLIP;
+    _push_cigar(&cigar, &cigar_n, &cigar_m, &Scigar, 1);
+
+    Hcigar = Hn << 4 | CHARD_CLIP;
+    _push_cigar(&cigar, &cigar_n, &cigar_m, &Hcigar, 1);
+
+    _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
+
+    *cigar_ = cigar;
+    *n_cigar_ = cigar_n;
+
+    free(lcigar); free(rcigar);
+
+    return 1;
+}
+
 /*******************************************
  * Main function (not compiled by default) *
  *******************************************/
@@ -682,6 +766,38 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 #include "kseq.h"
 KSEQ_INIT(gzFile, gzread)
 
+void _push_cigar(uint32_t **cigar, int *cigar_len, int *cigar_m, uint32_t *_cigar, int _cigar_len)
+{
+    if (_cigar_len == 0) return;
+	int i,j;
+	i = *cigar_len;
+	if (((i-1) >= 0) && (((*cigar)[i-1] & 0xf) == (_cigar[0] & 0xf)))
+	{
+		(*cigar)[i-1] += ((_cigar[0] >> 4) << 4);
+		j = 1;
+	}
+	else j = 0;
+
+	for (; j < _cigar_len; ++i,++j) {
+		if (i == *cigar_m) {
+			(*cigar_m) <<= 1;
+			(*cigar) = (uint32_t*)realloc(*cigar, (*cigar_m) * sizeof (uint32_t));
+			if ((*cigar) == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(-1);}
+		}	
+		(*cigar)[i] = _cigar[j];
+	}
+	*cigar_len = i;
+}
+
+void printcigar(uint32_t *cigar, int cigar_len)
+{
+	int i;
+
+    //fprintf(stdout, "cigar %d: ", cigar_len);
+	for (i = 0; i < cigar_len; i++)
+		fprintf(stdout, "%d%c", (int)(cigar[i]>>4), "MIDNSHP=X"[(int)(cigar[i] & 0xf)]);
+	//fprintf(stdout, "\t");
+}
 unsigned char seq_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
@@ -727,10 +843,17 @@ int main(int argc, char *argv[])
 		for (i = 0; i < (int)ksq->seq.l; ++i) ksq->seq.s[i] = seq_nt4_table[(int)ksq->seq.s[i]];
 		while (kseq_read(kst) > 0) {
 			for (i = 0; i < (int)kst->seq.l; ++i) kst->seq.s[i] = seq_nt4_table[(int)kst->seq.s[i]];
-			score = ksw_extend2(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, &qe, &te, &n_cigar, &cigar);
+			score = ksw_extend2(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 0, &qe, &te, &n_cigar, &cigar);
             printf("%d:\t%d\t%d\n", score, qe, te);
+			for (i = 0; i < n_cigar; ++i)
+                printf("%d%c", cigar[i] >> 4 , "MIDNSHP=X"[cigar[i] & 0xf]);
+            free(cigar);
+            cigar=0, n_cigar=0;
+            printf("\n");
+            ksw_both_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, &n_cigar, &cigar);
+            printf("ksw both extend:\n");
             for (i = 0; i < n_cigar; ++i)
-                printf("%d%c", cigar[i] >> 4 , "MID"[cigar[i] & 0xf]);
+                printf("%d%c", cigar[i] >> 4 , "MIDNSHP=X"[cigar[i] & 0xf]);
             printf("\n");
             /*score = ksw_global_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 0, &n_cigar, &cigar);
             printf("%d\n", score);

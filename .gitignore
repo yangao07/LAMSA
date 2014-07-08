@@ -35,5 +35,14 @@ soap2-dp/*
 output/*
 out*
 
+#tmep source files
+LSAT/*
+
 #eclipse project
 *project
+
+#err log
+error.log
+
+#shell
+*.sh

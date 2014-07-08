@@ -2034,7 +2034,7 @@ int frag_line_BCC(aln_msg *a_msg,
 {
     int i, j, k;
     // min_len XXX 
-    int min_len = 1, min_exist=0;
+    int min_len = 1, min_exist=0, min_num = 0;
 
     //dp init
     {
@@ -2044,11 +2044,13 @@ int frag_line_BCC(aln_msg *a_msg,
             {
                 frag_dp_init(*f_node, a_msg, i, (line_node){-1,0}, seed_len, MIN_FLAG);
                 min_exist = 1;
+                ++min_num;
             }
             else
                 frag_dp_init(*f_node, a_msg, i, (line_node){-1,0}, seed_len, MULTI_FLAG);
         }
-        if (!min_exist)
+        //fraction XXX
+        if (!min_exist || min_num * 10 < n_seed)
         {
             for (i = 0; i < n_seed; ++i)
             {
@@ -2079,8 +2081,8 @@ int frag_line_BCC(aln_msg *a_msg,
                     frag_dp_update(*f_node, a_msg, i, j, 0/*update start pos*/, seed_len, MIN_FLAG);
             }
         }
-        /*//print
-        printf("min-update:\n");
+        //print
+        /*printf("min-update:\n");
         for (i = 0; i < n_seed; ++i)
         {
             for (j = 0; j < a_msg[i].n_aln; ++j)
@@ -2145,6 +2147,11 @@ int frag_line_BCC(aln_msg *a_msg,
                             line[l_i+new_l][line_end[l_i+new_l]] = line[l_i][node_i-k];
                             line[l_i+new_l][line_end[l_i+new_l]+1] = last_n;
                             line[l_i+new_l][line_end[l_i+new_l]+2] = (line_node){0, 0};	//need trigger
+                            if ((*f_node)[last_n.x][last_n.y].next_trigger_n == (*f_node)[last_n.x][last_n.y].trigger_m)
+                            {
+                                (*f_node)[last_n.x][last_n.y].trigger_m <<= 1;
+                                (*f_node)[last_n.x][last_n.y].trigger = (int*)realloc((*f_node)[last_n.x][last_n.y].trigger,  (*f_node)[last_n.x][last_n.y].trigger_m * sizeof(int));
+                            }
                             (*f_node)[last_n.x][last_n.y].trigger[(*f_node)[last_n.x][last_n.y].next_trigger_n++] = l_i+new_l;
                             ++new_l;
                         }
@@ -2184,6 +2191,11 @@ int frag_line_BCC(aln_msg *a_msg,
                                 line[l_i+new_l][line_end[l_i+new_l]] = line[l_i][node_i-k];
                                 line[l_i+new_l][line_end[l_i+new_l]+1] = last_n;
                                 line[l_i+new_l][line_end[l_i+new_l]+2] = (line_node){0, 0};	//need trigger
+                                if ((*f_node)[last_n.x][last_n.y].next_trigger_n + (*f_node)[last_n.x][last_n.y].pre_trigger_n == (*f_node)[last_n.x][last_n.y].trigger_m)
+                                {
+                                    (*f_node)[last_n.x][last_n.y].trigger_m <<= 1;
+                                    (*f_node)[last_n.x][last_n.y].trigger = (int*)realloc((*f_node)[last_n.x][last_n.y].trigger,  (*f_node)[last_n.x][last_n.y].trigger_m * sizeof(int));
+                                }
                                 (*f_node)[last_n.x][last_n.y].trigger[(*f_node)[last_n.x][last_n.y].next_trigger_n + (*f_node)[last_n.x][last_n.y].pre_trigger_n] = l_i+new_l;
                                 ++(*f_node)[last_n.x][last_n.y].pre_trigger_n;
                                 ++new_l;
@@ -2202,8 +2214,8 @@ int frag_line_BCC(aln_msg *a_msg,
             tmp =line[l_i][k]; line[l_i][k] = line[l_i][node_i-k-1]; line[l_i][node_i-k-1] = tmp;
         }
 
-        /*//print
-        printf("whole-update:\n");
+        //print
+        /*printf("whole-update:\n");
         for (i = 0; i < n_seed; ++i)
         {
             for (j = 0; j < a_msg[i].n_aln; ++j)
@@ -2644,7 +2656,7 @@ int frag_dp_path(aln_msg *a_msg,
 
 void lsat_unmap(char *read_name)
 {
-    fprintf(stdout, "%s\tunmap\n", read_name);
+    fprintf(stdout, "%s\t*\t*\t*\t*\n", read_name);
 }
 
 #ifdef PLAIN_IN
@@ -2812,7 +2824,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
 
     line_node **line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
     int *line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
-    line_tri = (int*)malloc((s_msg->seed_max) * sizeof(int));
+    line_tri = (int*)calloc((s_msg->seed_max), sizeof(int));
     line_node **_line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
     int *_line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
     frag_dp_node ***f_node = (frag_dp_node***)malloc(sizeof(frag_dp_node**));
@@ -2829,7 +2841,9 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
         for (j = 0; j < PER_ALN_N; ++j)
         {
             (*f_node)[i][j].trigger_m = 100;
-            (*f_node)[i][j].trigger = (int*)malloc(100 * sizeof(int));
+            (*f_node)[i][j].trigger = (int*)calloc(100, sizeof(int));
+            (*f_node)[i][j].next_trigger_n = 0;
+            (*f_node)[i][j].pre_trigger_n = 0;
         }
     }
     if (line == NULL || _line == NULL || f_node == NULL) { fprintf(stderr, "[frag_dp_path] Not enougy memory.\n"); exit(0); }
@@ -2848,8 +2862,8 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
     uint64_t **hash_node;
     int key_len = 2;
     int hash_size = (int)pow(NT_N, key_len);
-    hash_num = (uint32_t*)malloc(hash_size * sizeof(uint32_t));	//16 = pow(4, 2)
-    hash_node = (uint64_t**)malloc(hash_size * sizeof(uint64_t*));
+    hash_num = (uint32_t*)calloc(hash_size, sizeof(uint32_t));	//16 = pow(4, 2)
+    hash_node = (uint64_t**)calloc(hash_size, sizeof(uint64_t*));
 
     if ((samf = samopen(seed_result, "r")) == 0) {
         fprintf(stderr, "[lsat_aln] Can't open seed result sam file %s.\n", seed_result);
