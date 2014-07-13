@@ -579,7 +579,7 @@ int cut_cigar(uint32_t **cigar, int *cigar_len, aln_res *a_res)
         tmp_offset = a_res->la[a_res->cur_res_n].offset;
         for (i = 0; i < *cigar_len; ++i)
         {
-            if ((((*cigar)[i]) & 0xf) == CSOFT_CLIP && (((*cigar)[i+1]) & 0xf) == CHARD_CLIP)
+            if ((i < *cigar_len-1) && (((*cigar)[i]) & 0xf) == CSOFT_CLIP && (((*cigar)[i+1]) & 0xf) == CHARD_CLIP)
             {
                 //pre
                 pre_clen = i+1;
@@ -1002,7 +1002,6 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 	int N_flag, N_len;
 
 	split_read_len = (2*(a_msg[s2_i].read_id-a_msg[s1_i].read_id)-1) * seed_len;
-	if (split_read_len > (int)pow((double)(2.0),(double)(16.0))) fprintf(stderr, "[split map] ERROR: split read is too long: %d\n", split_read_len);
 	split_read_seq = (uint8_t*)malloc(split_read_len * sizeof(uint8_t));
 
 	if (nsrand == 1) for (i = 0; i < split_read_len; ++i) split_read_seq[i] = nst_nt4_table[(int)read_seq[(a_msg[s1_i].read_id * 2 - 1)*seed_len+i]];
@@ -1044,7 +1043,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                     else
                     {
                         for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
-                            (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                            (*line_tri)[f_msg->fa_msg[f1_i].trigger[f_msg->fa_msg[f1_i].next_trigger_n+i]] = 1;
                     }
                     cut_cigar(split_cigar, split_len, a_res);
                 }
@@ -1079,7 +1078,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                     else
                     {
                         for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
-                            (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                            (*line_tri)[f_msg->fa_msg[f1_i].trigger[f_msg->fa_msg[f1_i].next_trigger_n+i]] = 1;
                     }
                     cut_cigar(split_cigar, split_len, a_res);
                 }
@@ -1127,7 +1126,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                             else
                             {
                                 for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
-                                    (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                                    (*line_tri)[f_msg->fa_msg[f1_i].trigger[f_msg->fa_msg[f1_i].next_trigger_n+i]] = 1;
                             }
                             cut_cigar(split_cigar, split_len, a_res);
                         }
@@ -1150,7 +1149,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                         else
                         {
                             for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
-                                (*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+                                (*line_tri)[f_msg->fa_msg[f1_i].trigger[f_msg->fa_msg[f1_i].next_trigger_n+i]] = 1;
                         }    
                         cut_cigar(split_cigar, split_len, a_res);
                     }
@@ -1183,7 +1182,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 					else
 					{
 						for(i = 0; i < f_msg->fa_msg[f1_i].pre_trigger_n; ++i)
-							(*line_tri)[f_msg->fa_msg[f2_i].trigger[f_msg->fa_msg[f2_i].next_trigger_n+i]] = 1;
+							(*line_tri)[f_msg->fa_msg[f1_i].trigger[f_msg->fa_msg[f1_i].next_trigger_n+i]] = 1;
 					}
 
                     //cut aln-cigar into split-cigar on 'nSmH' 
@@ -1398,7 +1397,7 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 			   uint32_t **hash_num, uint64_t ***hash_node, 
 			   int seed_len)
 {
-	//if (strcmp(read_name, "donor1_102509407_102514406_1:0:0_43:0:0_f27/1_1") ==0)// && strcmp(read_name, "donor1_247131951_247231950_0:0:0_989:0:0_f1/1_1")!=0)
+	//if (strcmp(read_name, "chrY_15207237_15217236_2:0:0_94:0:0_27ab/1_1") ==0)// && strcmp(read_name, "donor1_247131951_247231950_0:0:0_989:0:0_f1/1_1")!=0)
 	//	printf("debug");
 	//	return 0;
 	int i, j;

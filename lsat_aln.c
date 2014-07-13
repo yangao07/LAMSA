@@ -2888,14 +2888,14 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, in
             read_seq = read_seq_t->seq.s;
             f_msg[0].last_len = s_msg->last_len[n_read]; f_msg[0].seed_all = s_msg->n_seed[n_read]-s_msg->n_seed[n_read-1];
 
-            //debug XXX
-            if ((s_msg->read_name[n_read])[3] == 'Y')
-            {
+            //if (s_msg->read_name[n_read][3] == 'Y')
+            //{
                 if (frag_dp_path(a_msg, n_seed, seed_len, &f_msg, &line_n, line_tri, &line_m, line, line_end, f_node, _line, _line_end, aln_type))
                     frag_check(s_msg->read_name[n_read], bns, pac, read_prefix, read_seq, s_msg->read_len[n_read], &f_msg, line_n, line_tri, a_msg, &hash_num, &hash_node, seed_len);
                 else
                     lsat_unmap(s_msg->read_name[n_read]);
-            }
+            //}
+
             n_seed = 0;
             ++n_read;
         }
