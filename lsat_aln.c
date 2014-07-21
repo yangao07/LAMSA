@@ -1128,7 +1128,7 @@ int frag_dp_multi_update(frag_dp_node **f_node,
 int frag_mini_dp_multi_line(frag_dp_node **f_node, 
         aln_msg *a_msg, int seed_len, 
         line_node left, line_node right, 
-        line_node **line, int *line_end, 
+        line_node **line, int *line_end, int max_multi,
         int _head,  int _tail, int n_seed)
 {
     //line_node head = ((_head)?left:(line_node){-1,0});
@@ -1137,7 +1137,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node,
     int i, j, k, l, mini_dp_flag = MULTI_FLAG;
     int l_i, max_score, node_i;
     line_node _right, _left;
-    int candi_n; line_node candi[n_seed];
+    int candi_n; line_node candi[max_multi];
 
     if (_head) start = left.x; else start = left.x+1;
     if (_tail) end = right.x; else end = right.x-1;
@@ -1154,7 +1154,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node,
         }
     }
 
-    //store and sort candidate node
+    //store and sort candidate node, the biggest 'max-multi' cand-nodes
     candi_n=0;
     for (i = right.x-1; i > left.x; --i)
     {
@@ -1169,12 +1169,13 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node,
                     if (f_node[i][j].score > f_node[candi[k].x][candi[k].y].score)
                         break;
                 }
-                for (l = candi_n; l > k; --l)
+                if (k >= max_multi) continue;
+                if (candi_n < max_multi) candi_n++;
+                for (l = candi_n-1; l > k; --l)
                 {
                     candi[l] = candi[l-1];
                 }
                 candi[k].x = i; candi[k].y = j;
-                candi_n++;
             }
         }
     }
@@ -1781,7 +1782,7 @@ int frag_dp_line(aln_msg *a_msg,
             int max_score=0, max_dis = 0, l_i = 0;
             line_node max_node = (line_node){-1,0};
             int node_i=0, mini_len, new_l=1;
-            line_node last_n; int multi_l;
+            line_node last_n; int multi_l, max_multi = n_seed > 10 ? 10 : n_seed;
             line_node right, left;
             for (i = n_seed-1; i >= 0; --i)
             {
@@ -1823,7 +1824,7 @@ int frag_dp_line(aln_msg *a_msg,
                     if (last_n.x - line[l_i][node_i-k].x > 2)
                     {
                         //add multi-line
-                        multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, 0, 0, n_seed);
+                        multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, max_multi, 0, 0, n_seed);
                         for (i = 1; i < multi_l; ++i)
                         {
                             if (_line_end[i] > 0)
@@ -1880,7 +1881,7 @@ int frag_dp_line(aln_msg *a_msg,
                         if (last_n.x - line[l_i][node_i-k].x > 2)
                         {
                             //add multi-line
-                            multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, 0, 0, n_seed);
+                            multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, max_multi, 0, 0, n_seed);
                             for (i = 1; i < multi_l; ++i)
                             {
                                 if (_line_end[i] > 0)
@@ -2074,14 +2075,14 @@ int frag_line_BCC(aln_msg *a_msg,
         for (i = 0; i < n_seed; ++i)
         {
             for (j = 0; j < a_msg[i].n_aln; ++j)
-                if ((*f_node)[i][j].dp_flag == MIN_FLAG)
-                    fprintf(stdout, "node:(%d %d)\t%d\t%d %d %d\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tnode_n:%d\n", i, j, a_msg[i].read_id, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, a_msg[i].at[j].offset, (*f_node)[i][j].from.x, (*f_node)[i][j].from.y, (*f_node)[i][j].score, FRAG_CON_STR[(*f_node)[i][j].match_flag], (*f_node)[i][j].dp_flag, (*f_node)[i][j].node_n);
+                //if ((*f_node)[i][j].dp_flag == MIN_FLAG)
+                    fprintf(stdout, "node:(%d %d)\t%d\t%d %d %lld\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tnode_n:%d\n", i, j, a_msg[i].read_id, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, (long long)a_msg[i].at[j].offset, (*f_node)[i][j].from.x, (*f_node)[i][j].from.y, (*f_node)[i][j].score, FRAG_CON_STR[(*f_node)[i][j].match_flag], (*f_node)[i][j].dp_flag, (*f_node)[i][j].node_n);
         }*/
         //find start node of backtrack
         int max_score=0, max_dis = 0, l_i = 0;
         line_node max_node = (line_node){-1,0};
         int node_i=0, mini_len, new_l=1;
-        line_node last_n; int multi_l;
+        line_node last_n; int multi_l, max_multi = n_seed > 10 ? 10 : n_seed; //XXX
         line_node right, left;
         for (i = n_seed-1; i >= 0; --i)
         {
@@ -2134,7 +2135,7 @@ int frag_line_BCC(aln_msg *a_msg,
                     tri_x = line[l_i][node_i-k].x;
                     tri_y = line[l_i][node_i-k].y;
                     //add multi-line
-                    multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, 0, 0, n_seed);
+                    multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, max_multi, 0, 0, n_seed);
                     for (i = 1; i < multi_l; ++i)
                     {
                         if (_line_end[i] > 0)
@@ -2178,7 +2179,7 @@ int frag_line_BCC(aln_msg *a_msg,
                     if (last_n.x - line[l_i][node_i-k].x > 2)
                     {
                         //add multi-line
-                        multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, 0, 0, n_seed);
+                        multi_l = frag_mini_dp_multi_line(*f_node, a_msg, seed_len, line[l_i][node_i-k], last_n, _line, _line_end, max_multi, 0, 0, n_seed);
                         for (i = 1; i < multi_l; ++i)
                         {
                             if (_line_end[i] > 0)
@@ -2218,7 +2219,7 @@ int frag_line_BCC(aln_msg *a_msg,
         {
             for (j = 0; j < a_msg[i].n_aln; ++j)
             {
-                fprintf(stdout, "node:(%d %d)\t%d\t%d %d %d\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tBK-flag:%d\tnode_n:%d\n", i, j, a_msg[i].read_id, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, a_msg[i].at[j].offset, (*f_node)[i][j].from.x, (*f_node)[i][j].from.y, (*f_node)[i][j].score, FRAG_CON_STR[(*f_node)[i][j].match_flag], (*f_node)[i][j].dp_flag, (*f_node)[i][j].backtrack_flag, (*f_node)[i][j].node_n);
+                fprintf(stdout, "node:(%d %d)\t%d\t%d %d %lld\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tBK-flag:%d\tnode_n:%d\n", i, j, a_msg[i].read_id, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, (long long)a_msg[i].at[j].offset, (*f_node)[i][j].from.x, (*f_node)[i][j].from.y, (*f_node)[i][j].score, FRAG_CON_STR[(*f_node)[i][j].match_flag], (*f_node)[i][j].dp_flag, (*f_node)[i][j].backtrack_flag, (*f_node)[i][j].node_n);
             }
         }*/
         line_end[l_i] = node_i;
@@ -3024,7 +3025,7 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
 #ifdef BWA_SEED
         strcat(seed_result, ".seed.bwa.sam");
 #else
-        strcat(seed_result, ".seed.sam.out.0");
+        strcat(seed_result, ".seed.out.0");
 #endif
 #endif
     }

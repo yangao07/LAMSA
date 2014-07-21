@@ -856,6 +856,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			uint32_t *cigar=0;
 			//XXX score check
 			score = ksw_global(len2, seq2, len1, seq1, 5, bwasw_sc_mat, 5, 2, b, &cigar_len, &cigar);
+            //printf("score1: %d\n", score);
 			merge_cigar(f_msg, f_i, cigar, cigar_len, len1, len2, bns, pac, read_seq);
 			merge_cigar(f_msg, f_i, a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len, seed_len+a_msg[seed_i].at[seed_aln_i].len_dif, seed_len, bns, pac, read_seq);//merge seed to frag
 			last_i = seed_i;
@@ -878,6 +879,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			uint32_t *cigar=0;
 			//XXX score check
 			score = ksw_global(len2, seq2, len1, seq1, 5, bwasw_sc_mat, 5, 2, b, &cigar_len, &cigar);
+            //printf("score2: %d\n", score);
 			//merge_cigar
 			merge_cigar(f_msg, f_i, cigar, cigar_len, len1, len2, bns, pac, read_seq);
 			merge_cigar(f_msg, f_i, a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len, seed_len+a_msg[seed_i].at[seed_aln_i].len_dif, seed_len, bns, pac, read_seq);//merge seed to frag
@@ -1035,6 +1037,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 				pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &split_ref_len, 1/*+-*/, &N_flag, &N_len, split_ref_seq);
 				if (split_delete_map(split_cigar, split_len, split_m, split_read_seq, split_read_len, split_ref_seq, split_ref_len, ref_offset, hash_len, hash_step, hash_num, hash_node, key_len, hash_size) == 1)
                 {
+                    //printf("del-score: 1\t"); printcigar(stdout, *split_cigar, *split_len); printf("\n");
                     if (nsrand == 1)
                     {
                         for(i = 0; i < f_msg->fa_msg[f2_i].pre_trigger_n; ++i)
@@ -1047,6 +1050,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                     }
                     cut_cigar(split_cigar, split_len, a_res);
                 }
+                //else {printf("del-score: 0\t"); printcigar(stdout, *split_cigar, *split_len); printf("\n");}
             }
             //else	//dis > split_read_len
         }
@@ -1104,6 +1108,7 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
                         uint32_t *k_cigar=0;
                         int k_clen;
                         int score = ksw_global(split_read_len, split_read_seq, split_ref_len, split_ref_seq, 5, bwasw_sc_mat, 5, 2, abs(split_ref_len-split_read_len)+3, &k_clen, &k_cigar);
+                        //printf("score3: %d\n", score);
                         *split_len = 0;
                         _push_cigar(split_cigar, split_len, split_m, k_cigar, k_clen);
                         //fprintf(stderr, "[frag check] split ref is too short: %d (<= key_len, 2).\n", split_ref_len);
@@ -1214,13 +1219,14 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 	free(split_read_seq); free(split_ref_seq);
 }
 
-int check_cigar(uint32_t *cigar, int cigar_len)
+int check_cigar(uint32_t *cigar, int cigar_len, char *read_name, int read_len)
 {
 	int i;
 	int mid[5] = {0, 0, 0, 0, 0};
 	for (i = 0; i < cigar_len; ++i)
 		mid[(int)(cigar[i]&0xf)] += (cigar[i]>>4);
 	fprintf(stdout, "\t%d M, %d I, %d D, %d S\t", mid[0], mid[1], mid[2], mid[4]);
+    if (mid[0] + mid[1] + mid[4] != read_len) { fprintf(stderr, "[cigar length error]: %s cigar error\t", read_name); printcigar(stderr, *cigar, cigar_len); }
 	return 0;
 }
 
@@ -1538,7 +1544,7 @@ int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_pr
 	//if (a_res.cur_res_n > 1) fprintf(stdout, "multi\t");
 	for (i = 0; i < a_res.cur_res_n; ++i)
 	{
-		fprintf(stdout, "%s\t%d\t%c\t%lld\t", read_name, a_res.la[i].chr, "-++"[a_res.la[i].nsrand], (long long)a_res.la[i].offset); printcigar(stdout, a_res.la[i].cigar, a_res.la[i].cigar_len); check_cigar(a_res.la[i].cigar, a_res.la[i].cigar_len); 
+		fprintf(stdout, "%s\t%d\t%c\t%lld\t", read_name, a_res.la[i].chr, "-++"[a_res.la[i].nsrand], (long long)a_res.la[i].offset); printcigar(stdout, a_res.la[i].cigar, a_res.la[i].cigar_len); check_cigar(a_res.la[i].cigar, a_res.la[i].cigar_len, read_name, read_len); 
 		fprintf(stdout, "\n"); 
 	}
 	free(seq1); free(seq2); free(cigar);

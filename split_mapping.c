@@ -2361,7 +2361,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 	//hash map, restore hash map result
 	{
 		len_a[0] = 1;		//for head node
-		for (i = 0; i < ref_len; ++i) if (ref_seq[i] > 3) {free(start_a); free(len_a); return 0;}
+		for (i = 0; i < ref_len; ++i) if (ref_seq[i] > 3) {free(start_a); free(len_a); return 0;} // XXX 'N' in ref
 		for (i = 0; i <= ref_len - hash_len; i+=hash_step)
 		{
 			ref_query = ref_seq + i;
