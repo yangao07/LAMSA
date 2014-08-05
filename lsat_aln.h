@@ -100,6 +100,8 @@ typedef struct {	//全部read包含seed数目信息
     int seed_max;   //contig中分割成短read的数目最大值	
     int read_max_len;    //max length of read
 	int read_m; 
+    int *seed_len;
+    int *seed_inv;
 } seed_msg;
 
 typedef struct {
@@ -191,6 +193,48 @@ typedef struct {
     int trigger_m;
 	int *trigger;	//next...pre
 } frag_dp_node;
+
+typedef struct {
+    // read msg
+    char read_name[1024];
+    int read_len;
+
+    // seed msg
+    int seed_len;   //length of seed
+    int seed_inv;   //interval between adjacent seeds
+    int seed_step;  //sum of len and inv
+    int per_aln_n;
+    int last_len;
+
+    int seed_all;    //number of all the seeds
+    int seed_out;   //number of seeds that are filtered out for next step
+
+    // aln para
+    int min_thd;
+    int frag_score_table[10];
+        //frag_score_table[10] = {
+        //      1,  //F_MATCH
+        //      1,  //F_SPLIT_MATCH
+        //      1,  //F_MISMATCH
+        //     -1,  //F_LONG_MISMATCH
+        //     -3,  //F_INSERT
+        //     -3,  //F_DELETE
+        //     -3,  //F_CHR_DIF
+        //     -3,  //F_REVERSE
+        //     -6,  //F_UNCONNECT
+        //     -6,  //F_UNMATCH
+        //};
+    int match_dis; int del_thd; int ins_thd;
+} lsat_aln_per_para;    //specially for every read
+//APP
+
+typedef struct {
+    int SV_len_thd;
+    int seed_max;
+    int result_multi_max;
+    int hash_len; int hash_key_len;
+} lsat_aln_para;        //for all reads
+//AP
 
 int lsat_aln(int argc, char* argv[]);
 

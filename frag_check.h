@@ -40,10 +40,10 @@ typedef struct {
 	int chr;
 	int srand;
 
-	int64_t cigar_ref_start;	//frag's cigar start of ref, 1-based
-	int64_t cigar_ref_end;		
-	int64_t cigar_read_start;	//frag's cigar start of read, 1-based
-	int64_t cigar_read_end;
+	int64_t cigar_ref_start;	//frag's cigar start of ref, 1-based    XXX
+	int64_t cigar_ref_end;		                                    //  XXX
+	int64_t cigar_read_start;	//frag's cigar start of read, 1-based   XXX
+	int64_t cigar_read_end;                                         //  XXX 
 	uint32_t *cigar;		//frag's cigar
 	int cigar_len;			//frag's cigar length
 	int cigar_max;			//size of cigar[]
@@ -98,15 +98,22 @@ extern char nst_nt4_table[256];
 void _push_cigar(uint32_t **cigar, int *cigar_len, int *cigar_m, uint32_t *_cigar, int _cigar_len);
 void frag_init_msg(frag_msg *f_msg, int frag_max);
 void frag_free_msg(frag_msg *f_msg, int line_num);
-int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i, int seed_len);//FLAG 0: start/1:end / 2:seed
+int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i);//FLAG 0: start/1:end / 2:seed
 int frag_trigger_set(frag_dp_node f_node, frag_msg *f_msg, int frag_i);
 int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg);
-int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_prefix, 
+/*int frag_check(char *read_name, bntseq_t *bns, uint8_t *pac, const char *read_prefix, 
 			   char *read_seq, int read_len, 
 			   frag_msg **f_msg, int line_n, int *line_tri, 
 			   aln_msg *a_msg, 
 			   uint32_t **hash_num, uint64_t ***hash_node, 
-			   int seed_len);
+			   int seed_len);*/
+int frag_check(aln_msg *a_msg, frag_msg **f_msg,
+               bntseq_t *bns, uint8_t *pac, const char *read_prefix,
+               char *read_seq,
+               lsat_aln_per_para *APP, lsat_aln_para *AP,
+               int line_n, int *line_tri,
+               uint32_t **hash_num, uint64_t ***hash_node);
+
 void printcigar(FILE *outp, uint32_t *cigar, int cigar_len);
 
 #define MAXOFTWO(a, b) ((a) > (b) ? (a) : (b))
