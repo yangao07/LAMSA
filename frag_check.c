@@ -1005,11 +1005,14 @@ void split_mapping(uint32_t **split_cigar, int *split_len, int *split_m,
 	int hash_step = HASH_STEP;
 	int N_flag, N_len;
 
-	split_read_len = (a_msg[s2_i].read_id-a_msg[s1_i].read_id) * APP->seed_step - APP->seed_len;
-	split_read_seq = (uint8_t*)malloc(split_read_len * sizeof(uint8_t));
+	//split_read_len = (a_msg[s2_i].read_id-a_msg[s1_i].read_id) * APP->seed_step - APP->seed_len;
+	//split_read_seq = (uint8_t*)malloc(split_read_len * sizeof(uint8_t));
 
-	if (nsrand == 1) for (i = 0; i < split_read_len; ++i) split_read_seq[i] = nst_nt4_table[(int)read_seq[a_msg[s1_i].read_id*APP->seed_step-APP->seed_inv+i]];
-    else for (i = 0; i < split_read_len; ++i) split_read_seq[i] = nst_nt4_table[(int)read_seq[a_msg[s1_i].read_id*APP->seed_step + i]];//'-' srand	
+	//if (nsrand == 1) for (i = 0; i < split_read_len; ++i) split_read_seq[i] = nst_nt4_table[(int)read_seq[a_msg[s1_i].read_id*APP->seed_step-APP->seed_inv+i]];
+    //else for (i = 0; i < split_read_len; ++i) split_read_seq[i] = nst_nt4_table[(int)read_seq[a_msg[s1_i].read_id*APP->seed_step + i]];//'-' srand	
+
+    int bd;
+    get_read_intv(split_read_seq, read_seq, a_msg, s1_i, s1_aln_i, s2_i, s2_aln_i, &bd, APP);
 
 	//check SV-type
 	if (a_msg[s1_i].at[s1_aln_i].chr == a_msg[s2_i].at[s2_aln_i].chr &&
