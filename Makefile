@@ -5,7 +5,7 @@ OBJS=		main.o build_ref.o bntseq.o lsat_aln.o frag_check.o split_mapping.o exten
 PROG=		lsat
 LIB=		-lm -lz
 #MACRO=		-D __DEBUG__
-MACRO=		-D SAM_IN #-D BWA_SEED
+MACRO=		-D SAM_IN -D BWA_SEED
 #MACRO=		-D PLAIN_IN
 .SUFFIXES:.c .o
 
