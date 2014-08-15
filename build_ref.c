@@ -14,64 +14,63 @@
 #include "bntseq.h"
 #include "build_ref.h"
 
-int soap_bulid(char *prefix, char *path)
+
+int lsat_index_usage(void)
 {
-	if (prefix != 0 && path != NULL)
-	{
-		//soap2-dp-bulid prefix
-		char cmd[1024];
-		
-		strcpy(cmd, path); strcat(cmd, "/soap2-dp-builder "); strcat(cmd, prefix);
-        strcat(cmd, " > "); strcat(cmd, prefix), strcat(cmd, ".build");
-		fprintf(stderr, "Executing soap2-dp-builder ... \n");
-		fprintf(stderr, "%s", cmd);
-		if (system(cmd) != 0 )
-			exit(-1);
-		fprintf(stderr, " done.\n");
-		return 1;
-	}
-	return 0;
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Usage:   lsat index [option] <ref.fa>\n");
+    fprintf(stderr, "                    bulid soap2-dp index for ref.fa\n\n");
+    fprintf(stderr, "Option:  \n");
+    fprintf(stderr, "         -i [INT]     Index program, <bwa(1)> or <soap2-dp(2)>. [Def=1]\n");
+    return 1;
 }
+
+int bwa_build(char *prefix)
+{
+    char cmd[1024];
+    sprintf(cmd, "./bwa_index.sh %s", prefix);
+    fprintf(stderr, "[lsat_index] Executing bwa index ... ");
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, bwa index exit abnormally.\n"); exit(0); }
+    fprintf(stderr, "done.\n");
+    return 0;
+}
+
+int soap_bulid(char *prefix)
+{
+    char cmd[1024];
+    sprintf(cmd, "./soap2dp_index.sh %s", prefix);
+    fprintf(stderr, "[lsat_index] Executing soap2-dp-builder ... ");
+    if (system(cmd) != 0 ) { fprintf(stderr, "\n[lsat_aln] Indexing undone, soap2-dp-builder exit abnormally.\n"); exit(0);}
+    fprintf(stderr, " done.\n");
+    return 0;
+}
+
 int lsat_index(int argc, char *argv[])
 {
 	char *prefix=0;
-	char path[1024]="\0";
-	int c;
+	int type=1, c;
 	//XXX clock_t t;  
 	
-	while ((c = getopt(argc, argv, "s:")) >= 0)
+	while ((c = getopt(argc, argv, "i:")) >= 0)
 	{
 		switch (c)
 		{
-			case 's':
-				strcpy(path, optarg);
-				break;
-			default:
-				return 1;
+            case 'i':
+                type = atoi(optarg);
+                if (type > 2 || type < 1) return lsat_index_usage();
+                break;
+            default:
+                return lsat_index_usage();
 		}
 	}
 
-	if (optind + 1 > argc)
-	{
-		fprintf(stderr, "\n");
-		fprintf(stderr, "Usage:   lsat index [-s] <ref.fa>\n");
-		fprintf(stderr, "                    bulid soap2-dp index for ref.fa\n\n");
-		fprintf(stderr, "Option:  -s STR     soap2-dp's path. [Def=\"./soap2-dp/\"]\n\n");
-		return 1;
-	}
-	prefix = strdup (argv[optind]);
-	if (strlen(path) == 0)
-	{
-		if (getcwd(path, sizeof(path)) == NULL)
-		{
-			perror("getcwd error");
-			exit(-1);
-		}
-		strcat(path, "/soap2-dp");
-	}
+	if (optind + 1 > argc) return lsat_index_usage();
+	prefix = strdup(argv[optind]);
 
-	//soap2-dp-builder
-	soap_bulid(prefix, path);
+	if (type==1) bwa_build(prefix);
+    else if(type==2) soap_bulid(prefix);
+    else return lsat_index_usage();
+
 
 	//lsat_fa2pac
 	gzFile fp = gzopen(prefix, "r");

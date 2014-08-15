@@ -3,16 +3,18 @@
 
 #include <stdint.h>
 #include "kstring.h"
-#define READ_INIT_MAX 1000
-//#define SEED_INIT_MAX 1000
 
-#define SEED_LEN 100
+#define READ_MAX_NUM 1000
+//aln_para
 #define PER_ALN_N 100
+#define SV_MAX_LEN 10000
+#define RES_MAX_N 10
 
-#define HASH_MIN_LEN 1
+//aln_per_para
 
-#define EDIT_THS 3
 
+/* seeds' connect relation */
+//                    0123456789
 #define FRAG_CON_STR "MPXLIDCRUS"
 #define F_MATCH 0
 #define F_SPLIT_MATCH 1
@@ -31,59 +33,37 @@
 #define F_TRI_DELETE 13
 
 
-#define F_SV_PEN 2
-#define F_MATCH_SCORE 1
-
-// BCC score principle
-#define F_MATCH_SCORE 1
-#define F_INDEL_PEN -2
-#define F_UNCON_PEN -3
-
-#define DP_MIN 1
-#define DP_MULTI 2
-
+// backtrack flag
 #define DP_BACK_NONE 0
 #define DP_BACK_PEAK 1
 #define DP_BACK_LOCATED 2
-
-#define DEL_THD 100000	//XXX
-#define THRSHOLD 50
-
-#define PRICE_DIF_CHR 100000	//相邻read比对到不同chr上的路径代价
-#define PRICE_LONG_DEL 5000
-#define PRICE_SKIP	20
 
 #define FRAG_START 0
 #define FRAG_SEED 1
 #define FRAG_END 2
 
-#define adjest(dis) (dis>THRSHOLD?THRSHOLD:dis)
-
 #define SOAP2_DP_DIR "./soap2-dp"
 
-//copy from samtools-0.1.19
+/* CIGAR operations */
+/* copy from samtools-0.1.19 */
 #define CIGAR_STR "MIDNSHP=XB"
-/*
-  CIGAR operations.
- */
-/*! @abstract CIGAR: M = match or mismatch*/
+/* M: match or mismatch */
 #define CMATCH      0
-/*! @abstract CIGAR: I = insertion to the reference */
+/* I: insertion to the reference */
 #define CINS        1
-/*! @abstract CIGAR: D = deletion from the reference */
+/* D: deletion from the reference */
 #define CDEL        2
-/*! @abstract CIGAR: N = skip on the reference (e.g. spliced alignment) */
+/* N: skip on the reference (e.g. spliced alignment) */
 #define CREF_SKIP   3
-/*! @abstract CIGAR: S = clip on the read with clipped sequence
-  present in qseq */
+/* S: clip on the read with clipped sequence present in qseq */
 #define CSOFT_CLIP  4
-/*! @abstract CIGAR: H = clip on the read with clipped sequence trimmed off */
+/* H: clip on the read with clipped sequence trimmed off */
 #define CHARD_CLIP  5
-/*! @abstract CIGAR: P = padding */
+/* P: padding */
 #define CPAD        6
-/*! @abstract CIGAR: equals = match */
+/* =: match */
 #define CEQUAL      7
-/*! @abstract CIGAR: X = mismatch */
+/* X: mismatch */
 #define CDIFF       8
 #define CBACK       9
 
@@ -92,12 +72,13 @@
 
 
 typedef struct {	//全部read包含seed数目信息
-    int n_read;		//获取的read总数目			
+    int read_all;		//获取的read总数目			
 	char **read_name;
-    int *n_seed;	//存放每条read的seed数目    index from 1
+    int *seed_all;	//存放每条read的seed数目    index from 1
     int *read_len;	//length of read
+    int *read_level;//level of read length
 	int *last_len;	//last_len                  index from 1
-    int seed_max;   //contig中分割成短read的数目最大值	
+    int seed_max;   //read中分割成的seed数目最大值	
     int read_max_len;    //max length of read
 	int read_m; 
     int *seed_len;
@@ -110,7 +91,7 @@ typedef struct {
 	int8_t nsrand;
 	//int8_t edit_dis;
 
-	uint32_t *cigar;
+	int32_t *cigar;
 	int cigar_len;  //default: 7 for 3-ed
 	int len_dif;	//length difference between ref and read
 	int cmax;
@@ -142,12 +123,6 @@ typedef struct {
 	int sam_n;
 	int sam_m;
 } sam_msg;
-
-/*typedef struct {
-	int same;		//
-	int8_t n_aln;	//init:0
-	aln_t *at;
-} hash_aln_msg;*/
 
 typedef struct {
 	int32_t x;
@@ -198,41 +173,45 @@ typedef struct {
     // read msg
     char read_name[1024];
     int read_len;
+    int read_level; //level of read length
 
     // seed msg
     int seed_len;   //length of seed
     int seed_inv;   //interval between adjacent seeds
     int seed_step;  //sum of len and inv
-    int per_aln_n;
     int last_len;
 
-    int seed_all;    //number of all the seeds
+    int seed_all;   //number of all the seeds
+    int per_aln_n;  //number of seeds' aln-results
     int seed_out;   //number of seeds that are filtered out for next step
 
     // aln para
-    int min_thd;
-    int frag_score_table[10];
-        //frag_score_table[10] = {
-        //      1,  //F_MATCH
-        //      1,  //F_SPLIT_MATCH
-        //      1,  //F_MISMATCH
-        //     -1,  //F_LONG_MISMATCH
-        //     -3,  //F_INSERT
-        //     -3,  //F_DELETE
-        //     -3,  //F_CHR_DIF
-        //     -3,  //F_REVERSE
-        //     -6,  //F_UNCONNECT
-        //     -6,  //F_UNMATCH
-        //};
+    int min_thd;    //minimum number of seed's aln-result for first round's DP (min-len)
+    int *frag_score_table;
+        /*frag_score_table[10] = {
+              1,    F_MATCH
+              1,    F_SPLIT_MATCH
+              1,    F_MISMATCH
+             -1,    F_LONG_MISMATCH
+             -3,    F_INSERT
+             -3,    F_DELETE
+             -3,    F_CHR_DIF
+             -3,    F_REVERSE
+             -6,    F_UNCONNECT
+             -6,    F_UNMATCH
+        };*/
     int match_dis; int del_thd; int ins_thd;
 } lsat_aln_per_para;    //specially for every read
 //APP
 
 typedef struct {
+    int aln_type;
+
+    int per_aln_m;  //max number of seeds' aln-results
     int SV_len_thd;
-    int seed_max;
-    int result_multi_max;
-    int hash_len; int hash_key_len;
+    int res_mul_max;//max number of read's aln-results
+
+    int hash_len, hash_key_len, hash_step;
 } lsat_aln_para;        //for all reads
 //AP
 

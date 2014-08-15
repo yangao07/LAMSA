@@ -124,20 +124,8 @@ int hash_calcu(int *key_int, int *kmer_int, uint8_t *seed, int hash_len, int key
 {
 	int i;
 	(*key_int) = (*kmer_int) = 0;
-	for (i = 0; i < key_len; ++i) 
-	{
-		if (seed[i] >= (1 << key_len))
-			return 1;
-		(*key_int) = (*key_int) << 2 | (int)seed[i];
-	}
-	for (; i < hash_len; ++i) 
-	{
-		if (seed[i] >= (1 << key_len))
-			return 1;
-		(*kmer_int) = (*kmer_int) << 2 | (int)seed[i];	
-	}
-	//if (*key_int > 16) {fprintf(stderr, "[hash init] Error: key_int %d\thash_len: %d\tkey_len: %d\nseed:\t", *key_int, hash_len, key_len); for (i = 0; i < hash_len; ++i) fprintf(stderr, "%d",seed[i]); fprintf(stderr, "\n");exit(-1); }
-	
+	for (i = 0; i < key_len; ++i) (*key_int) = (*key_int) << 2 | hash_nt4_table[(int)seed[i]];
+	for (; i < hash_len; ++i) (*kmer_int) = (*kmer_int) << 2 | hash_nt4_table[(int)seed[i]];	
 	return 0;
 }
 
@@ -278,8 +266,6 @@ int init_hash(uint8_t *read_seq, int read_len, int hash_len,
 	int i;
 	uint8_t *hash_seq;
 
-	//check 'N', repalce by 'G'
-	for (i = 0; i < read_len; ++i) if (read_seq[i] > 3) read_seq[i] = 2;
 	for (i = 0; i < hash_size; ++i)
 		(*hash_num)[i] = 0;
 	for (i = 0; i <= read_len-hash_len; ++i)	//create hash index
@@ -298,10 +284,6 @@ int init_hash(uint8_t *read_seq, int read_len, int hash_len,
 		hash_seq = read_seq+i;
 		init_hash_core(hash_seq, i, hash_len, key_len, hash_size, *hash_num, hash_node, hash_node_num, hash_pos);
 	}
-    
-	//printf("hash_pos:\n");
-	//for (i = 0; i < read_len; ++i) printf("%d ", (*hash_pos)[i]);
-	//printf("\n");
 	return 0;
 }
 
@@ -1449,7 +1431,7 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset,
 
 //return the overlap len of two nodes 
 //return value >= 0
-int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right, int *clen, uint32_t **cigar)
+int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right, int *clen, int32_t **cigar)
 {
 	int dlen, ilen;
 	dlen = ref_left - ref_right + 1;
@@ -1927,8 +1909,8 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
                             printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
                         }
                     }
-                }*/
-				/*{
+                }
+				{
 					printf("min-update\n");
 					for (i = 0; i < node_i; ++i)
 						printf("%d: from(%d %d) ref_i %d offset %d score %d node_n %d match_f %d dp_f %d\n", i, h_node[line[i].x][line[i].y].from.x,h_node[line[i].x][line[i].y].from.y, h_node[line[i].x][line[i].y].ref_i, h_node[line[i].x][line[i].y].offset, h_node[line[i].x][line[i].y].score, h_node[line[i].x][line[i].y].node_n, h_node[line[i].x][line[i].y].match_flag, h_node[line[i].x][line[i].y].dp_flag);
@@ -2340,13 +2322,13 @@ int hash_split_map(uint32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_
 	return split_clen;
 }
 */
-int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
+int hash_split_map(int32_t **split_cigar, int *split_clen, int *split_m,
 				   uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 				   int hash_len, int hash_step, int key_len, 
 				   uint32_t *hash_num, uint64_t **hash_node, int **hash_node_num, int32_t *hash_pos, 
 				   int _head, int _tail)
 {
-	int i, res=0;
+	int i, res=0;   //res==1 -> cut_cigar 
 	uint8_t *ref_query;
 	int q_key_int, q_kmer_int, node_i;
 
@@ -2361,7 +2343,6 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 	//hash map, restore hash map result
 	{
 		len_a[0] = 1;		//for head node
-		for (i = 0; i < ref_len; ++i) if (ref_seq[i] > 3) {free(start_a); free(len_a); return 0;} // XXX 'N' in ref
 		for (i = 0; i <= ref_len - hash_len; i+=hash_step)
 		{
 			ref_query = ref_seq + i;
@@ -2383,9 +2364,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 		len_a[i/hash_step + 1] = 1;	//for tail node
 	}
 	//hash-node DP, select and arrange seeds's order on ref
-		line_node *line;
-		hash_dp_node **h_node;
-		int m_len;
+		line_node *line; hash_dp_node **h_node; int m_len;
 	{
 		line = (line_node*)malloc(hash_seed_n * sizeof(line_node));	//store the path of DP result
 		h_node = (hash_dp_node **)malloc((hash_seed_n + 2) * sizeof(hash_dp_node*));
@@ -2405,12 +2384,12 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 	}
 
 	int _q_len, _t_len, _clen, _b_w, _score; 
-	uint32_t *_cigar=0;
-	if (m_len > 0)
+	int32_t *_cigar=0;
+    if (m_len > 0)
 	{
 		//fill blank with generated SV and SW, return the whole cigar
-			uint32_t *g_cigar;
-			g_cigar = (uint32_t*)malloc(sizeof(uint32_t));
+			int32_t *g_cigar;
+			g_cigar = (int32_t*)malloc(sizeof(int32_t));
 			int tail_in, head_in;
 			//XXX hash read len == 0 XXX
 		//1. fix the region between left bound and first line
@@ -2455,7 +2434,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 					{
 						res = 1;
                         //free(_cigar);
-                        uint32_t *k_cigar=0;
+                        int32_t *k_cigar=0;
                         int k_clen = 0;
 						if (ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
                         {
@@ -2490,6 +2469,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 					g_cigar[0] = (h_node[line[i].x][line[i].y].ref_i - h_node[line[start_i].x][line[start_i].y].ref_i + hash_len - tail_in - overlap) << 4 | CMATCH;
 					_clen = 1;
 					_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
+                    //XXX
                     if (g_cigar[0] >>4 > 10000) { fprintf(stderr, "match both tail:%d overlap: %d\t", tail_in, overlap); printcigar(stderr, g_cigar, _clen); printf("\n"); }
 
 					if (i == m_len-1) break;
@@ -2522,7 +2502,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 						if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100)
 						{
 							res = 1;
-                            uint32_t *k_cigar=0;
+                            int32_t *k_cigar=0;
                             int k_clen;
                             if (ksw_both_extend(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset - head_in, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
                             {
@@ -2574,7 +2554,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
                     if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100)
                     {
                         res = 1;
-                        uint32_t *k_cigar=0;
+                        int32_t *k_cigar=0;
                         int k_clen = 0;
                         if (ksw_both_extend(_q_len, read_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset+hash_len - head_in, _t_len, ref_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
                         {
@@ -2605,7 +2585,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 			if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100)
 			{
 				res = 1;
-                uint32_t *k_cigar=0;
+                int32_t *k_cigar=0;
                 int k_clen = 0;
                 if (ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
                 {
@@ -2617,6 +2597,7 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 			_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 			free(_cigar);
 		}
+        //_head or _tail -> left or right
 	}
 //_FREE_V:
 	for (i = 0; i < hash_seed_n+2; ++i) free(h_node[i]);
@@ -2851,29 +2832,20 @@ int hash_split_map(uint32_t **split_cigar, int *split_clen, int *split_m,
 
 //XXX hash_node: use struct?
 //insertion length = read_len - ref_len
-int split_insert_map(uint32_t **res_cigar, int *res_len, int *res_m,
+int split_indel_map(int32_t **res_cigar, int *res_len, int *res_m,
 					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
 					 int64_t ref_offset, 
 					 int hash_len, int hash_step, 
 					 uint32_t **hash_num, uint64_t ***hash_node, 
 					 int key_len, int hash_size)
 {
-	int32_t *hash_pos = (int32_t*)malloc(read_len * sizeof(int32_t));
-    int **hash_node_num;
-	/*
-		for (i = 0; i < read_len; ++i) fprintf(stdout, "%d", read_seq[i]);
-		fprintf(stdout, "\n");
-		for (i = 0; i < ref_len; ++i) fprintf(stdout, "%d", ref_seq[i]);
-		fprintf(stdout,"\n");*/
+	int32_t *hash_pos = (int32_t*)malloc(read_len * sizeof(int32_t)); int **hash_node_num;
 	//init of hash table
 	init_hash(read_seq, read_len, hash_len, hash_num, hash_node, &hash_node_num, &hash_pos, key_len, hash_size);
 
 	int res;
 	//for multi-breakpoints
 	res = hash_split_map(res_cigar, res_len, res_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_node_num, hash_pos, 1, 1);
-	//printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");
-	
-    //printf("hash ins:\t"); printcigar(*res_cigar, *res_len); printf("\n");
 	free(hash_pos);
     int i; for (i = 0; i < hash_size; ++i) free(hash_node_num[i]);
     free(hash_node_num);
@@ -2881,37 +2853,7 @@ int split_insert_map(uint32_t **res_cigar, int *res_len, int *res_m,
 	return res;
 }
 
-//deletion length = ref_len - read_len
-int split_delete_map(uint32_t **res_cigar, int *res_len, int *res_m,
-					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
-					 int64_t ref_offset, 
-					 int hash_len, int hash_step, 
-					 uint32_t **hash_num, uint64_t ***hash_node, 
-					 int key_len, int hash_size)
-{
-	int32_t *hash_pos = (int32_t*)malloc(read_len * sizeof(int32_t));
-    int **hash_node_num;
-	/* 
-		for (i = 0; i < read_len; ++i) fprintf(stdout, %d", read_seq[i]);
-		fprintf(stdout, "\n");
-		for (i = 0; i < ref_len; ++i) fprintf(stdout, "%d", ref_seq[i]);
-		fprintf(stdout, "\n");*/
-	//init of hash table
-	init_hash(read_seq, read_len, hash_len, hash_num, hash_node, &hash_node_num, &hash_pos, key_len, hash_size);
-
-	int res;
-	//for multi-breakpoints
-	res = hash_split_map(res_cigar, res_len, res_m, ref_seq, ref_len, read_seq, read_len, hash_len, hash_step, key_len, *hash_num, *hash_node, hash_node_num, hash_pos, 1, 1);
-	/*printcigar(*res_cigar, *res_len); fprintf(stdout,"\n");*/
-
-	//printf("hash del:\t"); printcigar(*res_cigar, *res_len); printf("\n");
-	free(hash_pos);
-    int i; for (i = 0; i < hash_size; ++i) free(hash_node_num[i]);
-    free(hash_node_num);
-	return res;
-}
-
-int hash_right_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
+int hash_right_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
 						 uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 						 uint32_t **hash_num, uint64_t ***hash_node, 
 						 int hash_len, int hash_key, int hash_step)
@@ -2947,7 +2889,7 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 		int tlen = read_len -readINcigar + ((hash_len+read_len-readINcigar)*bwasw_sc_mat[0]-5-1)/2;
 		tlen = tlen < (ref_len - refINcigar) ? tlen : (ref_len - refINcigar);
 		int read_end, ref_end, n_cigar_;
-		uint32_t *cigar_= NULL;
+		int32_t *cigar_= NULL;
 		//
 		//printf("ref:\t");for (i = 0; i < tlen; ++i) printf("%c", "ACGT"[(ref_seq+refINcigar)[i]]);printf("\n");
 		//printf("read:\t");for (i =0; i < qlen; ++i) printf("%c", "ACGT"[(read_seq+readINcigar)[i]]);printf("\n");
@@ -2969,13 +2911,13 @@ int hash_right_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 	return res;
 }
 
-int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
+int hash_left_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
 						uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 						uint32_t **hash_num, uint64_t ***hash_node, 
 						int hash_len, int hash_key, int hash_step)
 {
 	int hash_cigar_len=0, hash_cigar_m=100;
-	uint32_t *hash_cigar = (uint32_t*)malloc(hash_cigar_m * sizeof(uint32_t));;
+	int32_t *hash_cigar = (int32_t*)malloc(hash_cigar_m * sizeof(int32_t));;
 	int32_t *hash_pos = (int32_t*)malloc(read_len * sizeof(int32_t));
 	(*cigar_len) = 0;
 	int hash_size = (int)pow((double)NT_N, (double)hash_key);	
@@ -3004,7 +2946,7 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 		uint8_t *qseq = (uint8_t*)malloc(qlen * sizeof(uint8_t));
 		uint8_t *tseq = (uint8_t*)malloc(tlen * sizeof(uint8_t));
 		int read_end, ref_end, n_cigar_;
-		uint32_t *cigar_= 0;
+		int32_t *cigar_= 0;
 		for (i = 0; i < qlen; ++i) qseq[i] = read_seq[qlen-i-1];
 		for (i = 0; i < tlen; ++i) tseq[i] = ref_seq[ref_len-refINcigar-i-1];
 
@@ -3019,7 +2961,7 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 				cigar_[n_cigar_++] = (((read_len -readINcigar - read_end) << 4) | CSOFT_CLIP); //'S' exsit
 
 			//reverse_cigar
-			uint32_t tmp;
+			int32_t tmp;
 			for (i = 0; i < n_cigar_/2; ++i)
 				tmp = cigar_[i], cigar_[i] = cigar_[n_cigar_-i-1], cigar_[n_cigar_-i-1] = tmp;
 			_push_cigar(cigar, cigar_len, cigar_m, cigar_, n_cigar_);
@@ -3040,7 +2982,7 @@ int hash_left_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
 }
 
 //for 'MIS-MATCH' case
-int hash_both_bound_map(uint32_t **cigar, int *cigar_len, int *cigar_m,
+int hash_both_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
 						uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 						uint32_t **hash_num, uint64_t ***hash_node, 
 						int hash_len, int hash_key, int hash_step)

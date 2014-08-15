@@ -31,11 +31,14 @@ out
 #soap2-dp
 soap2-dp/*
 
+#bwa
+bwa/*
+
 #output
 output/*
 out*
 
-#tmep source files
+#temp source files
 LSAT/*
 
 #eclipse project
@@ -45,4 +48,4 @@ LSAT/*
 error.log
 
 #shell
-*.sh
+lsat.sh
