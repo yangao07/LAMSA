@@ -2502,8 +2502,7 @@ int hash_split_map(int32_t **split_cigar, int *split_clen, int *split_m,
 						if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100)
 						{
 							res = 1;
-                            int32_t *k_cigar=0;
-                            int k_clen;
+                            int32_t *k_cigar=0; int k_clen=0;
                             if (ksw_both_extend(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset - head_in, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
                             {
                                 free(_cigar);
@@ -2888,12 +2887,12 @@ int hash_right_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
 		int qlen = read_len-readINcigar;
 		int tlen = read_len -readINcigar + ((hash_len+read_len-readINcigar)*bwasw_sc_mat[0]-5-1)/2;
 		tlen = tlen < (ref_len - refINcigar) ? tlen : (ref_len - refINcigar);
-		int read_end, ref_end, n_cigar_;
+		int read_end, ref_end, n_cigar_, m_cigar_;
 		int32_t *cigar_= NULL;
 		//
 		//printf("ref:\t");for (i = 0; i < tlen; ++i) printf("%c", "ACGT"[(ref_seq+refINcigar)[i]]);printf("\n");
 		//printf("read:\t");for (i =0; i < qlen; ++i) printf("%c", "ACGT"[(read_seq+readINcigar)[i]]);printf("\n");
-		res |= ksw_extend2(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, bwasw_sc_mat, 5, 2, abs(read_len-readINcigar-ref_len + refINcigar)+3, hash_len*bwasw_sc_mat[0], 2, &read_end, &ref_end, &n_cigar_, &cigar_);
+		res |= ksw_extend_c(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, bwasw_sc_mat, 5, 2, abs(read_len-readINcigar-ref_len + refINcigar)+3, hash_len*bwasw_sc_mat[0], 2, &read_end, &ref_end, &n_cigar_, &cigar_, &m_cigar_);
 		if (cigar_ != NULL)
 		{
 			_push_cigar(cigar, cigar_len, cigar_m, cigar_, n_cigar_);
@@ -2902,7 +2901,8 @@ int hash_right_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
 			free(cigar_);
 		}
 		if (read_end < read_len - readINcigar) 
-			(*cigar)[(*cigar_len)++] = (((read_len - readINcigar-read_end) << 4) | CSOFT_CLIP); //'S' exist
+            _push_cigar1(cigar, cigar_len, cigar_m, (((read_len - readINcigar-read_end) << 4) | CSOFT_CLIP));//'S' exist
+			//(*cigar)[(*cigar_len)++] = (((read_len - readINcigar-read_end) << 4) | CSOFT_CLIP); 
 	}
 
 	free(hash_pos);
@@ -2945,20 +2945,21 @@ int hash_left_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
 		tlen = tlen < (ref_len -refINcigar) ? tlen : (ref_len - refINcigar);
 		uint8_t *qseq = (uint8_t*)malloc(qlen * sizeof(uint8_t));
 		uint8_t *tseq = (uint8_t*)malloc(tlen * sizeof(uint8_t));
-		int read_end, ref_end, n_cigar_;
+		int read_end, ref_end, n_cigar_, m_cigar_;
 		int32_t *cigar_= 0;
 		for (i = 0; i < qlen; ++i) qseq[i] = read_seq[qlen-i-1];
 		for (i = 0; i < tlen; ++i) tseq[i] = ref_seq[ref_len-refINcigar-i-1];
 
 		//printf("ref:\t");for (i = 0; i < tlen; ++i) printf("%c", "ACGT"[tseq[i]]);printf("\n");
 		//printf("read:\t");for (i =0; i < qlen; ++i) printf("%c", "ACGT"[qseq[i]]);printf("\n");
-		res |= ksw_extend2(qlen, qseq, tlen, tseq, 5, bwasw_sc_mat, 5, 2, abs(qlen-tlen)+3, hash_len*bwasw_sc_mat[0], 2, &read_end, &ref_end, &n_cigar_, &cigar_);
+		res |= ksw_extend_c(qlen, qseq, tlen, tseq, 5, bwasw_sc_mat, 5, 2, abs(qlen-tlen)+3, hash_len*bwasw_sc_mat[0], 2, &read_end, &ref_end, &n_cigar_, &cigar_, &m_cigar_);
 
 		if (cigar_ != NULL)
 		{
 			//printf("head:\t"); printcigar(cigar_, n_cigar_); printf("\n");
 			if (read_end < read_len - readINcigar) 
-				cigar_[n_cigar_++] = (((read_len -readINcigar - read_end) << 4) | CSOFT_CLIP); //'S' exsit
+                _push_cigar1(&cigar_, &n_cigar_, &m_cigar_, (((read_len -readINcigar - read_end) << 4) | CSOFT_CLIP));//'S' exsit
+				//cigar_[n_cigar_++] = (((read_len -readINcigar - read_end) << 4) | CSOFT_CLIP); 
 
 			//reverse_cigar
 			int32_t tmp;
@@ -2968,7 +2969,8 @@ int hash_left_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
 			free(cigar_);
 		}
 		else
-			(*cigar)[(*cigar_len)++] = (((read_len - readINcigar) << 4) | CSOFT_CLIP); //'S' exsit
+            _push_cigar1(cigar, cigar_len, cigar_m, (((read_len - readINcigar) << 4) | CSOFT_CLIP)); //'S' exsit
+			//(*cigar)[(*cigar_len)++] = (((read_len - readINcigar) << 4) | CSOFT_CLIP); //'S' exsit
 
 		free(tseq); free(qseq); 
 	}

@@ -30,7 +30,7 @@ extern "C" {
 	 * @param tlen    length of the target sequence
 	 * @param target  target sequence
 	 * @param m       number of residue types
-	 * @param mat     m*m scoring matrix in one-dimention array
+	 * @param mat     m*m scoring matrix in one-dimension array
 	 * @param gapo    gap open penalty; a gap of length l cost "-(gapo+l*gape)"
 	 * @param gape    gap extension penalty
 	 * @param xtra    extra information (see below)
@@ -61,11 +61,56 @@ extern "C" {
 	 * query profile will be deallocated in ksw_align().
 	 */
 	kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry);
+	kswr_t ksw_align2(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int xtra, kswq_t **qry);
 
-	int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle);
-	int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *_n_cigar, int32_t **_cigar);
-	int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_);
-	int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, int *_n_cigar, int32_t **_cigar);
+	/**
+	 * Banded global alignment
+	 *
+	 * @param qlen    query length
+	 * @param query   query sequence with 0 <= query[i] < m
+	 * @param tlen    target length
+	 * @param target  target sequence with 0 <= target[i] < m
+	 * @param m       number of residue types
+	 * @param mat     m*m scoring mattrix in one-dimension array
+	 * @param gapo    gap open penalty; a gap of length l cost "-(gapo+l*gape)"
+	 * @param gape    gap extension penalty
+	 * @param w       band width
+	 * @param n_cigar (out) number of CIGAR elements
+	 * @param cigar   (out) BAM-encoded CIGAR; caller need to deallocate with free()
+	 *
+	 * @return        score of the alignment
+	 */
+	int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar, int32_t **cigar);
+	int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar, int32_t **cigar);
+
+	/**
+	 * Extend alignment
+	 *
+	 * The routine aligns $query and $target, assuming their upstream sequences,
+	 * which are not provided, have been aligned with score $h0. In return,
+	 * region [0,*qle) on the query and [0,*tle) on the target sequences are
+	 * aligned together. If *gscore>=0, *gscore keeps the best score such that
+	 * the entire query sequence is aligned; *gtle keeps the position on the
+	 * target where *gscore is achieved. Returning *gscore and *gtle helps the
+	 * caller to decide whether an end-to-end hit or a partial hit is preferred.
+	 *
+	 * The first 9 parameters are identical to those in ksw_global()
+	 *
+	 * @param h0      alignment score of upstream sequences
+	 * @param _qle    (out) length of the query in the alignment
+	 * @param _tle    (out) length of the target in the alignment
+	 * @param _gtle   (out) length of the target if query is fully aligned
+	 * @param _gscore (out) score of the best end-to-end alignment; negative if not found
+	 *
+	 * @return        best semi-local alignment score
+	 */
+	int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off);
+	int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off);
+
+    // added
+
+    int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_);
+    int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, int *n_cigar_, int32_t **cigar_);
 
 #ifdef __cplusplus
 }

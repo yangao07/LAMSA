@@ -23,12 +23,17 @@
    SOFTWARE.
 */
 
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
+#include <assert.h>
 #include <emmintrin.h>
 #include "ksw.h"
 #include "frag_check.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -46,15 +51,6 @@ struct _kswq_t {
 	__m128i *qp, *H0, *H1, *E, *Hmax;
 };
 
-void _printcigar(FILE *outp, int32_t *cigar, int cigar_len)
-{
-	int i;
-
-    //fprintf(stdout, "cigar %d: ", cigar_len);
-	for (i = 0; i < cigar_len; i++)
-		fprintf(outp, "%d%c", (int)(cigar[i]>>4), "MIDNSHP=X"[(int)(cigar[i] & 0xf)]);
-	//fprintf(stdout, "\t");
-}
 /**
  * Initialize the query data structure
  *
@@ -114,11 +110,11 @@ kswq_t *ksw_qinit(int size, int qlen, const uint8_t *query, int m, const int8_t 
 	return q;
 }
 
-kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, int xtra) // the first gap costs -(_o+_e)
+kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del, int _o_ins, int _e_ins, int xtra) // the first gap costs -(_o+_e)
 {
 	int slen, i, m_b, n_b, te = -1, gmax = 0, minsc, endsc;
 	uint64_t *b;
-	__m128i zero, gapoe, gape, shift, *H0, *H1, *E, *Hmax;
+	__m128i zero, oe_del, e_del, oe_ins, e_ins, shift, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
 #define __max_16(ret, xx) do { \
@@ -135,8 +131,10 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 	endsc = (xtra&KSW_XSTOP)? xtra&0xffff : 0x10000;
 	m_b = n_b = 0; b = 0;
 	zero = _mm_set1_epi32(0);
-	gapoe = _mm_set1_epi8(_gapo + _gape);
-	gape = _mm_set1_epi8(_gape);
+	oe_del = _mm_set1_epi8(_o_del + _e_del);
+	e_del = _mm_set1_epi8(_e_del);
+	oe_ins = _mm_set1_epi8(_o_ins + _e_ins);
+	e_ins = _mm_set1_epi8(_e_ins);
 	shift = _mm_set1_epi8(q->shift);
 	H0 = q->H0; H1 = q->H1; E = q->E; Hmax = q->Hmax;
 	slen = q->slen;
@@ -148,7 +146,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, cmp, imax;
-		__m128i e, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+		__m128i e, h, t, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 1); // h=H(i-1,-1); << instead of >> because x64 is little-endian
 		for (j = 0; LIKELY(j < slen); ++j) {
@@ -166,13 +164,14 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 			max = _mm_max_epu8(max, h); // set max
 			_mm_store_si128(H1 + j, h); // save to H'(i,j)
 			// now compute E'(i+1,j)
-			h = _mm_subs_epu8(h, gapoe); // h=H'(i,j)-gapo
-			e = _mm_subs_epu8(e, gape); // e=E'(i,j)-gape
-			e = _mm_max_epu8(e, h); // e=E'(i+1,j)
+			e = _mm_subs_epu8(e, e_del); // e=E'(i,j) - e_del
+			t = _mm_subs_epu8(h, oe_del); // h=H'(i,j) - o_del - e_del
+			e = _mm_max_epu8(e, t); // e=E'(i+1,j)
 			_mm_store_si128(E + j, e); // save to E'(i+1,j)
 			// now compute F'(i,j+1)
-			f = _mm_subs_epu8(f, gape);
-			f = _mm_max_epu8(f, h);
+			f = _mm_subs_epu8(f, e_ins);
+			t = _mm_subs_epu8(h, oe_ins); // h=H'(i,j) - o_ins - e_ins
+			f = _mm_max_epu8(f, t);
 			// get H'(i-1,j) and prepare for the next j
 			h = _mm_load_si128(H0 + j); // h=H'(i-1,j)
 		}
@@ -183,8 +182,8 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 				h = _mm_load_si128(H1 + j);
 				h = _mm_max_epu8(h, f); // h=H'(i,j)
 				_mm_store_si128(H1 + j, h);
-				h = _mm_subs_epu8(h, gapoe);
-				f = _mm_subs_epu8(f, gape);
+				h = _mm_subs_epu8(h, oe_ins);
+				f = _mm_subs_epu8(f, e_ins);
 				cmp = _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_subs_epu8(f, h), zero));
 				if (UNLIKELY(cmp == 0xffff)) goto end_loop16;
 			}
@@ -212,10 +211,11 @@ end_loop16:
 	r.score = gmax + q->shift < 255? gmax : 255;
 	r.te = te;
 	if (r.score != 255) { // get a->qe, the end of query match; find the 2nd best score
-		int max = -1, low, high, qlen = slen * 16;
+		int max = -1, tmp, low, high, qlen = slen * 16;
 		uint8_t *t = (uint8_t*)Hmax;
 		for (i = 0; i < qlen; ++i, ++t)
 			if ((int)*t > max) max = *t, r.qe = i / 16 + i % 16 * slen;
+			else if ((int)*t == max && (tmp = i / 16 + i % 16 * slen) < r.qe) r.qe = tmp; 
 		//printf("%d,%d\n", max, gmax);
 		if (b) {
 			i = (r.score + q->max - 1) / q->max;
@@ -231,11 +231,11 @@ end_loop16:
 	return r;
 }
 
-kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, int xtra) // the first gap costs -(_o+_e)
+kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del, int _o_ins, int _e_ins, int xtra) // the first gap costs -(_o+_e)
 {
 	int slen, i, m_b, n_b, te = -1, gmax = 0, minsc, endsc;
 	uint64_t *b;
-	__m128i zero, gapoe, gape, *H0, *H1, *E, *Hmax;
+	__m128i zero, oe_del, e_del, oe_ins, e_ins, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
 #define __max_8(ret, xx) do { \
@@ -251,8 +251,10 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 	endsc = (xtra&KSW_XSTOP)? xtra&0xffff : 0x10000;
 	m_b = n_b = 0; b = 0;
 	zero = _mm_set1_epi32(0);
-	gapoe = _mm_set1_epi16(_gapo + _gape);
-	gape = _mm_set1_epi16(_gape);
+	oe_del = _mm_set1_epi16(_o_del + _e_del);
+	e_del = _mm_set1_epi16(_e_del);
+	oe_ins = _mm_set1_epi16(_o_ins + _e_ins);
+	e_ins = _mm_set1_epi16(_e_ins);
 	H0 = q->H0; H1 = q->H1; E = q->E; Hmax = q->Hmax;
 	slen = q->slen;
 	for (i = 0; i < slen; ++i) {
@@ -263,7 +265,7 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, imax;
-		__m128i e, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+		__m128i e, t, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 2);
 		for (j = 0; LIKELY(j < slen); ++j) {
@@ -273,12 +275,13 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 			h = _mm_max_epi16(h, f);
 			max = _mm_max_epi16(max, h);
 			_mm_store_si128(H1 + j, h);
-			h = _mm_subs_epu16(h, gapoe);
-			e = _mm_subs_epu16(e, gape);
-			e = _mm_max_epi16(e, h);
+			e = _mm_subs_epu16(e, e_del);
+			t = _mm_subs_epu16(h, oe_del);
+			e = _mm_max_epi16(e, t);
 			_mm_store_si128(E + j, e);
-			f = _mm_subs_epu16(f, gape);
-			f = _mm_max_epi16(f, h);
+			f = _mm_subs_epu16(f, e_ins);
+			t = _mm_subs_epu16(h, oe_ins);
+			f = _mm_max_epi16(f, t);
 			h = _mm_load_si128(H0 + j);
 		}
 		for (k = 0; LIKELY(k < 16); ++k) {
@@ -287,8 +290,8 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 				h = _mm_load_si128(H1 + j);
 				h = _mm_max_epi16(h, f);
 				_mm_store_si128(H1 + j, h);
-				h = _mm_subs_epu16(h, gapoe);
-				f = _mm_subs_epu16(f, gape);
+				h = _mm_subs_epu16(h, oe_ins);
+				f = _mm_subs_epu16(f, e_ins);
 				if(UNLIKELY(!_mm_movemask_epi8(_mm_cmpgt_epi16(f, h)))) goto end_loop8;
 			}
 		}
@@ -313,10 +316,11 @@ end_loop8:
 	}
 	r.score = gmax; r.te = te;
 	{
-		int max = -1, low, high, qlen = slen * 8;
+		int max = -1, tmp, low, high, qlen = slen * 8;
 		uint16_t *t = (uint16_t*)Hmax;
 		for (i = 0, r.qe = -1; i < qlen; ++i, ++t)
 			if ((int)*t > max) max = *t, r.qe = i / 8 + i % 8 * slen;
+			else if ((int)*t == max && (tmp = i / 8 + i % 8 * slen) < r.qe) r.qe = tmp; 
 		if (b) {
 			i = (r.score + q->max - 1) / q->max;
 			low = te - i; high = te + i;
@@ -331,35 +335,40 @@ end_loop8:
 	return r;
 }
 
-static void revseq(int l, uint8_t *s)
+static inline void revseq(int l, uint8_t *s)
 {
 	int i, t;
 	for (i = 0; i < l>>1; ++i)
 		t = s[i], s[i] = s[l - 1 - i], s[l - 1 - i] = t;
 }
 
-kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
+kswr_t ksw_align2(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int xtra, kswq_t **qry)
 {
 	int size;
 	kswq_t *q;
 	kswr_t r, rr;
-	kswr_t (*func)(kswq_t*, int, const uint8_t*, int, int, int);
+	kswr_t (*func)(kswq_t*, int, const uint8_t*, int, int, int, int, int);
 
 	q = (qry && *qry)? *qry : ksw_qinit((xtra&KSW_XBYTE)? 1 : 2, qlen, query, m, mat);
 	if (qry && *qry == 0) *qry = q;
 	func = q->size == 2? ksw_i16 : ksw_u8;
 	size = q->size;
-	r = func(q, tlen, target, gapo, gape, xtra);
+	r = func(q, tlen, target, o_del, e_del, o_ins, e_ins, xtra);
 	if (qry == 0) free(q);
 	if ((xtra&KSW_XSTART) == 0 || ((xtra&KSW_XSUBO) && r.score < (xtra&0xffff))) return r;
 	revseq(r.qe + 1, query); revseq(r.te + 1, target); // +1 because qe/te points to the exact end, not the position after the end
 	q = ksw_qinit(size, r.qe + 1, query, m, mat);
-	rr = func(q, tlen, target, gapo, gape, KSW_XSTOP | r.score);
+	rr = func(q, tlen, target, o_del, e_del, o_ins, e_ins, KSW_XSTOP | r.score);
 	revseq(r.qe + 1, query); revseq(r.te + 1, target);
 	free(q);
 	if (r.score == rr.score)
 		r.tb = r.te - rr.te, r.qb = r.qe - rr.qe;
 	return r;
+}
+
+kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
+{
+	return ksw_align2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, xtra, qry);
 }
 
 /********************
@@ -370,12 +379,12 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-/*int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle)
+int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
-	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap;
-	if (h0 < 0) h0 = 0;
+	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
+	assert(h0 > 0);
 	// allocate memory
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
@@ -384,32 +393,36 @@ typedef struct {
 		const int8_t *p = &mat[k * m];
 		for (j = 0; j < qlen; ++j) qp[i++] = p[query[j]];
 	}
-
 	// fill the first row
-	eh[0].h = h0; eh[1].h = h0 > gapoe? h0 - gapoe : 0;
-	for (j = 2; j <= qlen && eh[j-1].h > gape; ++j)
-		eh[j].h = eh[j-1].h - gape;
-	
+	eh[0].h = h0; eh[1].h = h0 > oe_ins? h0 - oe_ins : 0;
+	for (j = 2; j <= qlen && eh[j-1].h > e_ins; ++j)
+		eh[j].h = eh[j-1].h - e_ins;
 	// adjust $w if it is too large
 	k = m * m;
 	for (i = 0, max = 0; i < k; ++i) // get the max score
 		max = max > mat[i]? max : mat[i];
-	max_gap = (int)((double)(qlen * max - gapo) / gape + 1.);
-	max_gap = max_gap > 1? max_gap : 1;
-	w = w < max_gap? w : max_gap;
+	max_ins = (int)((double)(qlen * max + end_bonus - o_ins) / e_ins + 1.);
+	max_ins = max_ins > 1? max_ins : 1;
+	w = w < max_ins? w : max_ins;
+	max_del = (int)((double)(qlen * max + end_bonus - o_del) / e_del + 1.);
+	max_del = max_del > 1? max_del : 1;
+	w = w < max_del? w : max_del; // TODO: is this necessary?
 	// DP loop
-	max = h0, max_i = max_j = -1;
+	max = h0, max_i = max_j = -1; max_ie = -1, gscore = -1;
+	max_off = 0;
 	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
-		int f = 0, h1, m = 0, mj = -1;
+		int t, f = 0, h1, m = 0, mj = -1;
 		int8_t *q = &qp[target[i] * qlen];
-		// compute the first column
-		h1 = h0 - (gapo + gape * (i + 1));
-		if (h1 < 0) h1 = 0;
 		// apply the band and the constraint (if provided)
 		if (beg < i - w) beg = i - w;
 		if (end > i + w + 1) end = i + w + 1;
 		if (end > qlen) end = qlen;
+		// compute the first column
+		if (beg == 0) {
+			h1 = h0 - (o_del + e_del * (i + 1));
+			if (h1 < 0) h1 = 0;
+		} else h1 = 0;
 		for (j = beg; LIKELY(j < end); ++j) {
 			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
 			// Similar to SSE2-SW, cells are computed in the following order:
@@ -417,37 +430,61 @@ typedef struct {
 			//   E(i+1,j) = max{H(i,j)-gapo, E(i,j)} - gape
 			//   F(i,j+1) = max{H(i,j)-gapo, F(i,j)} - gape
 			eh_t *p = &eh[j];
-			int h = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
+			int h, M = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
 			p->h = h1;          // set H(i,j-1) for the next row
-			h += q[j];
-			h = h > e? h : e;
+			M = M? M + q[j] : 0;// separating H and M to disallow a cigar like "100M3I3D20M"
+			h = M > e? M : e;   // e and f are guaranteed to be non-negative, so h>=0 even if M<0
 			h = h > f? h : f;
 			h1 = h;             // save H(i,j) to h1 for the next column
-			mj = m > h? mj : j;
+			mj = m > h? mj : j; // record the position where max score is achieved
 			m = m > h? m : h;   // m is stored at eh[mj+1]
-			h -= gapoe;
-			h = h > 0? h : 0;
-			e -= gape;
-			e = e > h? e : h;   // computed E(i+1,j)
+			t = M - oe_del;
+			t = t > 0? t : 0;
+			e -= e_del;
+			e = e > t? e : t;   // computed E(i+1,j)
 			p->e = e;           // save E(i+1,j) for the next row
-			f -= gape;
-			f = f > h? f : h;   // computed F(i,j+1)
+			t = M - oe_ins;
+			t = t > 0? t : 0;
+			f -= e_ins;
+			f = f > t? f : t;   // computed F(i,j+1)
 		}
 		eh[end].h = h1; eh[end].e = 0;
+		if (j == qlen) {
+			max_ie = gscore > h1? max_ie : i;
+			gscore = gscore > h1? gscore : h1;
+		}
 		if (m == 0) break;
-		if (m > max) max = m, max_i = i, max_j = mj;
+		if (m > max) {
+			max = m, max_i = i, max_j = mj;
+			max_off = max_off > abs(mj - i)? max_off : abs(mj - i);
+		} else if (zdrop > 0) {
+			if (i - max_i > mj - max_j) {
+				if (max - m - ((i - max_i) - (mj - max_j)) * e_del > zdrop) break;
+			} else {
+				if (max - m - ((mj - max_j) - (i - max_i)) * e_ins > zdrop) break;
+			}
+		}
 		// update beg and end for the next round
-		for (j = mj; j >= beg && eh[j].h; --j);
-		beg = j + 1;
-		for (j = mj + 2; j <= end && eh[j].h; ++j);
-		end = j;
+		for (j = beg; LIKELY(j < end) && eh[j].h == 0 && eh[j].e == 0; ++j);
+		beg = j;
+		for (j = end; LIKELY(j >= beg) && eh[j].h == 0 && eh[j].e == 0; --j);
+		end = j + 2 < qlen? j + 2 : qlen;
 		//beg = 0; end = qlen; // uncomment this line for debugging
 	}
+
 	free(eh); free(qp);
 	if (_qle) *_qle = max_j + 1;
 	if (_tle) *_tle = max_i + 1;
+	if (_gtle) *_gtle = max_ie + 1;
+	if (_gscore) *_gscore = gscore;
+	if (_max_off) *_max_off = max_off;
 	return max;
-}*/
+}
+
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off)
+{
+	return ksw_extend2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, end_bonus, zdrop, h0, qle, tle, gtle, gscore, max_off);
+}
 
 /********************
  * Global alignment *
@@ -463,22 +500,43 @@ static inline int32_t *push_cigar(int *n_cigar, int *m_cigar, int32_t *cigar, in
 			cigar = realloc(cigar, (*m_cigar) << 2);
 		}
 		cigar[(*n_cigar)++] = len<<4 | op;
-	} 
-	else 
-		cigar[(*n_cigar)-1] += len<<4;
+	} else cigar[(*n_cigar)-1] += len<<4;
 	return cigar;
 }
 
-int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, int32_t **cigar_)
+/*void _push_cigar(int32_t **cigar, int *cigar_len, int *cigar_m, int32_t *_cigar, int _cigar_len)
+{
+    if (_cigar_len == 0) return;
+	int i,j;
+	i = *cigar_len;
+	if (((i-1) >= 0) && (((*cigar)[i-1] & 0xf) == (_cigar[0] & 0xf)))
+	{
+		(*cigar)[i-1] += ((_cigar[0] >> 4) << 4);
+		j = 1;
+	}
+	else j = 0;
+
+	for (; j < _cigar_len; ++i,++j) {
+		if (i == *cigar_m) {
+			(*cigar_m) <<= 1;
+			(*cigar) = (int32_t*)realloc(*cigar, (*cigar_m) * sizeof (int32_t));
+			if ((*cigar) == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(-1);}
+		}	
+		(*cigar)[i] = _cigar[j];
+	}
+	*cigar_len = i;
+}*/
+
+int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, int32_t **cigar_)
 {
 	eh_t *eh;
 	int8_t *qp; // query profile
-	int i, j, k, gapoe = gapo + gape, score, n_col;
+	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, score, n_col;
 	uint8_t *z; // backtrack matrix; in each cell: f<<4|e<<2|h; in principle, we can halve the memory, but backtrack will be a little more complex
 	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
-	z = malloc(n_col * tlen);
+	z = n_cigar_ && cigar_? malloc((long)n_col * tlen) : 0;
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
 	// generate the query profile
@@ -489,38 +547,66 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	// fill the first row
 	eh[0].h = 0; eh[0].e = MINUS_INF;
 	for (j = 1; j <= qlen && j <= w; ++j)
-		eh[j].h = -(gapo + gape * j), eh[j].e = MINUS_INF;
+		eh[j].h = -(o_ins + e_ins * j), eh[j].e = MINUS_INF;
 	for (; j <= qlen; ++j) eh[j].h = eh[j].e = MINUS_INF; // everything is -inf outside the band
 	// DP loop
 	for (i = 0; LIKELY(i < tlen); ++i) { // target sequence is in the outer loop
-		int32_t f = MINUS_INF, h1, beg, end;
+		int32_t f = MINUS_INF, h1, beg, end, t;
 		int8_t *q = &qp[target[i] * qlen];
-		uint8_t *zi = &z[i * n_col];
 		beg = i > w? i - w : 0;
 		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
-		h1 = beg == 0? -(gapo + gape * (i + 1)) : MINUS_INF;
-		for (j = beg; LIKELY(j < end); ++j) {
-			// This loop is organized in a similar way to ksw_extend() and ksw_sse2(), except:
-			// 1) not checking h>0; 2) recording direction for backtracking
-			eh_t *p = &eh[j];
-			int32_t h = p->h, e = p->e;
-			uint8_t d; // direction
-			p->h = h1;
-			h += q[j];
-			d = h > e? 0 : 1;
-			h = h > e? h : e;
-			d = h > f? d : 2;
-			h = h > f? h : f;
-			h1 = h;
-			h -= gapoe;
-			e -= gape;
-			d |= e > h? 1<<2 : 0;
-			e = e > h? e : h;
-			p->e = e;
-			f -= gape;
-			d |= f > h? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
-			f = f > h? f : h;
-			zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
+		h1 = beg == 0? -(o_del + e_del * (i + 1)) : MINUS_INF;
+		if (n_cigar_ && cigar_) {
+			uint8_t *zi = &z[(long)i * n_col];
+			for (j = beg; LIKELY(j < end); ++j) {
+				// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
+				// Cells are computed in the following order:
+				//   M(i,j)   = H(i-1,j-1) + S(i,j)
+				//   H(i,j)   = max{M(i,j), E(i,j), F(i,j)}
+				//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
+				//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
+				// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
+				// However, a CIGAR like "10M3I3D10M" allowed by local() is disallowed by global().
+				// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
+				// In practice, this should happen very rarely given a reasonable scoring system.
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				uint8_t d; // direction
+				p->h = h1;
+				m += q[j];
+				d = m >= e? 0 : 1;
+				h = m >= e? m : e;
+				d = h >= f? d : 2;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				d |= e > t? 1<<2 : 0;
+				e  = e > t? e    : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				d |= f > t? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
+				f  = f > t? f    : t;
+				zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
+			}
+		} else {
+			for (j = beg; LIKELY(j < end); ++j) {
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				p->h = h1;
+				m += q[j];
+				h = m >= e? m : e;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				e  = e > t? e : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				f  = f > t? f : t;
+			}
 		}
 		eh[end].h = h1; eh[end].e = MINUS_INF;
 	}
@@ -530,7 +616,7 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		int32_t *cigar = 0, tmp;
 		i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
 		while (i >= 0 && k >= 0) {
-			which = z[i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
+			which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
 			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
 			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
@@ -545,23 +631,25 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	return score;
 }
 
+int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, int32_t **cigar_)
+{
+	return ksw_global2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, n_cigar_, cigar_);
+}
+
 /******************************************
  * Gap allowed extension, with backtrack  *
  * combined 'ksw_extend' and 'ksw_global' *
  * and make some modification             *
  ******************************************/
 
-int ksw_extend2_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_)
+int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int h0, int soft_p, int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
-    int soft_score;
-    int soft_max;
 	eh_t *eh; // score array
+    uint8_t *z; int n_col; // added for backtrack
+    int soft_score, soft_max; // added for soft_penalty
 	int8_t *qp; // query profile
-	int i, j, k, gapoe = gapo + gape, n_col;
-	int beg, end, max, max_i, max_j, max_gap;
-	uint8_t *z;
-	if (h0 < 0) h0 = 0;
-	if (n_cigar_) *n_cigar_ = 0;
+	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
+	assert(h0 > 0);
 	// allocate memory
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
@@ -570,39 +658,42 @@ int ksw_extend2_core(int qlen, const uint8_t *query, int tlen, const uint8_t *ta
 		const int8_t *p = &mat[k * m];
 		for (j = 0; j < qlen; ++j) qp[i++] = p[query[j]];
 	}
-
 	// fill the first row
-	eh[0].h = h0; eh[1].h = h0 > gapoe? h0 - gapoe : 0;
-	for (j = 2; j <= qlen && eh[j-1].h > gape; ++j)
-		eh[j].h = eh[j-1].h - gape;
-	
+	eh[0].h = h0; eh[1].h = h0 > oe_ins? h0 - oe_ins : 0;
+	for (j = 2; j <= qlen && eh[j-1].h > e_ins; ++j)
+		eh[j].h = eh[j-1].h - e_ins;
 	// adjust $w if it is too large
 	k = m * m;
 	for (i = 0, max = 0; i < k; ++i) // get the max score
 		max = max > mat[i]? max : mat[i];
-	max_gap = (int)((double)(qlen * max - gapo) / gape + 1.);//
-	max_gap = max_gap > 1? max_gap : 1;
-	w = w < max_gap? w : max_gap;
-	n_col = qlen < 2 * w + 1 ? qlen : 2 * w + 1;
-	z = malloc(n_col * tlen);
+	max_ins = (int)((double)(qlen * max - o_ins) / e_ins + 1.);
+	max_ins = max_ins > 1? max_ins : 1;
+	w = w < max_ins? w : max_ins;
+	max_del = (int)((double)(qlen * max - o_del) / e_del + 1.);
+	max_del = max_del > 1? max_del : 1;
+	w = w < max_del? w : max_del; // TODO: is this necessary?
+    n_col = qlen < 2 * w + 1 ? qlen : 2 * w + 1; // added
+    z = malloc(n_col * tlen); // added
+    for (i = 0;  i<n_col*tlen; ++i) z[i] = 255;
 	// DP loop
-    soft_max = 0 - soft_p * qlen;
-	max = h0, max_i = max_j = -1;
-	// E() && H()
-		beg = 0, end = 1;//qlen;
-	//beg = 0, end = qlen;
+	max = h0, max_i = max_j = -1; max_ie = -1, gscore = -1;
+	max_off = 0;
+    soft_max = h0 - soft_p * qlen;
+
+	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
-		int f = 0, h1, m = 0, mj = -1;
+		int t, f = 0, h1, m = 0, mj = -1;
 		int8_t *q = &qp[target[i] * qlen];
-		uint8_t *zi = &z[i * n_col];
-		int d_beg = i > w ? i - w : 0;
-		// compute the first column
-		h1 = h0 - (gapo + gape * (i + 1));
-		if (h1 < 0) h1 = 0;
+        uint8_t *zi = &z[i * n_col];
 		// apply the band and the constraint (if provided)
 		if (beg < i - w) beg = i - w;
 		if (end > i + w + 1) end = i + w + 1;
 		if (end > qlen) end = qlen;
+		// compute the first column
+		if (beg == 0) {
+			h1 = h0 - (o_del + e_del * (i + 1));
+			if (h1 < 0) h1 = 0;
+		} else h1 = 0;
 		for (j = beg; LIKELY(j < end); ++j) {
 			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
 			// Similar to SSE2-SW, cells are computed in the following order:
@@ -610,101 +701,114 @@ int ksw_extend2_core(int qlen, const uint8_t *query, int tlen, const uint8_t *ta
 			//   E(i+1,j) = max{H(i,j)-gapo, E(i,j)} - gape
 			//   F(i,j+1) = max{H(i,j)-gapo, F(i,j)} - gape
 			eh_t *p = &eh[j];
-			int h = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
-			uint8_t d;	//direction
+			int h, M = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
+            uint8_t d; // direction, added
+            int d_beg = i > w ? i - w : 0; // added
 			p->h = h1;          // set H(i,j-1) for the next row
-			h += q[j];
-			// F()
-				if (end < (j + 1 + (int)((double)(h - gapo - 1) / gape)))
-				{
-					end = (j + 1 + (int)((double)(h - gapo - 1) / gape));
-					if (end > i + w + 1) end = i + w + 1;
-					if (end > qlen) end = qlen;
-				}
-				//printf("be\t(%d %d) : %d %d\n", i, j, beg, end);
-			d = h > e? 0 : 1;
-			h = h > e? h : e;
-			d = h > f? d : 2;
+			M = M? M + q[j] : 0;// separating H and M to disallow a cigar like "100M3I3D20M"
+            // F()
+               if (end < (j+1+(int)((double)(M-o_ins-1)/e_ins)))
+               {
+                   end = (j+1+(int)((double)(M-o_ins-1)/e_ins));
+                   if (end > i + w + 1) end = i + w + 1;
+                   if (end > qlen) end = qlen;
+               }
+            d = M > e? 0 : 1;
+			h = M > e? M : e;   // e and f are guaranteed to be non-negative, so h>=0 even if M<0
+            d = h > f? d : 2;
 			h = h > f? h : f;
 			h1 = h;             // save H(i,j) to h1 for the next column
-			mj = m > h? mj : j;
+			mj = m > h? mj : j; // record the position where max score is achieved
 			m = m > h? m : h;   // m is stored at eh[mj+1]
-			h -= gapoe;
-			h = h > 0? h : 0;
-			e -= gape;
-			d |= e > h? 1<<2 : 0;
-			e = e > h? e : h;   // computed E(i+1,j)
+			t = M - oe_del;
+			t = t > 0? t : 0;
+			e -= e_del;
+            d |= e > t? 1<<2 : 0;
+			e = e > t? e : t;   // computed E(i+1,j)
 			p->e = e;           // save E(i+1,j) for the next row
-			f -= gape;
-			d |= f > h? 2<<4 : 0;
-			f = f > h? f : h;   // computed F(i,j+1)
-			zi[j - d_beg] = d;
-			//printf("%d %d : %d %d\n", i, j, h1, m);
-		}
+			t = M - oe_ins;
+			t = t > 0? t : 0;
+			f -= e_ins;
+            d |= f > t? 2<<4 : 0;
+			f = f > t? f : t;   // computed F(i,j+1)
+            zi[j - d_beg] = d; // added
+        }
 		eh[end].h = h1; eh[end].e = 0;
 		if (m == 0) break;
-		/*if (m > max)
-        {
-            max = m, max_i = i, max_j = mj;
-        }*/
+		/*if (m > max) {
+			max = m, max_i = i, max_j = mj;
+			max_off = max_off > abs(mj - i)? max_off : abs(mj - i);
+		} else if (zdrop > 0) {
+			if (i - max_i > mj - max_j) {
+				if (max - m - ((i - max_i) - (mj - max_j)) * e_del > zdrop) break;
+			} else {
+				if (max - m - ((mj - max_j) - (i - max_i)) * e_ins > zdrop) break;
+			}
+		}*/
         soft_score = m - (qlen - mj - 1) * soft_p;
         if (soft_score > soft_max)
         {
-            max_i = i, max_j = mj;
             soft_max = soft_score;
+            max_i = i; max_j = mj;
         }
 		// update beg and end for the next round
-			int _beg, _end;
-			// E()
-			for (j = mj; j >= beg && (eh[j].h > gapoe || eh[j].e > gape); --j);
-			_beg = j + 1;
-			for (j = mj + 2; j <= end && (eh[j].h > gapoe || eh[j].e > gape); ++j);
-			_end = j;
-			// H()
+            int _beg, _end;
+            // E()
+            for (j = mj; j >= beg && (eh[j].h > oe_ins || eh[j].e > e_ins); --j);
+            _beg = j+1;
+            for (j = mj+2; j <=end && (eh[j].h > oe_ins || eh[j].e > e_ins); ++j);
+            _end = j;
+            // H()
 			for (j = _beg - 1; j >= beg && eh[j].h; --j);
 			beg = j + 1;
 			for (j = _end; j <= end && eh[j].h; ++j);
 			end = j;
 
+		/*for (j = beg; LIKELY(j < end) && eh[j].h == 0 && eh[j].e == 0; ++j);
+		beg = j;
+		for (j = end; LIKELY(j >= beg) && eh[j].h == 0 && eh[j].e == 0; --j);
+		end = j + 2 < qlen? j + 2 : qlen;*/
 		//beg = 0; end = qlen; // uncomment this line for debugging
 	}
-	//score = max;
-	if (n_cigar_ && cigar_) {	//backtarck
+	if (n_cigar_ && cigar_) { // backtrack, added
 		int n_cigar = 0, m_cigar = 0, which = 0;
 		int32_t *cigar = 0, tmp;
-		i = max_i; k = max_j;
+		//i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
+        i = max_i; k = max_j;
 		while (i >= 0 && k >= 0) {
-			which = z[i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
-			if (which == 0)		 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
+            if (z[(long)i * n_col + (k - (i > w? i - w : 0))] == 255)
+                printf("debug");
+			which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
+			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
 			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
-			else				 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
+			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
 		}
-		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, i+1);
-		if (k >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, k+1);
-		for (i = 0; i < n_cigar>>1; ++i) //reverse cigar
-			tmp = cigar[i], cigar[i] = cigar[n_cigar-i-1], cigar[n_cigar-i-1] = tmp;
-		*n_cigar_ = n_cigar, *cigar_ = cigar;
+		if (i >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, i + 1);
+		if (k >= 0) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, k + 1);
+		for (i = 0; i < n_cigar>>1; ++i) // reverse CIGAR
+			tmp = cigar[i], cigar[i] = cigar[n_cigar-1-i], cigar[n_cigar-1-i] = tmp;
+		*n_cigar_ = n_cigar, *cigar_ = cigar; *m_cigar_ = m_cigar;
 	}
 
 	free(eh); free(qp); free(z);
 	if (_qle) *_qle = max_j + 1;
 	if (_tle) *_tle = max_i + 1;
-	return max;
+	return soft_max; //max;
 }
 
-int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_)
+int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
 {
     int res;
-    int n_cigar; int32_t *cigar = 0;
+    int n_cigar, m_cigar; int32_t *cigar = 0;
     // qlen threshold
     if (qlen <= 5000) 
     {
-        ksw_extend2_core(qlen, query, tlen, target, m, mat, gapo, gape, w, h0, soft_p, _qle, _tle, n_cigar_, cigar_);
+        ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, h0, soft_p, _qle, _tle, cigar_, n_cigar_, m_cigar_);
         if (*_qle < qlen) return 1;
         else return 0;
     }
 
-    int m_cigar_ = 10;
+    *m_cigar_ = 10;
     int extend_qstep = 200, extend_tstep = 200; // XXX depend on seed_len
     int tmp_qle=*_qle=0, tmp_tle=*_tle=0, score=h0;
     int r_qlen = qlen, r_tlen = tlen;
@@ -715,8 +819,8 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
     {
         if (extend_qstep > r_qlen) extend_qstep = r_qlen;
         if (extend_tstep > r_tlen) extend_tstep = r_tlen;
-        score = ksw_extend2_core(extend_qstep, query+*_qle, extend_tstep, target+*_tle, m ,mat, gapo, gape, w, score, soft_p, &tmp_qle, &tmp_tle, &n_cigar, &cigar);
-        _push_cigar(cigar_, n_cigar_, &m_cigar_, cigar, n_cigar);
+        score = ksw_extend_core(extend_qstep, query+*_qle, extend_tstep, target+*_tle, m ,mat, gapo, gape, gapo, gape, w, score, soft_p, &tmp_qle, &tmp_tle, &cigar, &n_cigar, &m_cigar);
+        _push_cigar(cigar_, n_cigar_, m_cigar_, cigar, n_cigar);
         free(cigar);
 
         *_qle += tmp_qle;
@@ -733,7 +837,6 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
     if (*_qle < qlen) return 1;
     else return 0;
 }
-
 
 /***************************************
  * Extend both left and right boundary *
@@ -752,19 +855,19 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     if (*n_cigar_) *n_cigar_ = 0;
     int lqe, lte;
     int32_t *lcigar=0;
-    int ln_cigar;
+    int ln_cigar, lm_cigar;
     //left boundary extension
-    ksw_extend2(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, 0, &lqe, &lte, &ln_cigar, &lcigar);
+    ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, 0, &lqe, &lte, &ln_cigar, &lcigar, &lm_cigar);
     //printf("left: \n\tqe: %d\tte: %d\n\t", lqe, lte); _printcigar(stdout, lcigar, ln_cigar); printf("\n");
 
     //right boundary extension
     uint8_t *r_query = (uint8_t*)malloc(qlen * sizeof(uint8_t));
     uint8_t *r_target = (uint8_t*)malloc(tlen * sizeof(uint8_t));
     int32_t *rcigar=0;
-    int rqe, rte, rn_cigar;
+    int rqe, rte, rn_cigar, rm_cigar;
     for (i = 0; i < qlen; ++i) r_query[i] = query[qlen-i-1];
     for (i = 0; i < tlen; ++i) r_target[i] = target[tlen-i-1];
-    ksw_extend2(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, rh0, 0, &rqe, &rte, &rn_cigar, &rcigar);
+    ksw_extend_c(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, rh0, 0, &rqe, &rte, &rn_cigar, &rcigar, &rm_cigar);
     //printf("right: \n\tqe: %d\tte: %d\n\t", rqe, rte); _printcigar(stdout, rcigar, rn_cigar); printf("\n");
     free(r_query), free(r_target);
 
@@ -819,31 +922,8 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 #include <stdio.h>
 #include <zlib.h>
 #include "kseq.h"
+//KSEQ_INIT(gzFile, err_gzread)
 KSEQ_INIT(gzFile, gzread)
-
-void _push_cigar(int32_t **cigar, int *cigar_len, int *cigar_m, int32_t *_cigar, int _cigar_len)
-{
-    if (_cigar_len == 0) return;
-	int i,j;
-	i = *cigar_len;
-	if (((i-1) >= 0) && (((*cigar)[i-1] & 0xf) == (_cigar[0] & 0xf)))
-	{
-		(*cigar)[i-1] += ((_cigar[0] >> 4) << 4);
-		j = 1;
-	}
-	else j = 0;
-
-	for (; j < _cigar_len; ++i,++j) {
-		if (i == *cigar_m) {
-			(*cigar_m) <<= 1;
-			(*cigar) = (int32_t*)realloc(*cigar, (*cigar_m) * sizeof (int32_t));
-			if ((*cigar) == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(-1);}
-		}	
-		(*cigar)[i] = _cigar[j];
-	}
-	*cigar_len = i;
-}
-
 
 unsigned char seq_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
@@ -864,16 +944,87 @@ unsigned char seq_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
 
+/*int main(int argc, char *argv[])
+{
+	int c, sa = 1, sb = 3, i, j, k, forward_only = 0, max_rseq = 0;
+	int8_t mat[25];
+	int gapo = 5, gape = 2, minsc = 0, xtra = KSW_XSTART;
+	uint8_t *rseq = 0;
+	gzFile fpt, fpq;
+	kseq_t *kst, *ksq;
+
+	// parse command line
+	while ((c = getopt(argc, argv, "a:b:q:r:ft:1")) >= 0) {
+		switch (c) {
+			case 'a': sa = atoi(optarg); break;
+			case 'b': sb = atoi(optarg); break;
+			case 'q': gapo = atoi(optarg); break;
+			case 'r': gape = atoi(optarg); break;
+			case 't': minsc = atoi(optarg); break;
+			case 'f': forward_only = 1; break;
+			case '1': xtra |= KSW_XBYTE; break;
+		}
+	}
+	if (optind + 2 > argc) {
+		fprintf(stderr, "Usage: ksw [-1] [-f] [-a%d] [-b%d] [-q%d] [-r%d] [-t%d] <target.fa> <query.fa>\n", sa, sb, gapo, gape, minsc);
+		return 1;
+	}
+	if (minsc > 0xffff) minsc = 0xffff;
+	xtra |= KSW_XSUBO | minsc;
+	// initialize scoring matrix
+	for (i = k = 0; i < 4; ++i) {
+		for (j = 0; j < 4; ++j)
+			mat[k++] = i == j? sa : -sb;
+		mat[k++] = 0; // ambiguous base
+	}
+	for (j = 0; j < 5; ++j) mat[k++] = 0;
+	// open file
+	fpt = xzopen(argv[optind],   "r"); kst = kseq_init(fpt);
+	fpq = xzopen(argv[optind+1], "r"); ksq = kseq_init(fpq);
+	// all-pair alignment
+	while (kseq_read(ksq) > 0) {
+		kswq_t *q[2] = {0, 0};
+		kswr_t r;
+		for (i = 0; i < (int)ksq->seq.l; ++i) ksq->seq.s[i] = seq_nt4_table[(int)ksq->seq.s[i]];
+		if (!forward_only) { // reverse
+			if ((int)ksq->seq.m > max_rseq) {
+				max_rseq = ksq->seq.m;
+				rseq = (uint8_t*)realloc(rseq, max_rseq);
+			}
+			for (i = 0, j = ksq->seq.l - 1; i < (int)ksq->seq.l; ++i, --j)
+				rseq[j] = ksq->seq.s[i] == 4? 4 : 3 - ksq->seq.s[i];
+		}
+		gzrewind(fpt); kseq_rewind(kst);
+		while (kseq_read(kst) > 0) {
+			for (i = 0; i < (int)kst->seq.l; ++i) kst->seq.s[i] = seq_nt4_table[(int)kst->seq.s[i]];
+			r = ksw_align(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[0]);
+			if (r.score >= minsc)
+				err_printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, r.qb, r.qe+1, r.score, r.score2, r.te2);
+			if (rseq) {
+				r = ksw_align(ksq->seq.l, rseq, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[1]);
+				if (r.score >= minsc)
+					err_printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, (int)ksq->seq.l - r.qb, (int)ksq->seq.l - 1 - r.qe, r.score, r.score2, r.te2);
+			}
+		}
+		free(q[0]); free(q[1]);
+	}
+	free(rseq);
+	kseq_destroy(kst); err_gzclose(fpt);
+	kseq_destroy(ksq); err_gzclose(fpq);
+	return 0;
+}*/
 int main(int argc, char *argv[])
 {
-	int c, sa = 1, sb = 3, i, j, k;
+	int c, /*sa = 1, sb = 3,*/ i, j, k;
+    int sa=1, sb=5;
 	int8_t mat[25];
-	int gapo = 5, gape = 2;
+	//int gapo = 5, gape = 2;
+    int gapo = 2, gape=1;
 	gzFile fpt, fpq;
 	kseq_t *kst, *ksq;
     int score, te, qe;
-    int n_cigar;
-    int32_t *cigar=0;
+    //int n_cigar;
+    //int32_t *cigar=0;
 
 	// initialize scoring matrix
 	for (i = k = 0; i < 4; ++i) {
@@ -890,22 +1041,15 @@ int main(int argc, char *argv[])
 		for (i = 0; i < (int)ksq->seq.l; ++i) ksq->seq.s[i] = seq_nt4_table[(int)ksq->seq.s[i]];
 		while (kseq_read(kst) > 0) {
 			for (i = 0; i < (int)kst->seq.l; ++i) kst->seq.s[i] = seq_nt4_table[(int)kst->seq.s[i]];
-			/*score = ksw_extend2(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 0, &qe, &te, &n_cigar, &cigar);
-            printf("%d:\t%d\t%d\n", score, qe, te);
-			for (i = 0; i < n_cigar; ++i)
-                printf("%d%c", cigar[i] >> 4 , "MIDNSHP=X"[cigar[i] & 0xf]);
-            free(cigar);
-            cigar=0, n_cigar=0;
-            printf("\n");
-            ksw_both_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 10, &n_cigar, &cigar);
-            printf("ksw both extend:\n");
+			
+            int qle, tle, m_cigar, n_cigar;
+            int32_t* cigar;
+            //score = ksw_extend2(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 0, 1, 10, &qle, &tle, &gtle, &gscore, &max_off);
+            score = ksw_extend_core(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 2, &qle, &tle, &cigar, &n_cigar, &m_cigar);
+            //score = ksw_global(0/*ksq->seq.l*/, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, &n_cigar, &cigar);
+            printf("%d\nte:%d\tqe:%d\n", score, tle, qle);
             for (i = 0; i < n_cigar; ++i)
-                printf("%d%c", cigar[i] >> 4 , "MIDNSHP=X"[cigar[i] & 0xf]);
-            printf("\n");*/
-            score = ksw_global(0/*ksq->seq.l*/, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, &n_cigar, &cigar);
-            printf("%d\n", score);
-            for (i = 0; i < n_cigar; ++i)
-                printf("%d%c", cigar[i] >> 4 , "MID"[cigar[i] & 0xf]);
+                printf("%d%c", cigar[i] >> 4 , "MIDSH"[cigar[i] & 0xf]);
             printf("\n");
             free(cigar);
 		}

@@ -70,6 +70,12 @@
 #define CIGAR_SHIFT	4
 #define CIGAR_GEN(l,o) ((int)(l)<<CIGAR_SHIFT|(o)) 
 
+typedef struct {
+    int32_t *cigar;
+    int cigar_m;
+    int cigar_n;
+} cigar_t;
+
 
 typedef struct {	//全部read包含seed数目信息
     int read_all;		//获取的read总数目			
