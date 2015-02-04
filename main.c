@@ -19,7 +19,7 @@ static int usage(void)	//main usage
 	fprintf(stderr, "Program: lsat (A Long Sequence Alignment Tool.)\n");
 	fprintf(stderr, "Usage:   lsat <cmd> [opts]\n\n");
 	fprintf(stderr, "Command: \n");
-	fprintf(stderr, "         index      index reference sequence(soap2-dp)\n");
+	fprintf(stderr, "         index      index reference sequence\n");
 	fprintf(stderr, "         aln        align long sequence to reference\n");
 
 	fprintf(stderr, "\n");
