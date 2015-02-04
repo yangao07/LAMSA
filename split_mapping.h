@@ -71,7 +71,9 @@ typedef struct {
 #define HASH_MIN_LEN 1
 
 #define MIN_FLAG 1
+#define MIN_OUT 11
 #define MULTI_FLAG 2
+#define MULTI_OUT 22
 #define UNLIMITED_FLAG 3
 
 #define HASH_FRAG_START 1
@@ -90,10 +92,10 @@ typedef struct {
 extern const int8_t sc_mat[25];
 extern const int8_t hash_nt4_table[5];
 
-int split_indel_map(int32_t **res_cigar, int *res_len, int *res_m,
+int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,
 					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
 					 int64_t ref_offset, 
-					 int hash_len, int hash_step, 
+					 int hash_len, int hash_step, int split_len,
 					 uint32_t **hash_num, uint64_t ***hash_node, 
 					 int key_len, int hash_size);
 /*int split_insert_map(uint32_t **res_cigar, int *res_len, int *res_m,
@@ -102,20 +104,23 @@ int split_indel_map(int32_t **res_cigar, int *res_len, int *res_m,
 					 int hash_len, int hash_step, 
 					 uint32_t **hash_num, uint64_t ***hash_node, 
 					 int key_len, int hash_size);*/
-int hash_left_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
+int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 						uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
 		                uint32_t **hash_num, uint64_t ***hash_node, 
-						int hash_len, int hash_key, int hash_step);
+						int hash_len, int hash_key, int hash_step,
+                        int split_len);
 
-int hash_right_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
+int hash_right_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 						 uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
 		                 uint32_t **hash_num, uint64_t ***hash_node, 
-						 int hash_len, int hash_key, int hash_step);
+						 int hash_len, int hash_key, int hash_step,
+                         int split_len);
 
-int hash_both_bound_map(int32_t **cigar, int *cigar_len, int *cigar_m,
+int hash_both_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 						 uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
 		                 uint32_t **hash_num, uint64_t ***hash_node, 
-						 int hash_len, int hash_key, int hash_step);
+						 int hash_len, int hash_key, int hash_step,
+                         int split_len);
 
 
 #endif

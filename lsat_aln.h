@@ -7,30 +7,39 @@
 #define READ_MAX_NUM 1000
 //aln_para
 #define PER_ALN_N 100
+#define SPLIT_ALN_LEN 100
+#define SPLIT_ALN_PEN 10
 #define SV_MAX_LEN 10000
 #define RES_MAX_N 10
 
 //aln_per_para
 
+//
+#define START_NODE (line_node){-1,0}
+
 
 /* seeds' connect relation */
 //                    0123456789
 #define FRAG_CON_STR "MPXLIDCRUS"
-#define F_MATCH 0
-#define F_SPLIT_MATCH 1
-#define F_MISMATCH 2
+#define F_MATCH         0
+#define F_SPLIT_MATCH   1
+#define F_MISMATCH      2
 #define F_LONG_MISMATCH 3
-#define F_INSERT 4
-#define F_DELETE 5
-#define F_CHR_DIF 6
-#define F_REVERSE 7
-#define F_UNCONNECT 8
-#define F_UNMATCH 9
 
-#define F_TRI 10
+#define F_INSERT        4
+#define F_DELETE        5
+
+#define F_CHR_DIF       6
+#define F_REVERSE       7
+#define F_UNCONNECT     8
+#define F_UNMATCH       9
+
+#define F_TRI          10
 #define F_TRI_MISMATCH 11
-#define F_TRI_INSERT 12
-#define F_TRI_DELETE 13
+#define F_TRI_INSERT   12
+#define F_TRI_DELETE   13
+
+#define F_INIT 20
 
 
 // backtrack flag
@@ -45,7 +54,7 @@
 #define SOAP2_DP_DIR "./soap2-dp"
 
 /* CIGAR operations */
-/* copy from samtools-0.1.19 */
+/* from samtools-0.1.19 */
 #define CIGAR_STR "MIDNSHP=XB"
 /* M: match or mismatch */
 #define CMATCH      0
@@ -70,8 +79,10 @@
 #define CIGAR_SHIFT	4
 #define CIGAR_GEN(l,o) ((int)(l)<<CIGAR_SHIFT|(o)) 
 
+#define cigar32_t int32_t
+
 typedef struct {
-    int32_t *cigar;
+    cigar32_t *cigar;
     int cigar_m;
     int cigar_n;
 } cigar_t;
@@ -93,16 +104,16 @@ typedef struct {	//全部read包含seed数目信息
 
 typedef struct {
 	int32_t chr;
-	int64_t offset;	//1-base
+	int64_t offset;	// 1-base
 	int8_t nsrand;
-	//int8_t edit_dis;
+	int NM;      // edit distance
 
-	int32_t *cigar;
-	int cigar_len;  //default: 7 for 3-ed
-	int len_dif;	//length difference between ref and read
+	cigar32_t *cigar;
+	int cigar_len;  // default: 7 for 3-ed
+	int len_dif;	// length difference between ref and read
 	int cmax;
-	int bmax;		//max band-width, NOT for this seed-aln, for this in-del case.
-					//max of the number of inserts and the number of dels
+	int bmax;		// max band-width, NOT for this seed-aln, for this in-del case.
+					// max of the number of inserts and the number of dels
 } aln_t;
 
 typedef struct {
@@ -119,6 +130,7 @@ typedef struct {
 	int64_t offset;	// 1-base
 
 	kstring_t *cigar_s;
+    int NM;
 	//char *cigar;	// cigar
 	//int cigar_cl;	// cigar len
 	//int cigar_cm;	// cigar m
@@ -144,6 +156,26 @@ typedef struct {
 	int x;		//seed#
 	int y;		//n_aln#
 } line_node;
+#define nodeEq(a,b) (a.x==b.x && a.y==b.y)
+
+typedef struct {
+    int x,y,z;
+} tri_node;
+
+typedef struct {
+    int x1,y1;
+    int x2,y2;
+} tetr_node;
+typedef struct {
+    line_node *node;
+    int *pos;
+    int *score;
+
+    int max_n;
+    int node_n;
+}node_score;
+#define TREE_START 0
+#define TREE_BRANCH 1
 
 typedef struct {
 	int seed_num;
@@ -153,26 +185,29 @@ typedef struct {
 	int from_i;
 } frag_DP_node;
 
+//ALLOC //DP
 typedef struct {
-	line_node from;
-	int seed_i;
-	int aln_i;
+    int son_flag;
+	line_node from; 
+	int seed_i;     //ALLOC
+	int aln_i;      //ALLOC
+
+	//tree generating and pruning
+	int in_de; // 入度      
+    int son_n; // 子节点数目
+    int son_max;            //ALLOC
+    line_node *son;
+    int max_score;          
+    line_node max_node;     
 
 	int score; int dis_pen; // score: for connect, dis_pen: for SV/indel penalty
 
 	uint8_t match_flag;
 	int dp_flag;
-	int backtrack_flag;
 
 	int node_n;
-
-	int peak_value;
-	line_node peak;
-
-	int next_trigger_n;
-	int pre_trigger_n;
-    int trigger_m;
-	int *trigger;	//next...pre
+    uint8_t trg_n; //00 01 10 11
+    line_node next_trg, pre_trg;
 } frag_dp_node;
 
 typedef struct {
@@ -207,20 +242,27 @@ typedef struct {
              -6,    F_UNMATCH
         };*/
     int match_dis; int del_thd; int ins_thd;
-} lsat_aln_per_para;    //specially for every read
+} lsat_aln_per_para;    // specially for every read
 //APP
 
 typedef struct {
     int aln_type;
 
-    int per_aln_m;  //max number of seeds' aln-results
+    int per_aln_m;  // max number of seeds' aln-results
     int SV_len_thd;
-    int res_mul_max;//max number of read's aln-results
+    int split_len;  // min length of gap that causes split-alignment
+    int split_pen;  // split score penalty
+    int res_mul_max;// max number of read's aln-results
 
     int hash_len, hash_key_len, hash_step;
-} lsat_aln_para;        //for all reads
+
+    // SW para
+    int gapo, gape; // gap open penalty, gap extension penalty
+    int match, mis;     // score matrix, match and mismatch
+} lsat_aln_para;        // for all reads
 //AP
 
 int lsat_aln(int argc, char* argv[]);
+int line_pull_trg(line_node LR);
 
 #endif

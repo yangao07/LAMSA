@@ -358,7 +358,22 @@ int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_co
 
 #define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
 //convert binary seq to 'ACGT' sequence
-int pac2fa_core(const bntseq_t *bns, const uint8_t *pac, 
+void pac2fa(const bntseq_t *bns, const uint8_t *pac, 
+			const int32_t seq_n, 
+			const int64_t start/*0-base*/, 
+			int32_t *len, 
+			const int srand, 
+			int *N_FLAG, int *N_len, 
+			char *seq)
+{
+    uint8_t *ref_seq = (uint8_t*)malloc(*len * sizeof(uint8_t));
+    pac2fa_core(bns, pac, seq_n, start/*0-base*/, len, srand, N_FLAG, N_len, ref_seq);
+    int i;
+    for (i = 0; i < *len; ++i) seq[i] = "ACGTN"[ref_seq[i]];
+    free(ref_seq);
+}
+
+void pac2fa_core(const bntseq_t *bns, const uint8_t *pac, 
 				const int32_t seq_n, 
 				const int64_t start/*0-base*/, 
 				int32_t *len, 
@@ -369,8 +384,6 @@ int pac2fa_core(const bntseq_t *bns, const uint8_t *pac,
 	int64_t pac_coor;
 	int64_t i,k;
 	
-	//*N_FLAG = 0;
-
 	if (start > bns->anns[seq_n-1].len)
 	{
 		fprintf(stderr, "\n[bntseq] ERROR: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_n-1].len);
@@ -396,7 +409,6 @@ int pac2fa_core(const bntseq_t *bns, const uint8_t *pac,
 	}
 
 	*N_FLAG = n_recover(bns, seq_n, pac_coor, *len, seq, N_len);	//0 : no 'N', or 2.
-	return 0;
 }
 
 //int main(int argc, char *argv[])

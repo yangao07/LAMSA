@@ -321,8 +321,7 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 			while (ks_getuntil(ks, KS_SEP_TAB, str, &dret) >= 0) {
 				if (!str->l) break;
 				if (str->l < 6 || str->s[2] != ':' || str->s[4] != ':') parse_error(fp->n_lines, "missing colon in auxiliary data");
-				if (str->s[0] == 'X' && str->s[1] == 'A' && str->s[3] == 'Z') 
-				{
+				if (str->s[0] == 'X' && str->s[1] == 'A' && str->s[3] == 'Z') {
 					//printf("\t\t%s\n", str->s);
 					s = (char*)realloc(s, str->l - 4);
 					ts = (char*)realloc(ts, str->l - 4);
@@ -339,8 +338,7 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
                             for (d = 0; d < strlen(cigar); ++d)
                             {
                                 if (cigar[d] == 'I' || cigar[d] == 'D') ++id;
-                                else if (cigar[d] == 'S')
-                                {
+                                else if (cigar[d] == 'S') {
                                     id = 3;
                                     break;
                                 }
@@ -349,6 +347,7 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 							m->sam[m->sam_n].chr = bam_get_tid(header, ts) + 1;
 							m->sam[m->sam_n].nsrand = csrand;
 							m->sam[m->sam_n].offset = offset;
+                            m->sam[m->sam_n].NM = ed;
 							m->sam[m->sam_n].cigar_s->l = 0;
 							kputs(cigar, m->sam[m->sam_n].cigar_s);
 							++m->sam_n;
@@ -356,7 +355,10 @@ int sam_read1(tamFile fp, bam_header_t *header, sam_msg *m, int xa_limit)
 						}
 					}
 					break;
-				}
+				} else if (str->s[0] == 'N' && str->s[1] == 'M' && str->s[3] == 'i') {
+                    if (sscanf(str->s+5, "%d", &ed) == 1) m->sam->NM = ed;
+                    else return 0; // incomplete SAM result
+                }
 				if (dret == '\n' || dret == '\r') break;
 			}
 			if (s) free(s);
