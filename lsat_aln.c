@@ -5,6 +5,7 @@
 #include <zlib.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <time.h>
 #include "lsat_aln.h"
 #include "bntseq.h"
 #include "frag_check.h"
@@ -38,8 +39,11 @@ int lsat_seed_len[10] = {  50,   50,   50,   75,   75,   75,  100,  100, 100, 10
 //                         40 27-40 30-40 40-50 40-48 40-47 47-54 46-52  45-50 40  
 int lsat_seed_inv[10] = {   0,   25,   50,   25,   50,   75,   50,   75, 100, 150}; 
 int lsat_per_aln[10]  = { 200,  200,  200,  150,  150,  150,  100,  100, 100, 100}; //XXX
-int lsat_min_thd[10]  = {   3,    3,    3,    2,    2,    2,    1,    1,   1,   1};
+int lsat_mis_len[10]  = {  30,   30,   30,   25,   25,   25,   20,   20,  20,  20};//XXX
+int lsat_min_thd[10]  = {   2,    2,    1,    1,    1,    1,    1,    1,   1,   1};
 
+// for debug
+char READ_NAME[1024];
 
 int get_read_level(int read_len)
 {
@@ -369,6 +373,7 @@ void aln_res_output(aln_res *res, lsat_aln_per_para *APP)
     for (i = 0; i < res->l_m; ++i) {
         if (res->la[i].merg_msg.x==1) {
             for (j = 0; j <= res->la[i].cur_res_n; ++j) {
+                //fprintf(stdout, "line: #%d\n", i+1);
                 fprintf(stdout, "%s\t%d\t%c\t%lld\t", APP->read_name, res->la[i].res[j].chr, "-++"[res->la[i].res[j].nsrand], (long long)res->la[i].res[j].offset); 
                 printcigar(stdout, res->la[i].res[j].cigar, res->la[i].res[j].cigar_len); 
                 fprintf(stdout, "\tAS:i:%d\tNM:i:%d", res->la[i].res[j].score, res->la[i].res[j].NM);
@@ -598,7 +603,7 @@ void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n)
     APP->seed_all = s_msg->seed_all[read_n] - s_msg->seed_all[read_n-1];
 
     APP->per_aln_n = lsat_per_aln[APP->read_level]; // depend on seed_len
-    APP->min_thd = 1; // depend on seed_len XXX
+    APP->min_thd = lsat_min_thd[APP->read_level]; // depend on seed_len XXX
     APP->frag_score_table = f_BCC_score_table;
 
     APP->match_dis = APP->seed_inv/10; // depend on seed_len, seed_inv
@@ -767,31 +772,46 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
             if (f_node[i][j].dp_flag == dp_flag)// || f_node[i][j].dp_flag == UPDATE_FLAG)
             {
                 dis = get_fseed_dis(a_msg, i, j, seed_i, aln_i, &con_flag, APP, AP);
-                if (con_flag > f_node[i][j].son_flag+1) //
-                    continue;
                 if (con_flag == F_UNCONNECT || con_flag == F_CHR_DIF)
                     continue;
-                //											XXX MATCH, MISMATCH: same score?
-                con_score = APP->frag_score_table[con_flag];
-
-                if (con_flag == F_MATCH || con_flag == F_MISMATCH || con_flag == F_LONG_MISMATCH) // MEM // XXX cigar-diff, when score equal with each other
-                {
+                // '+' strand: successor-Match
+                //if (con_flag > f_node[i][j].son_flag+1) //
+                 //   continue;
+                if (a_msg[i].at[j].nsrand == 1) {
+                    if (f_node[i][j].son_flag <= F_MISMATCH) {
+                        continue;
+                        /// cigar-diff
+                        /*if (con_flag > F_MISMATCH)
+                            continue;
+                        else { 
+                            max_from = (line_node){i,j};
+                            con_score = APP->frag_score_table[con_flag];
+                            max_score = f_node[i][j].score + 1 + con_score;
+                            max_flag = con_flag;
+                            max_dis = f_node[i][j].dis_pen + dis;
+                            goto UPDATE;
+                        }*/
+                    } 
+                }
+                // '-' strand: precursor-Match 
+                ///XXX LONG_MISMATCH
+                ///XXX cigar-diff, when score equal with each other
+                else if (con_flag <= F_MISMATCH) {
                     max_from = (line_node){i,j};
+                    con_score = APP->frag_score_table[con_flag];
                     max_score = f_node[i][j].score + 1 + con_score;
                     max_flag = con_flag;
                     max_dis = f_node[i][j].dis_pen + dis;
                     goto UPDATE;
                 }
 
-                if (f_node[i][j].score + 1 + con_score > max_score)	
-                {
+                con_score = APP->frag_score_table[con_flag];
+                if (f_node[i][j].score + 1 + con_score > max_score)	{
                     max_from = (line_node){i,j};
                     max_score = f_node[i][j].score + 1 + con_score;
                     max_flag = con_flag;
                     max_dis = f_node[i][j].dis_pen + dis;
-                }
-                else if (f_node[i][j].score + 1 + con_score == max_score)
-                {
+                } else if (f_node[i][j].score + 1 + con_score == max_score) {
                     if (f_node[i][j].dis_pen + dis < max_dis)
                     {
                         max_from = (line_node){i,j};
@@ -804,8 +824,7 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
         }
     }
 UPDATE:
-    if (max_from.x != f_node[seed_i][aln_i].from.x || max_from.y != f_node[seed_i][aln_i].from.y)
-    {
+    if (max_from.x != f_node[seed_i][aln_i].from.x || max_from.y != f_node[seed_i][aln_i].from.y) {
         f_node[max_from.x][max_from.y].son_flag = max_flag;
         f_node[seed_i][aln_i].from = max_from;
         f_node[seed_i][aln_i].score = max_score;
@@ -821,21 +840,21 @@ UPDATE:
 
 //XXX 在输出node时就已经排序？即在dp过程中排序？
 void line_sort_endpos(line_node **line, int *line_end,
-                      tetr_node **t_node, int *tri_n,
+                      trig_node **t_node, int *tri_n,
                       int li, int len) {
     int i, j, k, end, t;
-    line_node tmp; tetr_node tr;
+    line_node tmp; trig_node tr;
     for (i = 0; i < len-1; ++i) {
         for (j = i+1; j < len; ++j) {
             if (line[j][line_end[j]-1].x > line[i][line_end[i]-1].x) {
                 // swap_line
                 end = line_end[j] > line_end[i] ? line_end[j] : line_end[i];
-                for (k = 0; k <= end+2; ++k) {
+                for (k = 0; k < end+L_EXTRA; ++k) {
                     tmp = line[i][k], line[i][k] = line[j][k], line[j][k] = tmp;   
                 }
                 t = line_end[i], line_end[i] = line_end[j], line_end[j] = t;
                 end = tri_n[j] > tri_n[i] ? tri_n[j] : tri_n[i];
-                for (k = 0; k <= end+2; ++k) {
+                for (k = 0; k < end+L_EXTRA; ++k) {
                     tr = t_node[i][k], t_node[i][k] = t_node[j][k], t_node[j][k] = tr;   
                 }
                 t = tri_n[i], tri_n[i] = tri_n[j], tri_n[j] = t;
@@ -852,7 +871,7 @@ void line_sort_endpos1(line_node **line, int *line_end,
             if (line[j][line_end[j]-1].x > line[i][line_end[i]-1].x) {
                 // swap_line
                 end = line_end[j] > line_end[i] ? line_end[j] : line_end[i];
-                for (k = 0; k <= end+2; ++k) {
+                for (k = 0; k < end+L_EXTRA; ++k) {
                     tmp = line[i][k], line[i][k] = line[j][k], line[j][k] = tmp;   
                 }
                 t = line_end[i], line_end[i] = line_end[j], line_end[j] = t;
@@ -866,86 +885,165 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
     float rat1, rat2;
 
     s2 = line[a][0].x, e2 = line[a][line_end[a]-1].x;
-    if (line[b][line_end[b]+1].x == -1) { // NO merged-line
+    ///if (line[b][line_end[b]+1].x == -1) { // NO merged-line
+    if (L_MF(line,line_end,b) & L_NMERG) {// Not merged
         hi = b;
         s1 = line[b][0].x, e1 = line[b][line_end[b]-1].x;
     } else { // [b] was merged already
-        hi = line[b][line_end[b]+1].y;
-        s1 = line[hi][line_end[hi]+1].x, e1 = line[hi][line_end[hi]+1].y; 
+        hi = L_MH(line, line_end, b);
+        s1 = L_LB(line, line_end, hi), e1 = L_RB(line, line_end, hi);
     }
     s = (s2 > s1) ? s2 : s1;
     e = (e2 < e1) ? e2 : e1;
+    // new strategy: mattter how big/small the overlap is, do the merging.
+    if (s <= e) {
+        L_LB(line, line_end, hi) = s1+s2-s, L_RB(line, line_end, hi) = e1+e2-e;
+        L_MF(line, line_end, hi) = L_MERGH;
+        L_MF(line, line_end, a) = L_MERGB, L_MH(line, line_end, a) = hi;
+        return 1;
+    } else {
+        L_MF(line, line_end, a) = L_NMERG;
+        return 0;
+    }
+    /*
     rat1 = (e-s+1+0.0)/(e1-s1+0.0);
     rat2 = (e-s+1+0.0)/(e2-s2+0.0);
     if (rat1>=0.7 || rat2>=0.7) { //0.7? XXX
-        line[hi][line_end[hi]+1].x = s1+s2-s, line[hi][line_end[hi]+1].y = e1+e2-e;
-        line[a][line_end[a]+1].x = -2, line[a][line_end[a]+1].y = hi;
+        ///line[hi][line_end[hi]+1].x = s1+s2-s, line[hi][line_end[hi]+1].y = e1+e2-e;
+        L_LB(line, line_end, hi) = s1+s2-s, L_RB(line, line_end, hi) = e1+e2-e;
+        L_MF(line, line_end, hi) = L_MERGH;
+        ///line[a][line_end[a]+1].x = -2, line[a][line_end[a]+1].y = hi;
+        L_MF(line, line_end, a) = L_MERGB, L_MH(line, line_end, a) = hi;
         return 1;
     }
     else {
-        line[a][line_end[a]+1].x = -1;
+        ///line[a][line_end[a]+1].x = -1;
+        L_MF(line, line_end, a) = L_NMERG;
         return 0;
-    }
+    }*/
 }
 
 // select best/secondary merged-line, based on line-node number OR based on line-score? XXX
-// priciple: 1. Better Score
-//           2. Short line, if Score is equal
-//           3. Random XXX third candidate?
-void line_filter(line_node **line, int *line_end, int li, int len, int *tri_n)
+// principle: 1. Better Score
+//            2. Short line, if Score is equal
+//            3. Random XXX third candidate?
+void line_filter(line_node **line, int *line_end, int li, int len, trig_node **tri_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg)
 {
-    int i,j, m_ii;
+    int i, m_ii;
     line_node *m_b = (line_node*)malloc(len * sizeof(line_node));
-    int *dump = (int*)malloc(len * sizeof(int));
     int m_i = -1, d_i=0;
     int i_score, b_score, s_score;
+    // check merged-lines
     for (i = li; i < li+len; ++i) {
-        if (line[i][line_end[i]+1].x >= 0) { // merged, head
+        if (L_MF(line, line_end, i) & L_NMERG) { // NOT merged
+            ++m_i; 
+            m_b[m_i].x = i, m_b[m_i].y = -2; // NOT merged
+        } else if (L_MF(line, line_end, i) & L_MERGH) { // merged, head
             ++m_i;
-            m_b[m_i].x = i, m_b[m_i].y = -1;
-        } else if (line[i][line_end[i]+1].x == -2) {
-            if (m_i < 0) { fprintf(stderr, "[line_filter] BUG.\n"); exit(-1); }
-            i_score = line[i][line_end[i]+2].x;
-            b_score = line[m_b[m_i].x][line_end[m_b[m_i].x]+2].x;
-            //if (i_score > b_score || (i_score == b_score && line_end[i] < line_end[m_b[m_i].x])) {
-            if (line_end[i] > line_end[m_b[m_i].x]) {
+            m_b[m_i].x = i, m_b[m_i].y = -1; // NO secondary
+        } else { // merged, body : inter-line candidate
+            if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(-1); }
+            i_score = L_LS(line, line_end, i);
+            b_score = L_LS(line, line_end, m_b[m_i].x);
+            if (i_score > b_score || (i_score == b_score && line_end[i] < line_end[m_b[m_i].x])) {
                 if (m_b[m_i].y != -1) { 
-                    dump[d_i++] = m_b[m_i].y;
-                    line[m_b[m_i].y][line_end[m_b[m_i].y]+1].x = -3;
+                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
+                    tri_n[m_b[m_i].y] = 0;
                 }
                 m_b[m_i].y = m_b[m_i].x;
                 m_b[m_i].x = i;
             } else if (m_b[m_i].y == -1)
                 m_b[m_i].y = i;
             else {
-                s_score = line[m_b[m_i].y][line_end[m_b[m_i].y]+2].x;
-                //if (i_score > s_score || (i_score == s_score && line_end[i] < line_end[m_b[m_i].y])) {
-                if (line_end[i] > line_end[m_b[m_i].y]) {
-                    line[m_b[m_i].y][line_end[m_b[m_i].y]+1].x = -3;
-                    dump[d_i++] = m_b[m_i].y;
+                s_score = L_LS(line, line_end, m_b[m_i].y);
+                if (i_score > s_score || (i_score == s_score && line_end[i] < line_end[m_b[m_i].y])) {
+                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
                     m_b[m_i].y = i;
+                    tri_n[m_b[m_i].y] = 0;
                 } else {
-                    line[i][line_end[i]+1].x = -3;
-                    dump[d_i++] = i;
+                    L_MF(line, line_end, i) |= L_DUMP;
+                    tri_n[i] = 0;
                 }
             }
         }
     }
+    // select best/secondary, remove merged line 
     for (i = 0; i <= m_i; ++i) {
+        if (m_b[i].y == -2) continue; // NOT merged
         int b = m_b[i].x, s = m_b[i].y;
-        if (line[m_b[i].y][line_end[m_b[i].y]+2].x > line[m_b[i].x][line_end[m_b[i].x]+2].x/2) { // best & seondary
+        if (L_LS(line, line_end, s) > L_LS(line, line_end, b)/2) { // best & seondary
             int h = MINOFTWO(b,s), t = MAXOFTWO(b,s);
-            line[t][line_end[t]+1] = (line_node){-2, h};
-            line[h][line_end[h]+1].x = MINOFTWO(line[h][0].x, line[t][0].x);
-            line[h][line_end[h]+1].y = MAXOFTWO(line[h][line_end[h]-1].x, line[t][line_end[t]-1].x);
+            L_MF(line, line_end, t) = L_MERGB; L_MH(line, line_end, t) = h;
+            L_MF(line, line_end, h) = L_MERGH;
+            L_LB(line, line_end, h) = MINOFTWO(line[h][0].x, line[t][0].x);
+            L_RB(line, line_end, h) = MAXOFTWO(line[h][line_end[h]-1].x, line[t][line_end[t]-1].x);
         } else { // only best
-            line[b][line_end[b]+1].x = -1;
-            line[s][line_end[s]+1].x = -3;
-            dump[d_i++] = s;
+            L_MF(line, line_end, b) = L_NMERG;
+            L_MF(line, line_end, s) |= L_DUMP;
+            tri_n[s] = 0;
+        }
+        // check inter-line: from b/s+1 -> merge_end
+        int j, k, l, head;
+        /// b/s
+        for (j = b; j ==b || j == s; j+=(s-b)) {
+            for (k = 0; k < tri_n[j]; ++k) {
+                head = -1;
+                for (l = j+1; l < li+len && (L_MF(line, line_end, l) & 0x3)==0; ++l) {
+                    if (line[l][0].x > tri_node[j][k].n1.x && line[l][line_end[l]-1].x < tri_node[j][k].n2.x) {
+                        // check for MIS(INV)
+                        if (f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].match_flag == F_MISMATCH ||
+                                f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].match_flag == F_LONG_MISMATCH) {
+                            int x_s = line[l][0].x, y_s = line[l][0].y;
+                            int x_e = line[l][line_end[l]-1].x, y_e = line[l][line_end[l]-1].y;
+                            int x1 = tri_node[j][k].n1.x, y1 = tri_node[j][k].n1.y, x2 = tri_node[j][k].n2.x, y2 = tri_node[j][k].n2.y;
+                            int nsrand = a_msg[x_s].at[y_s].nsrand;
+                            if (nsrand == a_msg[x1].at[y1].nsrand ||
+                                    a_msg[x_s].at[y_s].chr != a_msg[x1].at[y1].chr ||
+                                    nsrand * a_msg[x_s].at[y_s].offset < nsrand * a_msg[x2].at[y2].offset ||
+                                    nsrand * a_msg[x_e].at[y_e].offset > nsrand * a_msg[x1].at[y1].offset)
+                                continue;
+                        }
+                        E_LB(line, line_end, l) = tri_node[j][k].n1.x;
+                        E_RB(line, line_end, l) = tri_node[j][k].n2.x;
+                        L_MF(line, line_end, l) = L_INTER;
+                        if (tri_node[j][k].tri_flag == 0x2 && (f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].trg_n & 0x2)) // pre
+                            f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].trg_n -= 0x2;
+                        else if (tri_node[j][k].tri_flag == 0x1 && (f_node[tri_node[j][k].n1.x][tri_node[j][k].n1.y].trg_n & 0x1)) // next
+                            f_node[tri_node[j][k].n1.x][tri_node[j][k].n1.y].trg_n -= 0x1; 
+                        if (head == -1) {
+                            L_MF(line, line_end, l) |= L_NMERG;
+                            head = l;
+                        } else {
+                            L_MF(line, line_end, l) |= L_MERGB;
+                            L_MH(line, line_end, l) = head;
+                            L_MF(line, line_end, head) = L_INTER|L_MERGH;
+                        }
+                    }
+                }
+            }
         }
     }
-    for (j = 0; j < d_i; ++j) tri_n[dump[j]] = 0;
-    free(m_b); free(dump);
+    // remove candidate "trigger-line", left-most or right-most line
+    if (m_i > 0) {
+        int l, L;
+        // left-boundary tri-line
+        m_ii = 0;
+        l = line[m_b[m_ii].x][line_end[m_b[m_ii].x]-1].x - line[m_b[m_ii].x][0].x;
+        L = line[m_b[m_ii+1].x][line_end[m_b[m_ii+1].x]-1].x - line[m_b[m_ii+1].x][0].x;
+        if (l < 2 && L >= 2) { // DUMP
+            L_MF(line, line_end, m_b[m_ii].x) = L_DUMP;
+            if (m_b[m_ii].y != -2) L_MF(line, line_end, m_b[m_ii].y) = L_DUMP;
+        }
+        // right-boundary tri-line
+        m_ii = m_i;
+        l = line[m_b[m_ii].x][line_end[m_b[m_ii].x]-1].x - line[m_b[m_ii].x][0].x;
+        L = line[m_b[m_ii-1].x][line_end[m_b[m_ii-1].x]-1].x - line[m_b[m_ii-1].x][0].x;
+        if (l < 2 && L >= 2) { // DUMP
+            L_MF(line, line_end, m_b[m_ii].x) = L_DUMP;
+            if (m_b[m_ii].y != -2) L_MF(line, line_end, m_b[m_ii].y) = L_DUMP;
+        }
+    }
+    free(m_b);
 }
 void line_filter1(line_node **line, int *line_end, int li, int len)
 {
@@ -954,70 +1052,72 @@ void line_filter1(line_node **line, int *line_end, int li, int len)
     int m_i = -1, d_i=0;
     int i_score, b_score, s_score;
     for (i = li; i < li+len; ++i) {
-        if (line[i][line_end[i]+1].x >= 0) { // merged, head
+        if (L_MF(line, line_end, i) & L_NMERG) continue; // NOT merged
+        else if (L_MF(line, line_end, i) & L_MERGH) { // merged, head
             ++m_i;
             m_b[m_i].x = i, m_b[m_i].y = -1;
-        } else if (line[i][line_end[i]+1].x == -2) {
-            if (m_i < 0) { fprintf(stderr, "[line_filter] BUG.\n"); exit(-1); }
-            i_score = line[i][line_end[i]+2].x;
-            b_score = line[m_b[m_i].x][line_end[m_b[m_i].x]+2].x;
-            //if (i_score > b_score || (i_score == b_score && line_end[i] < line_end[m_b[m_i].x])) {
-            if (line_end[i] > line_end[m_b[m_i].x]) {
+        } else { // merged, body
+            if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(-1); }
+            i_score = L_LS(line, line_end, i);
+            b_score = L_LS(line, line_end, m_b[m_i].x);
+            if (i_score > b_score || (i_score == b_score && line_end[i] < line_end[m_b[m_i].x])) {
                 if (m_b[m_i].y != -1) { 
-                    line[m_b[m_i].y][line_end[m_b[m_i].y]+1].x = -3;
+                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
                 }
                 m_b[m_i].y = m_b[m_i].x;
                 m_b[m_i].x = i;
             } else if (m_b[m_i].y == -1)
                 m_b[m_i].y = i;
             else {
-                s_score = line[m_b[m_i].y][line_end[m_b[m_i].y]+2].x;
-                //if (i_score > s_score || (i_score == s_score && line_end[i] < line_end[m_b[m_i].y])) {
-                if (line_end[i] > line_end[m_b[m_i].y]) {
-                    line[m_b[m_i].y][line_end[m_b[m_i].y]+1].x = -3;
+                s_score = L_LS(line, line_end, m_b[m_i].y);
+                if (i_score > s_score || (i_score == s_score && line_end[i] < line_end[m_b[m_i].y])) {
+                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
                     m_b[m_i].y = i;
                 } else {
-                    line[i][line_end[i]+1].x = -3;
+                    L_MF(line, line_end, i) |= L_DUMP;
                 }
             }
         }
     }
     for (i = 0; i <= m_i; ++i) {
         int b = m_b[i].x, s = m_b[i].y;
-        //if (line[m_b[i].y][line_end[m_b[i].y]+2].x > line[m_b[i].x][line_end[m_b[i].x]+2].x/2) { // best & seondary
+        /// if (line[m_b[i].y][line_end[m_b[i].y]+2].x > line[m_b[i].x][line_end[m_b[i].x]+2].x/2) { // best & seondary
+        if (L_LS(line, line_end, s) > L_LS(line, line_end, b)/2) {
             int h = MINOFTWO(b,s), t = MAXOFTWO(b,s);
-            line[t][line_end[t]+1] = (line_node){-2, h};
-            line[h][line_end[h]+1].x = MINOFTWO(line[h][0].x, line[t][0].x);
-            line[h][line_end[h]+1].y = MAXOFTWO(line[h][line_end[h]-1].x, line[t][line_end[t]-1].x);
-        /*} else { // only best
-            line[b][line_end[b]+1].x = -1;
-            line[s][line_end[s]+1].x = -3;
-            dump[d_i++] = s;
-        }*/
+            L_MF(line, line_end, t) = L_MERGB; L_MH(line, line_end, t) = h;
+            L_MF(line, line_end, h) = L_MERGH;
+            L_LB(line, line_end, h) = MINOFTWO(line[h][0].x, line[t][0].x);
+            L_RB(line, line_end, h) = MAXOFTWO(line[h][line_end[h]-1].x, line[t][line_end[t]-1].x);
+        } else { // only best
+            L_MF(line, line_end, b) = L_NMERG;
+            L_MF(line, line_end, s) |= L_DUMP;
+        }
     }
     free(m_b);
 }
+
 // internal mini merge ? XXX
 //     same to the process in "set-bound"?
 // internal-merge, based on inter-trigger
 //   INS/INV
 //   XXX check match_flag
 //      MIS(INV): chr-dif and offset
-void line_inter_bound(line_node **line, int *line_end, int li, int len, tetr_node **tri_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg)
+void line_inter_bound(line_node **line, int *line_end, int li, int len, trig_node **tri_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg)
 {
     int i,j,head,k;
     for (j = li; j < li+len; ++j) {
         for (k = 0; k < tri_n[j]; ++k) {
             head = -1;
             for (i = li; i < li+len; ++i) {
-                if (line[li][line_end[li]+1].x != -3) continue;
-                if (line[i][0].x > tri_node[j][k].x1 && line[i][line_end[i]-1].x < tri_node[j][k].x2) {
+                ///if (line[i][line_end[i]+1].x != -3) continue;
+                if (!(L_MF(line, line_end, i) & L_DUMP)) continue;
+                if (line[i][0].x > tri_node[j][k].n1.x && line[i][line_end[i]-1].x < tri_node[j][k].n2.x) {
                     // check for MIS(INV)
-                    if (f_node[tri_node[j][k].x2][tri_node[j][k].y2].match_flag == F_MISMATCH ||
-                        f_node[tri_node[j][k].x2][tri_node[j][k].y2].match_flag == F_LONG_MISMATCH) {
+                    if (f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].match_flag == F_MISMATCH ||
+                        f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].match_flag == F_LONG_MISMATCH) {
                         int x_s = line[i][0].x, y_s = line[i][0].y;
                         int x_e = line[i][line_end[i]-1].x, y_e = line[i][line_end[i]-1].y;
-                        int x1 = tri_node[j][k].x1, y1 = tri_node[j][k].y1, x2 = tri_node[j][k].x2, y2 = tri_node[j][k].y2;
+                        int x1 = tri_node[j][k].n1.x, y1 = tri_node[j][k].n1.y, x2 = tri_node[j][k].n2.x, y2 = tri_node[j][k].n2.y;
                         int nsrand = a_msg[x_s].at[y_s].nsrand;
                         if (nsrand == a_msg[x1].at[y1].nsrand ||
                             a_msg[x_s].at[y_s].chr != a_msg[x1].at[y1].chr ||
@@ -1025,15 +1125,25 @@ void line_inter_bound(line_node **line, int *line_end, int li, int len, tetr_nod
                             nsrand * a_msg[x_e].at[y_e].offset > nsrand * a_msg[x1].at[y1].offset)
                             continue;
                     }
-                    
-                    line[i][line_end[i]].x = tri_node[j][k].x1;
-                    line[i][line_end[i]].y = tri_node[j][k].x2;
+                    ///line[i][line_end[i]].x = tri_node[j][k].x1;
+                    ///line[i][line_end[i]].y = tri_node[j][k].x2;
+                    E_LB(line, line_end, i) = tri_node[j][k].n1.x;
+                    E_RB(line, line_end, i) = tri_node[j][k].n2.x;
+                    L_MF(line, line_end, i) = L_INTER;
+                    if (tri_node[j][k].tri_flag == 0x2 && (f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].trg_n & 0x2)) // pre
+                        f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].trg_n -= 0x2;
+                    else if (tri_node[j][k].tri_flag == 0x1 && (f_node[tri_node[j][k].n1.x][tri_node[j][k].n1.y].trg_n & 0x1)) // next
+                        f_node[tri_node[j][k].n1.x][tri_node[j][k].n1.y].trg_n -= 0x1; 
                     if (head == -1) {
-                        line[i][line_end[i]+1].x = -1;
+                        ///line[i][line_end[i]+1].x = -1;
+                        L_MF(line, line_end, i) |= L_NMERG;
                         head = i;
                     } else {
-                        line[i][line_end[i]+1] = (line_node){-2, head};
-                        line[head][line_end[head]+1].x = 0;
+                        ///line[i][line_end[i]+1] = (line_node){-2, head};
+                        L_MF(line, line_end, i) |= L_MERGB;
+                        L_MH(line, line_end, i) = head;
+                        ///line[head][line_end[head]+1].x = 0;
+                        L_MF(line, line_end, head) = L_INTER|L_MERGH;
                     }
                 }
             }
@@ -1041,7 +1151,34 @@ void line_inter_bound(line_node **line, int *line_end, int li, int len, tetr_nod
     }
 }
 
-/* line: [0 ~ end-1] -> node; 
+int line_remove(line_node **line, int *line_end, int li, int len)
+{
+    int *head = (int*)malloc(len * sizeof(int));
+    int l, j, cur_i=li;
+    // remove line with "DUMP" flag
+    for (l = li; l < li+len; ++l) {
+        if (!(L_MF(line, line_end, l) & L_DUMP)) {
+            if (L_MF(line, line_end, l) & L_MERGH)
+                head[l-li] = cur_i;
+            if (l == cur_i) {
+                ++cur_i;
+                continue;
+            }
+            line_end[cur_i] = line_end[l];
+            for (j = 0; j < line_end[l]+L_EXTRA; ++j)
+                line[cur_i][j] = line[l][j];
+            //merged, body
+            if (!(L_MF(line, line_end, cur_i)&L_NMERG) && !(L_MF(line, line_end, cur_i)&L_MERGH))
+                    L_MH(line, line_end, cur_i) = head[L_MH(line, line_end, cur_i)-li];
+            ++cur_i;
+        }
+    }
+    free(head);
+    return cur_i-li;
+}
+
+//XXX 将NotMerged与Merged统一起来
+/* line: [0 ~ end-1] -> nodea; 
          [end] -> (left-b, right-b); 
          [end+1] -> (merged-flag, merge-head)/(start, end) 
          // (-1,):NOT merged
@@ -1052,209 +1189,129 @@ void line_inter_bound(line_node **line, int *line_end, int li, int len, tetr_nod
          [end+2] -> (line-score, x)
          */
 int line_set_bound(line_node **line, int *line_end, 
-                   int li, int len, int left, int right, 
-                   tetr_node **t_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg) 
+                   int li, int *o_len, int left, int right, 
+                   trig_node **t_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg) 
 {
-    if (len <= 0) return 0;
-    int i, j;
+    if (*o_len <= 0) return 0;
+    int i, j, len = *o_len;
     // sort by end-pos
     line_sort_endpos(line, line_end, t_node, tri_n, li, len);
     // merge lines
-    line[li][line_end[li]+1].x = -1;
+    ///line[li][line_end[li]+1].x = -1;
+    L_MF(line, line_end, li) = L_NMERG;
     for (i = 1; i < len; ++i)
         line_merge(li+i, li+i-1, line, line_end);
-    // filter best/secondary line, and their tri-nodes
-    line_filter(line, line_end, li, len, tri_n);
+    // filter best/secondary line, and their tri-nodes, then find inter-line 
+    line_filter(line, line_end, li, len, t_node, tri_n, f_node, a_msg);
+    *o_len = line_remove(line, line_end, li, len);
+    len = *o_len;
     // set line-boundary
     int l,r,m,s,e;
     r = right;
     for (i = li; i < li+len; ++i) {
-        if (line[i][line_end[i]+1].x != -3) {
-            line[i][line_end[i]].y = r;
+        if (!(L_MF(line, line_end, i) & L_DUMP)) {
+            E_RB(line, line_end, i) = r;
             break;
         }
     }
-    if (i == li+len) {fprintf(stderr, "[line_set_bound] BUG.\n"); exit(-1);}
+    if (i == li+len) {fprintf(stderr, "[line_set_bound] %s BUG 0.\n", READ_NAME); exit(-1);}
     // set right-b
-    if (line[i][line_end[i]+1].x == -1) //NOT merged
+    if (L_MF(line, line_end, i) & L_NMERG)
         s = line[i][0].x, e = line[i][line_end[i]-1].x;
     else
-        s = line[i][line_end[i]+1].x, e = line[i][line_end[i]+1].y;
+        s = L_LB(line, line_end, i), e = L_RB(line, line_end, i);
     m = 0; //Merged head OR NOT-merged head
     for (++i; i < li+len; ++i) {
-        if (line[i][line_end[i]+1].x == -3) continue;
-        if (line[i][line_end[i]+1].x == -1) {//NOT merged
-            if (s > line[i][line_end[i]-1].x)
-                r = s, l = line[i][line_end[i]-1].x;
-            else r = e, l = line[i][0].x;
+        if (L_MF(line, line_end, i) & (L_DUMP|L_INTER)) continue;
+        if (L_MF(line, line_end, i) & L_NMERG) {
+            r = s, l = line[i][line_end[i]-1].x;
             //set left-b for last-line(s)
-            for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
+            for (j = i-1; j >= m; --j) {
+                if (L_MF(line, line_end, j) & (L_DUMP|L_INTER)) continue;
+                E_LB(line, line_end, j) = l;
+            }
             s = line[i][0].x, e = line[i][line_end[i]-1].x;
             m = i;
-        } else if (line[i][line_end[i]+1].x != -2) {//merged and head
-            if (s > line[i][line_end[i]+1].y) 
-                r = s, l = line[i][line_end[i]+1].y;
-            else r = e, l = line[i][line_end[i]+1].x;
-            for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
-            s = line[i][line_end[i]+1].x, e = line[i][line_end[i]+1].y;
+        } else if (L_MF(line, line_end, i) & L_MERGH) {
+            r = s, l = L_RB(line, line_end, i);
+            for (j = i-1; j >= m; --j) {
+                if (L_MF(line, line_end, j) & (L_DUMP|L_INTER)) continue;
+                E_LB(line, line_end, j) = l;
+            }
+            s = L_LB(line, line_end, i), e = L_RB(line, line_end, i);
             m = i;
         } //merged and body
-        line[i][line_end[i]].y = r;
+        E_RB(line, line_end, i) = r;
     }
-    for (j = i-1; j >= m; --j) line[j][line_end[j]].x = left;
+    for (j = i-1; j >= m; --j) {
+        if (L_MF(line, line_end, j) & (L_DUMP|L_INTER)) continue;
+        E_LB(line, line_end, j) = left;
+    }
     // set inter-bound
-    line_inter_bound(line, line_end, li, len, t_node, tri_n, f_node, a_msg);
+    //line_inter_bound(line, line_end, li, len, t_node, tri_n, f_node, a_msg);
     return 0;
-    /*
-        // merge lines
-        line[0][line_end[0]+1].x = -1;
-        for (i = 1; i < min_l; ++i) 
-            line_merge(i, i-1, line, line_end);
-        // set line-boundary
-        int l,r,m,s,e;
-        r = APP->seed_out;
-        line[0][line_end[0]].y = r;
-        // set right-b
-        if (line[0][line_end[0]+1].x == -1) {//NOT merged
-            s = line[0][0].x, e = line[0][line_end[0]-1].x;
-        } else {
-            s = line[0][line_end[0]+1].x, e = line[0][line_end[0]+1].y;
-        }
-        m = 0;
-        for (i = 1; i < min_l; ++i)
-        {
-            if (line[i][line_end[i]+1].x == -1) {//NOT merged
-                if (s > line[i][line_end[i]-1].x)
-                    r = s, l = line[i][line_end[i]-1].x;
-                else r = e, l = line[i][0].x;
-                //set left-b for last-line(s)
-                for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
-                s = line[i][0].x, e = line[i][line_end[i]-1].x;
-                m = i;
-            } else if (line[i][line_end[i]+1].x != -2) {//merged and head
-                if (s > line[i][line_end[i]+1].y) 
-                    r = s, l = line[i][line_end[i]+1].y;
-                else r = e, l = line[i][line_end[i]+1].x;
-                for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
-                s = line[i][line_end[i]+1].x, e = line[i][line_end[i]+1].y;
-                m = i;
-            } //merged and body
-            line[i][line_end[i]].y = r;
-        }
-        for (j = i-1; j >= m; --j) line[j][line_end[j]].x = -1; //left-b
-        */
 }
-int line_set_bound1(line_node **line, int *line_end, int li, int len, int left, int right) {
-    if (len <= 0) return 0;
-    int i, j;
+int line_set_bound1(line_node **line, int *line_end, 
+                   int li, int *o_len, int left, int right) 
+{
+    if (*o_len <= 0) return 0;
+    int i, j, len=*o_len;
     // sort by end-pos
     line_sort_endpos1(line, line_end, li, len);
     // merge lines
-    line[li][line_end[li]+1].x = -1;
+    ///line[li][line_end[li]+1].x = -1;
+    L_MF(line, line_end, li) = L_NMERG;
     for (i = 1; i < len; ++i)
         line_merge(li+i, li+i-1, line, line_end);
-    // filter best/secondary line
+    // filter best/secondary line, and their tri-nodes, then find inter-line 
     line_filter1(line, line_end, li, len);
+    *o_len = line_remove(line, line_end, li, len);
+    len = *o_len;
     // set line-boundary
     int l,r,m,s,e;
     r = right;
     for (i = li; i < li+len; ++i) {
-        if (line[i][line_end[i]+1].x != -3) {
-            line[i][line_end[i]].y = r;
+        if (!(L_MF(line, line_end, i) & L_DUMP)) {
+            E_RB(line, line_end, i) = r;
             break;
         }
     }
-    if (i == li+len) {fprintf(stderr, "[line_set_bound] BUG.\n"); exit(-1);}
+    if (i == li+len) {fprintf(stderr, "[line_set_bound] %s BUG 0.\n", READ_NAME); exit(-1);}
     // set right-b
-    if (line[i][line_end[i]+1].x == -1) //NOT merged
+    if (L_MF(line, line_end, i) & L_NMERG)
         s = line[i][0].x, e = line[i][line_end[i]-1].x;
-    else 
-        s = line[i][line_end[i]+1].x, e = line[i][line_end[i]+1].y;
+    else
+        s = L_LB(line, line_end, i), e = L_RB(line, line_end, i);
     m = 0; //Merged head OR NOT-merged head
     for (++i; i < li+len; ++i) {
-        if (line[i][line_end[i]+1].x == -3) continue;
-        if (line[i][line_end[i]+1].x == -1) {//NOT merged
-            if (s > line[i][line_end[i]-1].x)
-                r = s, l = line[i][line_end[i]-1].x;
-            else r = e, l = line[i][0].x;
+        if (L_MF(line, line_end, i) & (L_DUMP|L_INTER)) continue;
+        if (L_MF(line, line_end, i) & L_NMERG) {
+            r = s, l = line[i][line_end[i]-1].x;
             //set left-b for last-line(s)
-            for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
+            for (j = i-1; j >= m; --j) {
+                if (L_MF(line, line_end, j) & (L_DUMP|L_INTER)) continue;
+                E_LB(line, line_end, j) = l;
+            }
             s = line[i][0].x, e = line[i][line_end[i]-1].x;
             m = i;
-        } else if (line[i][line_end[i]+1].x != -2) {//merged and head
-            if (s > line[i][line_end[i]+1].y) 
-                r = s, l = line[i][line_end[i]+1].y;
-            else r = e, l = line[i][line_end[i]+1].x;
-            for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
-            s = line[i][line_end[i]+1].x, e = line[i][line_end[i]+1].y;
+        } else if (L_MF(line, line_end, i) & L_MERGH) {
+            r = s, l = L_RB(line, line_end, i);
+            for (j = i-1; j >= m; --j) {
+                if (L_MF(line, line_end, j) & (L_DUMP|L_INTER)) continue;
+                E_LB(line, line_end, j) = l;
+            }
+            s = L_LB(line, line_end, i), e = L_RB(line, line_end, i);
             m = i;
         } //merged and body
-        line[i][line_end[i]].y = r;
+        E_RB(line, line_end, i) = r;
     }
-    for (j = i-1; j >= m; --j) line[j][line_end[j]].x = left;
+    for (j = i-1; j >= m; --j) {
+        if (L_MF(line, line_end, j) & (L_DUMP|L_INTER)) continue;
+        E_LB(line, line_end, j) = left;
+    }
+    // set inter-bound
+    //line_inter_bound(line, line_end, li, len, t_node, tri_n, f_node, a_msg);
     return 0;
-    /*
-        // merge lines
-        line[0][line_end[0]+1].x = -1;
-        for (i = 1; i < min_l; ++i) 
-            line_merge(i, i-1, line, line_end);
-        // set line-boundary
-        int l,r,m,s,e;
-        r = APP->seed_out;
-        line[0][line_end[0]].y = r;
-        // set right-b
-        if (line[0][line_end[0]+1].x == -1) {//NOT merged
-            s = line[0][0].x, e = line[0][line_end[0]-1].x;
-        } else {
-            s = line[0][line_end[0]+1].x, e = line[0][line_end[0]+1].y;
-        }
-        m = 0;
-        for (i = 1; i < min_l; ++i)
-        {
-            if (line[i][line_end[i]+1].x == -1) {//NOT merged
-                if (s > line[i][line_end[i]-1].x)
-                    r = s, l = line[i][line_end[i]-1].x;
-                else r = e, l = line[i][0].x;
-                //set left-b for last-line(s)
-                for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
-                s = line[i][0].x, e = line[i][line_end[i]-1].x;
-                m = i;
-            } else if (line[i][line_end[i]+1].x != -2) {//merged and head
-                if (s > line[i][line_end[i]+1].y) 
-                    r = s, l = line[i][line_end[i]+1].y;
-                else r = e, l = line[i][line_end[i]+1].x;
-                for (j = i-1; j >= m; --j) line[j][line_end[j]].x = l;
-                s = line[i][line_end[i]+1].x, e = line[i][line_end[i]+1].y;
-                m = i;
-            } //merged and body
-            line[i][line_end[i]].y = r;
-        }
-        for (j = i-1; j >= m; --j) line[j][line_end[j]].x = -1; //left-b
-        */
-}
-
-int line_remove(line_node **line, int *line_end, int li, int len)
-{
-    int *head = (int*)malloc(len * sizeof(int));
-    int l, j, cur_i=li;
-    for (l = li; l < li+len; ++l) {
-        if (line[l][line_end[l]+1].x != -3) {
-            if (line[l][line_end[l]+1].x >= 0)
-                head[l-li] = cur_i;
-            if (l == cur_i) {
-                ++cur_i;
-                continue;
-            }
-            line_end[cur_i] = line_end[l];
-            for (j = 0; j <= line_end[l]+2; ++j)
-                line[cur_i][j] = line[l][j];
-            if (line[cur_i][j-2].x == -2) //merged, body
-                line[cur_i][j-2].y = head[line[cur_i][j-2].y-li];
-            ++cur_i;
-        }
-    }
-    free(head);
-    return cur_i-li;
 }
 
 //TODO: save all (node,score)? OR just save the first `M` big (node,score)
@@ -1289,7 +1346,8 @@ line_node get_max_son(frag_dp_node **f_node, int x, int y)
     for (i = 0; i < f_node[x][y].son_n; ++i) {
         son = f_node[x][y].son[i];
         max_flag = f_node[son.x][son.y].match_flag;
-        if (max_flag == F_MATCH || max_flag == F_MISMATCH || max_flag == F_LONG_MISMATCH)
+        /// XXX LONG_MIS_MATCH
+        if (max_flag == F_MATCH || max_flag == F_MISMATCH)// || max_flag == F_LONG_MISMATCH)
             return son;
         if (f_node[son.x][son.y].max_score > max_score || (f_node[son.x][son.y].max_score == max_score && son.x - x < max_dis)) {
             max = son;
@@ -1452,7 +1510,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
 
     line_node head = START_NODE; // unlimited
     int start, end;
-    int i, j, k, l, mini_dp_flag = MULTI_FLAG;
+    int i, j, k, l, mini_dp_flag = WHOLE_FLAG;// (whole DP)
     int l_i, max_score, node_i;
     line_node left, right;
     line_node _right;
@@ -1465,7 +1523,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
     //first dp int
     for (i = start; i <= end; ++i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
-            if (f_node[i][j].dp_flag == mini_dp_flag || f_node[i][j].dp_flag == 0-mini_dp_flag)
+            //if (f_node[i][j].dp_flag == mini_dp_flag || f_node[i][j].dp_flag == 0-mini_dp_flag)
                 frag_dp_per_init(f_node, a_msg, i, j, head, APP, AP, mini_dp_flag);
         }
     }
@@ -1493,17 +1551,17 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         if (_right.x == START_NODE.x) break;
         node_i = f_node[_right.x][_right.y].node_n-1;
         line_end[l_i] = node_i+1;
-        line[l_i][line_end[l_i]+2].x = score;
+        L_LS(line,line_end,l_i) = score;
         while (_right.x != head.x) {
             if (node_i < 0) { 
-                fprintf(stderr, "\n[frag mini dp multi] node_i BUG 1.\n"); 
+                fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 1.\n", APP->read_name); 
                 exit(0); }
             line[l_i][node_i--] = _right;
             f_node[_right.x][_right.y].dp_flag = MULTI_OUT;
             _right = f_node[_right.x][_right.y].from;
         }
         if (node_i >= 0) { 
-            fprintf(stderr, "\n[frag mini dp multi] node_i BUG 2.\n"); 
+            fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 2.\n", APP->read_name); 
             exit(0); }
         ++l_i;
     }
@@ -1582,7 +1640,8 @@ int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg, frag_msg **f_msg,
 {
     int i, j;
     int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, line, line_end, max_multi);//, 0, 0);
-    line_set_bound1(line, line_end, 0,  l, left, right);
+    line_set_bound1(line, line_end, 0,  &l, left, right);
+    ///l = line_remove(line, line_end, 0, l);
     return l;
 }
 //mini-dp 过程中，种子比对结果被多重输出的问题
@@ -1656,13 +1715,13 @@ int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
     //while (_right.x != left.x)
     while (_right.x != head.x) {
         if (node_i < 0) { 
-            fprintf(stderr, "\n[frag mini dp] node_i BUG 1.\n"); 
+            fprintf(stderr, "\n[frag mini dp] %s node_i BUG 1.\n", APP->read_name);
             exit(0); 
         }
         line[node_i--] = _right;
         _right = f_node[_right.x][_right.y].from;
     }
-    if (node_i >= 0) { fprintf(stderr, "\n[frag mini dp] node_i BUG 2.\n"); exit(0); }
+    if (node_i >= 0) { fprintf(stderr, "\n[frag mini dp] %s node_i BUG 2.\n", APP->read_name); exit(0); }
     *de_score += (max_score-old_score);
     return max_n;
 }
@@ -1956,7 +2015,7 @@ int frag_line_BCC(aln_msg *a_msg,
                 frag_dp_init(*f_node, a_msg, i, START_NODE, APP, AP, MULTI_FLAG);
         }
         //fraction XXX
-        if (!min_exist || min_num * 10 < APP->seed_out)
+        if (!min_exist || min_num * 3 < APP->seed_out)
         {
             for (i = 0; i < APP->seed_out; ++i) {
                 for (j = 0; j < a_msg[i].n_aln; ++j) (*f_node)[i][j].dp_flag = MIN_FLAG;
@@ -2004,11 +2063,11 @@ int frag_line_BCC(aln_msg *a_msg,
         //max-heap, sort by score
         build_node_max_heap(ns);
         int max_score, line_score; line_node max_node;
-        int l_i = 0, new_l = 0, min_l=ns->node_n;
+        int l_i = 0, new_l = 0, min_l=ns->node_n, o_l = min_l;
         int tri_x, tri_y, node_i, mini_len, multi_l;
-        tetr_node **inter_tri = (tetr_node**)malloc(min_l* sizeof(tetr_node*)); int *inter_n=(int*)malloc(min_l*sizeof(int));
-        for (i = 0; i < min_l;++i)
-            inter_tri[i] = (tetr_node*)malloc(APP->seed_out * sizeof(tetr_node));
+        trig_node **inter_tri = (trig_node**)malloc(o_l* sizeof(trig_node*)); int *inter_n=(int*)malloc(o_l*sizeof(int));
+        for (i = 0; i < o_l;++i)
+            inter_tri[i] = (trig_node*)malloc(APP->seed_out * sizeof(trig_node));
         //multi-backtrack
         //extend for min-line AND set inter-trigger
         while (1) {
@@ -2036,13 +2095,12 @@ int frag_line_BCC(aln_msg *a_msg,
                         (*f_node)[last_n.x][last_n.y].pre_trg = (line_node){line[l_i][node_i-k].x, last_n.x};
                         // 同一node处有多个trigger?XXX,即trg_n被重复赋值1或2
                         (*f_node)[last_n.x][last_n.y].trg_n |= 0x2;
-                        inter_tri[l_i][inter_n[l_i]++] = (tetr_node){line[l_i][node_i-k].x, line[l_i][node_i-k].y, last_n.x, last_n.y};
+                        inter_tri[l_i][inter_n[l_i]++] = (trig_node){(line_node){line[l_i][node_i-k].x, line[l_i][node_i-k].y}, (line_node){last_n.x, last_n.y}, 2};
                     }
                     last_n = line[l_i][node_i-k];
                 }
             }
             right = max_node;
-            // XXX 能否与上边的代码合并?
             // fill-up for every gap
             while (right.x != START_NODE.x) {
                 line[l_i][node_i++] = right;
@@ -2064,7 +2122,7 @@ int frag_line_BCC(aln_msg *a_msg,
                             if (line[l_i][node_i-k].x == START_NODE.x) continue;
                             (*f_node)[last_n.x][last_n.y].pre_trg = (line_node){line[l_i][node_i-k].x, last_n.x};
                             (*f_node)[last_n.x][last_n.y].trg_n |= 0x2;
-                            inter_tri[l_i][inter_n[l_i]++] = (tetr_node){line[l_i][node_i-k].x, line[l_i][node_i-k].y,last_n.x, last_n.y};
+                            inter_tri[l_i][inter_n[l_i]++] = (trig_node){(line_node){line[l_i][node_i-k].x, line[l_i][node_i-k].y},(line_node){last_n.x, last_n.y}, 2};
                         }
                         last_n = line[l_i][node_i-k];
                     }
@@ -2077,35 +2135,40 @@ int frag_line_BCC(aln_msg *a_msg,
                 tmp =line[l_i][k]; line[l_i][k] = line[l_i][node_i-k-1]; line[l_i][node_i-k-1] = tmp;
             }
             line_end[l_i] = node_i;
-            line[l_i][line_end[l_i]+2].x = line_score;
+            ///line[l_i][line_end[l_i]+2].x = line_score;
+            L_LS(line, line_end, l_i) = line_score;
             l_i++;
         }
         /* line: [0 ~ end-1] -> node; 
-                 [end] -> (left-b, right-b); 
+                 [end] -> (left-b, right-b)/(start,end)
                  [end+1] -> (merged-flag, merge-head)/(start, end) // (-1,):NOT merged/ (-2,i):Merged and head is i/ (a,b): start from a to b
                  [end+2] -> (line-score, x) */
         // min-lines have been extended, and sorted by end-pos
         // set boundary and filter best/secondary
-        line_set_bound(line, line_end, 0, min_l, -1, APP->seed_out, inter_tri, inter_n, *f_node, a_msg);
-        for (i = 0; i < min_l; ++i) free(inter_tri[i]);
+        line_set_bound(line, line_end, 0, &min_l, -1, APP->seed_out, inter_tri, inter_n, *f_node, a_msg);
+        for (i = 0; i < o_l; ++i) free(inter_tri[i]);
         free(inter_tri); free(inter_n);
-        min_l = line_remove(line, line_end, 0, min_l);
+        ///min_l = line_remove(line, line_end, 0, min_l);
+
         // set bound-trigger (-1, right)/ (left, APP->seed_out)
         for (i = 0; i < min_l; ++i) {
-            if (line[i][line_end[i]].y == APP->seed_out && line[i][line_end[i]-1].x < APP->seed_out-2) {
+            if(L_MF(line, line_end, i) & L_INTER) continue;
+            if (E_RB(line, line_end, i) == APP->seed_out && line[i][line_end[i]-1].x < APP->seed_out-2) {
                 (*f_node)[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].next_trg = (line_node){line[i][line_end[i]-1].x, APP->seed_out};
                 (*f_node)[line[i][line_end[i]-1].x][line[i][line_end[i]-1].y].trg_n |= 0x1;
-            } else if (line[i][line_end[i]].x == -1 && line[i][0].x > 2) {
+            } 
+            if (E_LB(line, line_end, i) == -1 && line[i][0].x > 1) {
                 (*f_node)[line[i][0].x][line[i][0].y].pre_trg = (line_node){-1, line[i][0].x};
                 (*f_node)[line[i][0].x][line[i][0].y].trg_n |= 0x2;
             }
         }
         //find path without endpoints between min-lines(merged-lines), similar to the trigger-line
-        //for [0]
-        line_node left, right; int ll;
+        /*line_node left, right; int ll;
         right.x = APP->seed_out;
         for (k = 0; k < min_l; ++k) {
-            if (line[k][line_end[k]+1].x == -1) { //NO merged-line
+            if (L_MF(line, line_end, k) & L_INTER) continue;
+            ///if (line[k][line_end[k]+1].x == -1) { //NO merged-line
+            if (L_MF(line, line_end, k) & L_NMERG) {
                 left.x = line[k][line_end[k]-1].x;
                 // 两端的gap是 inter
                 if (right.x != APP->seed_out && left.x != -1) {
@@ -2126,8 +2189,10 @@ int frag_line_BCC(aln_msg *a_msg,
                     new_l = ll+line_remove(line, line_end, min_l+ll, new_l-ll);
                 }
                 right.x = line[k][0].x;
-            } else if (line[k][line_end[k]+1].x != -2) { //merged and head
-                left.x = line[k][line_end[k]+1].y;
+            ///} else if (line[k][line_end[k]+1].x != -2) { //merged and head
+            } else if (L_MF(line, line_end, k) & L_MERGH) {
+                ///left.x = line[k][line_end[k]+1].y;
+                left.x = L_RB(line, line_end, k);
                 if (right.x != APP->seed_out && left.x != -1) {
                     multi_l = frag_mini_dp_multi_line(*f_node, a_msg, APP, AP, left.x, right.x, _line, _line_end, max_multi);//, 0, 0);
                     ll = new_l;
@@ -2144,9 +2209,10 @@ int frag_line_BCC(aln_msg *a_msg,
                     line_set_bound1(line, line_end, min_l+ll, new_l-ll, left.x, right.x);
                     new_l = ll + line_remove(line, line_end, min_l+ll, new_l-ll);
                 }
-                right.x = line[k][line_end[k]+1].x;
+                ///right.x = line[k][line_end[k]+1].x;
+                right.x = L_RB(line, line_end, k);
             } // merged and body: continue
-        }
+        }*/
         node_free_score(ns);
         return min_l+new_l;
     }
@@ -2322,23 +2388,21 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
     if (line_n == 0) return 0;
 	int i, l;
     
-    /*for (i = 0; i < line_n; ++i) {
-        printf("%d(%d,%d score: %d):\t", i+1, line[i][line_end[i]+1].x,line[i][line_end[i]+1].y, line[i][line_end[i]+2].x);
+#ifdef __DEBUG__
+    for (i = 0; i < line_n; ++i) {
+        printf("%d(%d,%d score: %d):\t", i+1, L_MF(line, line_end, i), L_MH(line, line_end,i), L_LS(line, line_end, i));
         for (l = 0; l < line_end[i]; ++l)
             //printf("(%d, %d)\t", a_msg[line[i][l].x].read_id, line[i][l].y);
             printf("(%d, %d)\t", line[i][l].x, line[i][l].y);
         printf("\n");
-    }*/
+    }
+#endif
 
 	int frag_num;
 	int cur_x , cur_y , pre_x, pre_y;
 
-	//for new frags
-	//  cur_line: cur line index, cur_num:  whole lines, *line_num: mem of *f_msg
-	//int cur_line=0, cur_num=1, _m_len;
 	int left_bound, right_bound;
 
-    //(*line_n) = l_n;
     if (line_n > (*line_m)) {
         (*f_msg) = (frag_msg*)realloc(*f_msg, line_n * sizeof(frag_msg));
         for (i = (*line_m); i < line_n; ++i)
@@ -2354,18 +2418,15 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
     int j=0;
 	for (l = 0; l < line_n; ++l) {
         //set merged msg
-        if (line[l][line_end[l]+1].x < 0) {
-            ((*f_msg)+j)->merg_msg.x = line[l][line_end[l]+1].x;
-            ((*f_msg)+j)->merg_msg.y = line[l][line_end[l]+1].y;
-        }
-        else
-            ((*f_msg)+j)->merg_msg.x = 0;
+        ((*f_msg)+j)->merg_msg.x = L_MF(line,line_end,l);
+        ((*f_msg)+j)->merg_msg.y = L_MH(line,line_end,l);
             
         frag_num=0;
         pre_x = line[l][line_end[l]-1].x; pre_y = line[l][line_end[l]-1].y;
         //fprintf(stdout, "left: %d, right: %d\n", line[l][line_end[l]].x, line[l][line_end[l]+1].x);
 		//right bound
-        right_bound = ((line[l][line_end[l]].y == APP->seed_out) ? (APP->seed_all+1) : (a_msg[line[l][line_end[l]].y].read_id));
+        ///right_bound = ((line[l][line_end[l]].y == APP->seed_out) ? (APP->seed_all+1) : (a_msg[line[l][line_end[l]].y].read_id));
+        right_bound = ((E_RB(line, line_end, l) == APP->seed_out) ? (APP->seed_all+1) : a_msg[E_RB(line, line_end, l)].read_id);
         //MIS-MATCH
         //first end
 		frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+j, frag_num); //XXX set merged msg
@@ -2413,10 +2474,13 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
 		frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+j, frag_num);
         if ((*f_node)[cur_x][cur_y].trg_n)	//set trigger
             frag_trg_set((*f_node)[cur_x][cur_y], (*f_msg)+j, frag_num);
-        left_bound = ((line[l][line_end[l]].x == -1) ? 0 : (a_msg[line[l][line_end[l]].x].read_id));
+        ///left_bound = ((line[l][line_end[l]].x == -1) ? 0 : (a_msg[line[l][line_end[l]].x].read_id));
+        left_bound = ((E_LB(line, line_end, l) == -1) ? 0 : a_msg[E_LB(line, line_end, l)].read_id);
 		//MIS-MATCH
         ((*f_msg)+j)->frag_left_bound = left_bound;
-        //fprintf(stdout, "#%d: left %d, right %d\n", j+1, left_bound, right_bound);
+#ifdef __DEBUG__
+        fprintf(stdout, "#%d: left %d, right %d\n", j+1, left_bound, right_bound);
+#endif
         ++j;
 	}
     *l_n = j;
@@ -2472,8 +2536,8 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bn
         int *_line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
         for (i = 0; i < s_msg->seed_max; ++i)
         {
-            line[i] = (line_node*)malloc((s_msg->seed_max+3) * sizeof(line_node));
-            _line[i] = (line_node*)malloc((s_msg->seed_max+3) * sizeof(line_node));
+            line[i] = (line_node*)malloc((s_msg->seed_max+L_EXTRA) * sizeof(line_node));
+            _line[i] = (line_node*)malloc((s_msg->seed_max+L_EXTRA) * sizeof(line_node));
         }
 
         if (line == NULL || _line == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enougy memory.\n"); exit(0); }
@@ -2503,9 +2567,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bn
 
     readfp = gzopen(read_prefix, "r");
     read_seq_t = kseq_init(readfp);
-    while (1) { // get seeds' aln-msg of every read
-        if (read_n > s_msg->read_all) break;
-
+    while (read_n <= s_msg->read_all) { // get seeds' aln-msg of every read
         init_aln_per_para(APP, s_msg, read_n);
         if ((r = sam_read1(samf->x.tamr, samf->header, m_msg, APP->per_aln_n)) < 0) break;
         if (APP->per_aln_n > AP->per_aln_m)
@@ -2531,6 +2593,7 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bn
             int max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
             aln_res *a_res;
             // main line process
+            strcpy(READ_NAME, APP->read_name);
             line_n = frag_line_BCC(a_msg, APP, AP, line, line_end, f_node, _line, _line_end, max_multi);
             if (line_n == 0) 
                 lsat_unmap(s_msg->read_name[read_n]);
@@ -2667,6 +2730,7 @@ int lsat_soap2dp(const char *ref_prefix, const char *read_prefix)
 
 int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info, int seed_program, int no_seed_aln, char *seed_result, lsat_aln_per_para *APP, lsat_aln_para *AP)
 {
+    clock_t t = clock();
     seed_msg *s_msg;
     bntseq_t *bns;
 
@@ -2700,6 +2764,7 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
     fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);	fprintf(stderr, "done.\n");
     fprintf(stderr, "[lsat_aln] Clustering frag ... ");
     frag_cluster(read_prefix, seed_result, s_msg, bns, pac, APP, AP);	fprintf(stderr, "done.\n");
+    fprintf(stderr, "[lsat_aln] Time Consupmtion: %.3f sec.\n", (float)(clock() -t )/CLOCKS_PER_SEC);
 
     seed_free_msg(s_msg);
     free(pac);

@@ -809,7 +809,7 @@ int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target
     }
 
     *m_cigar_ = 10;
-    int extend_qstep = 200, extend_tstep = 200; // XXX depend on seed_len
+    int extend_qstep = 200, extend_tstep = 200; // XXX depend on seed_len??
     int tmp_qle=*_qle=0, tmp_tle=*_tle=0, score=h0;
     int r_qlen = qlen, r_tlen = tlen;
 
@@ -820,6 +820,8 @@ int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target
         if (extend_qstep > r_qlen) extend_qstep = r_qlen;
         if (extend_tstep > r_tlen) extend_tstep = r_tlen;
         score = ksw_extend_core(extend_qstep, query+*_qle, extend_tstep, target+*_tle, m ,mat, gapo, gape, gapo, gape, w, score, soft_p, &tmp_qle, &tmp_tle, &cigar, &n_cigar, &m_cigar);
+        if (score < 0) break;
+
         _push_cigar(cigar_, n_cigar_, m_cigar_, cigar, n_cigar);
         free(cigar);
 

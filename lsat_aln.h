@@ -41,6 +41,34 @@
 
 #define F_INIT 20
 
+//node-line flag
+//  [0 ~ end-1] -> node;
+//  [end] -> (left-b, right-b)/(start,end)
+//  [end+1] -> (extend-left-b, extend-right-b)
+//  [end+2] -> (merge-flag, merge-head)
+//    0x1 Not Merged(1), Merged(0)
+//    0x2 Merged, Head(1) or Body(0)
+//    0x4 Inter(1) or Not Inter(0)
+//  [end+2] -> (line-score, x)
+
+#define L_NMERG 0x1
+#define L_MERGH 0x2
+#define L_MERGB 0x0
+#define L_INTER 0x4
+#define L_DUMP  0x8
+
+#define L_EXTRA 4                    // extra line-node variables
+#define L_LB(l,e,i) (l[i][e[i]].x)   // line left-boundary
+#define L_RB(l,e,i) (l[i][e[i]].y)   // line right-boundary
+#define E_LB(l,e,i) (l[i][e[i]+1].x) // extend left-boundary
+#define E_RB(l,e,i) (l[i][e[i]+1].y) // extend right-boundary
+#define L_MF(l,e,i) (l[i][e[i]+2].x) // line merge-flag
+#define L_MH(l,e,i) (l[i][e[i]+2].y) // line merge-head
+
+#define L_LS(l,e,i) (l[i][e[i]+3].x) // line score
+
+
+//  [end+2] -> (line-score, x)
 
 // backtrack flag
 #define DP_BACK_NONE 0
@@ -163,9 +191,9 @@ typedef struct {
 } tri_node;
 
 typedef struct {
-    int x1,y1;
-    int x2,y2;
-} tetr_node;
+    line_node n1, n2;
+    uint8_t tri_flag; // 0x01->next, 0x10->per
+} trig_node;
 typedef struct {
     line_node *node;
     int *pos;

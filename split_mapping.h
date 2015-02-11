@@ -75,6 +75,8 @@ typedef struct {
 #define MULTI_FLAG 2
 #define MULTI_OUT 22
 #define UNLIMITED_FLAG 3
+#define WHOLE_FLAG 4
+#define WHOLE_OUT 44
 
 #define HASH_FRAG_START 1
 #define HASH_FRAG_END 2
