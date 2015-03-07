@@ -5,7 +5,7 @@ OBJS=		main.o build_ref.o bntseq.o lsat_heap.o lsat_aln.o frag_check.o split_map
 			./lsat_sam_parse/kstring.o ./lsat_sam_parse/sam_header.o ./lsat_sam_parse/sam_view.o
 PROG=		lsat
 LIB=		-lm -lz
-#MACRO=		-D __DEBUG__
+MACRO=		-D __DEBUG__
 .SUFFIXES:.c .o
 
 .c.o:

@@ -19,7 +19,7 @@ int lsat_index_usage(void)
 {
     fprintf(stderr, "\n");
     fprintf(stderr, "Usage:   lsat index [option] <ref.fa>\n");
-    fprintf(stderr, "                    bulid soap2-dp index for ref.fa\n\n");
+    fprintf(stderr, "                    bulid index for ref.fa\n\n");
     fprintf(stderr, "Option:  \n");
     fprintf(stderr, "         -i [INT]     Index program, <bwa(1)> or <soap2-dp(2)>. [Def=1]\n");
     return 1;

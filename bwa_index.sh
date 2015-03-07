@@ -1,5 +1,6 @@
 #!/bin/bash
-BWA_DIR=./bwa
+CMD_PATH=`dirname $0`
+BWA_DIR=$CMD_PATH/bwa
 
 if [ $# -ne 1 ]
 then
