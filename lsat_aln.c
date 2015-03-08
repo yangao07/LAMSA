@@ -13,6 +13,7 @@
 #include "lsat_heap.h"
 #include "kseq.h"
 #include "kstring.h"
+#include "gem_parse.h"
 #include "./lsat_sam_parse/sam.h"
 
 KSEQ_INIT(gzFile, gzread)
@@ -67,7 +68,7 @@ int lsat_aln_usage(void)		//aln usage
     fprintf(stderr, "         -V [INT]      The expected maximun length of SV. [Def=%d]\n", SV_MAX_LEN);
     fprintf(stderr, "         -g [INT]      The minimum length of gap that causes a split-alignment. [Def=%d]\n", SPLIT_ALN_LEN);
     fprintf(stderr, "         -p [INT]      The score penalty of split-alignment. [Def=%d]\n", SPLIT_ALN_PEN);
-    fprintf(stderr, "         -s [INT]      The seeding program, <bwa(1)> or <soap2-dp(2)>. [Def=1]\n");
+    fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [Def=0]\n");
     
     fprintf(stderr, "         -o [STR]      The output file (SAM format). [Def=\"prefix_out.sam\"]\n");
 
@@ -548,13 +549,8 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
             case 'M':	op = CMATCH;	break;
             case 'I':	op = CINS;		bi += x;	break;
             case 'D':	op = CDEL;		bd += x;	break;
-            case 'N':	op = CREF_SKIP;		bd += x;	break;
-            case 'S':	op = CSOFT_CLIP;		bi += x;	break;
-            case 'H':	op = CHARD_CLIP;		bd += x;	break;
-            case 'P':	op = CPAD;		bd += x;	break;
-            case '=':	op = CEQUAL;	break;
-            case 'X':	op = CDIFF;	break;
-            case 'B':	op = CBACK;		bi += x;	break;	
+            //case 'S':	op = CSOFT_CLIP;		bi += x;	break;
+            //case 'H':	op = CHARD_CLIP;		bi += x;	break;
             default:	fprintf(stderr, "\n[lsat_aln] Cigar ERROR 2.\n"); exit(-1); break;
         }
         if (a_msg[seed_i].at[aln_i].cigar_len == a_msg[seed_i].at[aln_i].cmax)
@@ -573,13 +569,8 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 
 void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, 
              int read_id, sam_t sam)
-    //int chr, int64_t offset, 
-     //   char srand, int NM, char *cigar)
+    //   char srand, int NM, char *cigar)
 {   //read_x: (除去unmap和repeat的)read序号, aln_y: read对应的比对结果序号(从1开始)
-    /*if (aln_y > PER_ALN_N) {    // per_aln_n
-      fprintf(stderr, "[lsat_aln] setAmsg ERROR!\n");
-      exit(0); }*/
-    //printf("%d %d: %d %d %lld %c %s\n", read_x, aln_y, read_id, chr, offset, srand, cigar);
     a_msg[read_x-1].read_id = read_id;			//from 1
     a_msg[read_x-1].at[aln_y-1].chr = sam.chr;
     a_msg[read_x-1].at[aln_y-1].offset = sam.offset;	//1-base
@@ -587,6 +578,28 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y,
     a_msg[read_x-1].at[aln_y-1].NM = sam.NM;
     a_msg[read_x-1].n_aln = aln_y;
     setCigar(a_msg, read_x-1, aln_y-1,  sam.cigar_s->s);
+}
+
+void set_cigar(aln_t *at, cigar_t *cigar)
+{
+    int i, bd=0, bi=0;
+    for (i = 0; i < cigar->cigar_n; ++i) {
+        _push_cigar1(&(at->cigar), &(at->cigar_len), &(at->cmax), cigar->cigar[i]);
+        if (((cigar->cigar[i]) & 0xf) == CINS) bi += (cigar->cigar[i] >> 4);
+        else if (((cigar->cigar[i]) & 0xf) == CDEL) bd += (cigar->cigar[i] >> 4);
+    }
+    at->len_dif = bd - bi;
+    at->bmax = bd > bi ? bd : bi;
+}
+void set_aln_msg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, map_t map)
+{   
+    a_msg[read_x-1].read_id = read_id;			//from 1
+    a_msg[read_x-1].at[aln_y-1].chr = (map.chr[3] == 'X' ? 23 : (map.chr[3] == 'Y' ? 24 :atoi(map.chr+3))); //XXX
+    a_msg[read_x-1].at[aln_y-1].offset = map.offset;	//1-base
+    a_msg[read_x-1].at[aln_y-1].nsrand = ((map.strand=='+')?1:-1);
+    a_msg[read_x-1].at[aln_y-1].NM = map.NM;
+    a_msg[read_x-1].n_aln = aln_y;
+    set_cigar(a_msg[read_x-1].at+aln_y-1, map.cigar);
 }
 
 void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n)
@@ -2509,7 +2522,7 @@ void lsat_unmap(char *read_name)
     fprintf(stdout, "%s\t*\t*\t*\t*\n", read_name);
 }
 
-int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para *AP)
+int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para *AP)
 {
     int read_n/*1-based*/, seed_out, i, j;
     int seed_id;
@@ -2642,6 +2655,144 @@ int frag_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bn
     return 0;
 }
 
+// for GEM
+int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para *AP)
+{
+    int read_n/*1-based*/, seed_out, i, j;
+    int seed_id;
+
+    map_msg *m_msg;
+    FILE *mapf;
+
+    aln_msg *a_msg; 
+    frag_msg *f_msg; int line_n=0, tri_n, line_m=1/*line size*/;
+    frag_dp_node ***f_node;
+    uint32_t *hash_num;
+    uint64_t **hash_node;
+
+    gzFile readfp; kseq_t *read_seq_t; char *read_seq;
+
+    //alloc mem and initialization
+        m_msg = map_init_msg();
+        a_msg = aln_init_msg(s_msg->seed_max, AP->per_aln_m);
+        f_node = fnode_alloc(s_msg->seed_max+2, AP->per_aln_m);
+
+        line_node **line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
+        int *line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
+        line_node **_line = (line_node**)malloc(s_msg->seed_max * sizeof(line_node*));
+        int *_line_end = (int*)malloc((s_msg->seed_max) * sizeof(int));
+        for (i = 0; i < s_msg->seed_max; ++i)
+        {
+            line[i] = (line_node*)malloc((s_msg->seed_max+L_EXTRA) * sizeof(line_node));
+            _line[i] = (line_node*)malloc((s_msg->seed_max+L_EXTRA) * sizeof(line_node));
+        }
+
+        if (line == NULL || _line == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enougy memory.\n"); exit(0); }
+
+        //XXX 
+        f_msg = (frag_msg*)malloc(sizeof(frag_msg));	
+        frag_init_msg(&f_msg[0], s_msg->seed_max);
+
+
+        //alloc mem for hash mapping
+        int key_len = 2;
+        int hash_size = (int)pow(NT_N, key_len);
+        hash_num = (uint32_t*)calloc(hash_size, sizeof(uint32_t));	//16 = pow(4, 2)
+        hash_node = (uint64_t**)calloc(hash_size, sizeof(uint64_t*));
+
+    if ((mapf = fopen(seed_result, "r")) == NULL) {
+        fprintf(stderr, "\n[lsat_aln] Can't open seed result 'map' file %s.\n", seed_result);
+        exit(-1);
+    }
+
+    int r;
+    seed_id = seed_out = 0;
+    read_n = 1;
+
+    readfp = gzopen(read_prefix, "r");
+    read_seq_t = kseq_init(readfp);
+    while (read_n <= s_msg->read_all) { // get seeds' aln-msg of every read
+        init_aln_per_para(APP, s_msg, read_n);
+        if ((r = gem_map_read(mapf, m_msg, APP->per_aln_n)) < 0) break;
+        if (APP->per_aln_n > AP->per_aln_m)
+        {
+            aln_realc_msg(a_msg, s_msg->seed_max, AP->per_aln_m, APP->per_aln_n);
+            fnode_realc(f_node, s_msg->seed_max+2, AP->per_aln_m, APP->per_aln_n);
+            AP->per_aln_m = APP->per_aln_n;
+        }
+        ++seed_id;
+        if (r > 0) {
+            ++seed_out;
+            for (i = 0; i < m_msg->map_n; ++i) 
+                set_aln_msg(a_msg, seed_out, i+1, seed_id - s_msg->seed_all[read_n-1], m_msg->map[i]);
+        }
+        if (seed_id == s_msg->seed_all[read_n]) { // get a whole-read
+            if (kseq_read(read_seq_t) < 0) { fprintf(stderr, "\n[lsat_aln] Read file ERROR.\n"); exit(-1); }
+            // XXX no seed is 'setAmsg'ed
+            read_seq = read_seq_t->seq.s;
+
+            APP->seed_out = seed_out;
+            //fnode_init(*f_node, s_msg->seed_max+2, AP->per_aln_m);
+            
+            int max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
+            aln_res *a_res;
+            // main line process
+            strcpy(READ_NAME, APP->read_name);
+            line_n = frag_line_BCC(a_msg, APP, AP, line, line_end, f_node, _line, _line_end, max_multi);
+            if (line_n == 0) 
+                lsat_unmap(s_msg->read_name[read_n]);
+            else {
+                frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node, _line, _line_end);
+                a_res = frag_check(a_msg, &f_msg, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
+                aln_res_output(a_res, APP);
+                // trigger-line
+                for (i=0; i<line_n; ++i) {
+                    if (a_res->la[i].merg_msg.x == 1) {
+                        for (j=0; j<a_res->la[i].trg_n; ++j) {
+                            tri_n = trg_dp_line(*f_node, a_msg, &f_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, _line, _line_end, max_multi);
+                            if (tri_n == 0) continue;
+                            frag_dp_path(a_msg, &f_msg, APP, AP, &tri_n, &line_m, line, line_end, f_node, _line, _line_end);
+                            aln_res *tri_res = frag_check(a_msg, &f_msg, bns, pac, read_prefix, read_seq, APP, AP, tri_n, &hash_num, &hash_node);
+                            aln_res_output(tri_res, APP); aln_res_free(tri_res);
+                        }
+                    }
+                }
+                aln_res_free(a_res);
+            }
+            seed_out = 0;
+            ++read_n;
+        }
+    }
+    //free variables and close file handles
+    map_free_msg(m_msg);
+    aln_free_msg(a_msg, s_msg->seed_max, AP->per_aln_m);
+    fnode_free(f_node, s_msg->seed_max+2, AP->per_aln_m);
+    
+    for (i = 0; i < s_msg->seed_max; ++i) {
+        free(line[i]); free(_line[i]);
+    }
+    free(line); free(_line); free(line_end); /*free(line_tri);*/ free(_line_end);
+    //hash map
+    for (i = 0; i < hash_size; ++i) free(hash_node[i]);
+    free(hash_node); free(hash_num); 
+
+    frag_free_msg(f_msg, line_m);
+    gzclose(readfp); kseq_destroy(read_seq_t);
+    fclose(mapf);
+    return 0;
+}
+
+int lsat_gem(const char *ref_prefix, const char *read_prefix)
+{
+    char cmd[1024];
+    sprintf(cmd, "./gem_map.sh %s %s.seed", ref_prefix, read_prefix);
+    fprintf(stderr, "[lsat_aln] Executing gem-mapper ... ");
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(0); }
+    fprintf(stderr, "done.\n");
+    return 0;
+}
+
+
 int lsat_bwa(const char *ref_prefix, const char *read_prefix)
 {
     char cmd[1024];
@@ -2651,72 +2802,6 @@ int lsat_bwa(const char *ref_prefix, const char *read_prefix)
     fprintf(stderr, "done.\n");
     return 0;
 }
-
-/* convert into relative path for soap2-dp */
-/*void relat_path(const char *ref_path, const char *soap_dir, char *relat_ref_path)	
-{
-    int i;
-    char lsat_dir[1024], abs_soap_dir[1024], abs_ref_path[1024], ref_dir[1024], ref_file[1024];
-
-    if (getcwd(lsat_dir, 1024) == NULL) { perror("getcwd error"); exit(-1); } 
-    if (chdir(soap_dir) != 0) { perror("Wrong soap2-dp path"); exit(-1); }
-    if (getcwd(abs_soap_dir, 1024) == NULL) { perror("getcwd error"); exit(-1); }
-
-    //printf("ref: %s\n",ref_path);
-    if (ref_path[0] == '.')
-    {
-        if (chdir(lsat_dir) != 0) { perror("Wrong soap2-dp path"); exit(-1); }
-        strcpy(ref_dir, ref_path);
-        for (i = strlen(ref_path)-1; i >= 0; i--)
-            if (ref_path[i] == '/') { ref_dir[i] = '\0'; strncpy(ref_file, ref_path+i, 1024); }
-        if (chdir(ref_dir) != 0) { perror("Wrong soap2-dp path"); exit(-1); }
-        if (getcwd(abs_ref_path, 1024) == NULL) { perror("getcwd error"); exit(-1); }
-        strcat(abs_ref_path, ref_file);
-    }
-    else
-        strcpy(abs_ref_path, ref_path);
-
-    if (chdir(lsat_dir) != 0) { perror("chdir error"); exit(-1); }
-    //printf("soap: %s\nref: %s\n", abs_soap_dir, abs_ref_path);
-    int dif=-1;
-    for (i = 0; i < strlen(abs_soap_dir); ++i)
-    {
-        if (abs_soap_dir[i] != abs_ref_path[i]) break;
-        if (abs_soap_dir[i] == '/') dif = i;
-    }
-    //printf("i: %d dif: %d\n", i, dif);
-    if(dif == -1)
-    {
-        fprintf(stderr, "[lsat_aln] dir bug\n");
-        exit(-1);
-    }
-    strcpy(relat_ref_path, "./");
-    for (i = dif; i < strlen(abs_soap_dir); ++i)
-    {
-        if (abs_soap_dir[i] == '/')
-            strcat(relat_ref_path, "../");
-    }
-    strcat(relat_ref_path, abs_ref_path+dif+1);
-}
-int lsat_soap2dp(const char *ref_prefix, const char *read_prefix)
-{
-    char relat_ref_path[1024], relat_read_path[1024];
-    char lsat_dir[1024];
-
-    if (getcwd(lsat_dir, 1024) == NULL) { perror("getcwd error"); exit(-1); } 
-    relat_path(ref_prefix, SOAP2_DP_DIR, relat_ref_path);
-    relat_path(read_prefix, SOAP2_DP_DIR, relat_read_path);
-    if (chdir(SOAP2_DP_DIR) != 0) { perror("Wrong soap2-dp dir"); exit(-1); }
-
-    char soap2_dp_cmd[1024];
-    sprintf(soap2_dp_cmd, "./soap2-dp single %s.index %s.seed -h 2 -m 3e > %s.seed.aln", relat_ref_path, relat_read_path, relat_read_path);
-    fprintf(stderr, "[lsat_aln] Executing soap2-dp ... ");
-    if (system (soap2_dp_cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, soap2dp exit aborted.\n"); exit(0); }
-    fprintf(stderr, "done.\n");
-
-    if (chdir(lsat_dir) != 0) { perror("chdir error"); exit(-1); }
-    return 0;
-}*/
 
 int lsat_soap2dp(const char *ref_prefix, const char *read_prefix)
 {
@@ -2742,7 +2827,9 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
     if (!strcmp(seed_result, ""))
     {
         strcpy(seed_result, read_prefix);
-        if (seed_program == 1)
+        if (seed_program == 0)
+            strcat(seed_result, ".seed.gem.map");
+        else if (seed_program == 1)
             strcat(seed_result, ".seed.bwa.sam");
         else if (seed_program == 2)
             strcat(seed_result, ".seed.out.0");
@@ -2751,7 +2838,8 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
     //excute soap2-dp program
     if (!no_seed_aln) 
     {
-        if (seed_program == 1) lsat_bwa(ref_prefix, read_prefix);
+        if (seed_program == 0) lsat_gem(ref_prefix, read_prefix);
+        else if (seed_program == 1) lsat_bwa(ref_prefix, read_prefix);
         else if (seed_program == 2) lsat_soap2dp(ref_prefix, read_prefix);
         else { fprintf(stderr, "[lsat_aln] Unknown seeding program option.\n"); return lsat_aln_usage(); }
     }
@@ -2763,7 +2851,11 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
     uint8_t *pac = (uint8_t*)calloc(bns->l_pac/4+1, 1);
     fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);	fprintf(stderr, "done.\n");
     fprintf(stderr, "[lsat_aln] Clustering frag ... ");
-    frag_cluster(read_prefix, seed_result, s_msg, bns, pac, APP, AP);	fprintf(stderr, "done.\n");
+    if (seed_program == 0)
+        frag_map_cluster(read_prefix, seed_result, s_msg, bns, pac, APP, AP);	
+    else
+        frag_sam_cluster(read_prefix, seed_result, s_msg, bns, pac, APP, AP);	
+    fprintf(stderr, "done.\n");
     fprintf(stderr, "[lsat_aln] Time Consupmtion: %.3f sec.\n", (float)(clock() -t )/CLOCKS_PER_SEC);
 
     seed_free_msg(s_msg);
@@ -2780,7 +2872,7 @@ int lsat_aln(int argc, char *argv[])
     lsat_aln_per_para *APP = (lsat_aln_per_para*)calloc(1, sizeof(lsat_aln_per_para));
     lsat_aln_para *AP = (lsat_aln_para*)calloc(1, sizeof(lsat_aln_para));
     init_aln_para(AP);
-    int no_seed_aln=0, seed_info=0, aln_type=1, seed_program=1;
+    int no_seed_aln=0, seed_info=0, aln_type=1, seed_program=0;
     char seed_result_f[1024]="", aln_result_f[1024]="";
 
     while ((c =getopt(argc, argv, "t:m:M:O:E:r:V:s:o:NSA:")) >= 0)
