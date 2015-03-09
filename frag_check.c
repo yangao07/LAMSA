@@ -401,11 +401,8 @@ void _push_cigar(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *_ciga
 }
 
 void _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
+	if (_cigar >> 4 == 0) return;
     int i;
-    if (*cigar_n >1000)
-    {
-        i=0;
-    }
     i = *cigar_n;
     if (((i-1) >=0) && (((*cigar)[i-1] & 0xf) == (_cigar & 0xf)))
         (*cigar)[i-1] += ((_cigar >> 4) << 4);

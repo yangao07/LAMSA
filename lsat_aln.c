@@ -583,6 +583,7 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y,
 void set_cigar(aln_t *at, cigar_t *cigar)
 {
     int i, bd=0, bi=0;
+	at->cigar_len = 0;
     for (i = 0; i < cigar->cigar_n; ++i) {
         _push_cigar1(&(at->cigar), &(at->cigar_len), &(at->cmax), cigar->cigar[i]);
         if (((cigar->cigar[i]) & 0xf) == CINS) bi += (cigar->cigar[i] >> 4);
