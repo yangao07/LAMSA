@@ -620,7 +620,7 @@ void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n)
     APP->min_thd = lsat_min_thd[APP->read_level]; // depend on seed_len XXX
     APP->frag_score_table = f_BCC_score_table;
 
-    APP->match_dis = APP->seed_inv/10; // depend on seed_len, seed_inv
+    APP->match_dis = APP->seed_step/10; // depend on seed_len, seed_inv
 }
 
 void init_aln_para(lsat_aln_para *AP)
@@ -2897,7 +2897,7 @@ int lsat_aln(int argc, char *argv[])
             case 'o': strcpy(aln_result_f, optarg); break;
             case 'N': no_seed_aln = 1; break;
             case 'S': seed_info = 1; break;
-            case 'A': strcpy(seed_result_f, optarg);	//seed alignment result break;
+            case 'A': strcpy(seed_result_f, optarg); break;	//seed alignment result break;
             default: return lsat_aln_usage();
         }
     }

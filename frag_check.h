@@ -85,6 +85,7 @@ extern const int8_t bwasw_sc_mat[25];
 extern char nst_nt4_table[256];
 void _push_cigar(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t *_cigar, int _cigar_len);
 void _push_cigar1(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t _cigar);
+void _invert_cigar(cigar32_t **cigar, int cigar_n);
 void frag_init_msg(frag_msg *f_msg, int frag_max);
 void frag_free_msg(frag_msg *f_msg, int line_num);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i);//FLAG 0: start/1:end / 2:seed

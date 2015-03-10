@@ -120,21 +120,12 @@ void md2cigar(char *md, map_t *map)
 	while (i < md_len) {
 		if (md[i] == '>') { // indel
 			sscanf(md+i, ">%[^+-]%[+-]", indel_c, &id);
-			// head or tail '>'
-			if (i == 0 || i+strlen(indel_c)+2 == md_len) {
-				if (id =='+') {
-					fprintf(stderr, "[gem_parse] Error: '+' DEL at head or tail. (%s)\n", md);
-					exit(0);
-				}
-				mm = atoi(indel_c);
-				_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (mm) << 4 | CMATCH);
-				map->NM += mm;
-			} else {
+			{
 				indel_n = atoi(indel_c);
 				_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
 				map->NM += (indel_n+mm);
+				i += (strlen(indel_c)+2);
 			}
-			i += (strlen(indel_c)+2);
 		} else {
 			c_i = i;
 			for (; md[i] && md[i]!='>'; ++i) {
@@ -151,14 +142,14 @@ void md2cigar(char *md, map_t *map)
 
 map_msg *map_init_msg(void)
 {
-    int i, max_n = 1;
-    map_msg *m_msg = (map_msg*)malloc(sizeof(map_msg));
-    m_msg->map_n = 0; m_msg->map_m = max_n; m_msg->map = (map_t*)malloc(max_n * sizeof(map_t));
-    for (i = 0; i < max_n; ++i) {
-        m_msg->map[i].cigar = (cigar_t*)malloc(sizeof(cigar_t));
-        m_msg->map[i].cigar->cigar_n = 0; m_msg->map[i].cigar->cigar_m = 10; m_msg->map[i].cigar->cigar = (cigar32_t*)malloc(10 * sizeof(cigar32_t));
-    }
-    return m_msg;
+	int i, max_n = 1;
+	map_msg *m_msg = (map_msg*)malloc(sizeof(map_msg));
+	m_msg->map_n = 0; m_msg->map_m = max_n; m_msg->map = (map_t*)malloc(max_n * sizeof(map_t));
+	for (i = 0; i < max_n; ++i) {
+		m_msg->map[i].cigar = (cigar_t*)malloc(sizeof(cigar_t));
+		m_msg->map[i].cigar->cigar_n = 0; m_msg->map[i].cigar->cigar_m = 10; m_msg->map[i].cigar->cigar = (cigar32_t*)malloc(10 * sizeof(cigar32_t));
+	}
+	return m_msg;
 }
 
 void map_free_msg(map_msg *m_msg)
@@ -314,6 +305,7 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 		sscanf(t, "%[^:]:%c:%lld:%[^:]", chr, &strand, &offset, md);
 		t_i = _t_i;
 		md2cigar(md, &(m_msg->map[m_msg->map_n]));
+		if (strand == '-') _invert_cigar(&(m_msg->map[m_msg->map_n].cigar->cigar), m_msg->map[m_msg->map_n].cigar->cigar_n);
 		m_msg->map[m_msg->map_n].offset = offset;
 		m_msg->map[m_msg->map_n].strand = strand;
 		strcpy(m_msg->map[m_msg->map_n].chr, chr);
@@ -323,13 +315,13 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 		printcigar(stdout, m_msg->map[m_msg->map_n].cigar->cigar, m_msg->map[m_msg->map_n].cigar->cigar_n);
 		fprintf(stdout, "\n");
 #endif
-		++(m_msg->map_n);
+		if (strcmp(chr, "chrM")!=0)
+			++(m_msg->map_n);
 		if (t_i >= msg_len) break;
 		t = strtok(aln_msg+t_i, ",");
 		if (t == NULL) break;
 		t_i += strlen(t)+1;
 	}
-
 RET:
 	free(gem_line);
 	free(aln_msg);

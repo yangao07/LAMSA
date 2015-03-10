@@ -620,7 +620,7 @@ void merge_cigar(frag_msg *f_msg, int f_i,
 	if (((*fcigar)[*fc_len-1] & 0xf) != CMATCH || (cigar[0] & 0xf) != CMATCH)	//bound-repair
 	{
 		    /* seq1, ref */ /*    seq2, read     */
-		int len1, len11=0,  len2, len21=0, len22=0, len_dif1=0, len_dif2;
+		int len1, len11=0,  len2, len21=0, len22=0, len_dif1=0, len_dif2=0;
 		int bd_cigar_len=0, b=0, min_b, score, ci=0;
 		int N_flag, N_len;
 		int i, j, left=1, right=1;

@@ -386,7 +386,7 @@ void pac2fa_core(const bntseq_t *bns, const uint8_t *pac,
 	
 	if (start > bns->anns[seq_n-1].len)
 	{
-		fprintf(stderr, "\n[bntseq] ERROR: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_n-1].len);
+		fprintf(stderr, "\n[bntseq] Error: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_n-1].len);
 		exit(1);
 	}
 	pac_coor = bns->anns[seq_n-1].offset + start;
