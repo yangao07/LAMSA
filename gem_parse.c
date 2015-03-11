@@ -111,8 +111,8 @@ void md2m(char *c, int *m, int *mm)
 void md2cigar(char *md, map_t *map)
 {
     int md_len = strlen(md);
-    int i; 
-	char *c = malloc(md_len * sizeof(char)); int c_i;
+    int i=0; 
+	char *c = malloc((md_len+1) * sizeof(char)); int c_i;
     char indel_c[10], id, m_c[100]; int indel_n;
     int m, mm;
 	map->cigar->cigar_n = 0;

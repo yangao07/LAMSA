@@ -607,12 +607,16 @@ void push_res(line_aln_res *la)
 //merge interval and seed to frag
 //Before, frag has the first seed's msg already
 void merge_cigar(frag_msg *f_msg, int f_i, 
-				 cigar32_t *cigar, int cigar_len, 
+				 cigar32_t *aln_cigar, int cigar_len, 
 				 int reflen, int readlen, 
 				 bntseq_t *bns, uint8_t *pac, 
 				 char *read_seq, int read_len)
 {
     if (cigar_len == 0) return;
+	cigar32_t *cigar = (cigar32_t*)malloc(cigar_len * sizeof(cigar32_t));
+	int ii;
+	for (ii= 0; ii < cigar_len; ++ii) cigar[ii] = aln_cigar[ii];
+
 	int *fc_len = &(f_msg->fa_msg[f_i].cigar_len);
 	cigar32_t **fcigar = &(f_msg->fa_msg[f_i].cigar);
 	//refresh cigar msg
@@ -748,6 +752,7 @@ void merge_cigar(frag_msg *f_msg, int f_i,
 	f_msg->fa_msg[f_i].cigar_ref_end += reflen;
 	f_msg->fa_msg[f_i].cigar_read_end += readlen;
 	f_msg->fa_msg[f_i].len_dif += (reflen-readlen);
+	free(cigar);
 }
 
 void push_trg(line_node **trg, int *trg_n, int *trg_m, line_node t)
@@ -1437,7 +1442,7 @@ void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, char *read_seq,
                 exit(0); }
         }
         if (read_i != read_len || ref_i != ref_len) { fprintf(stderr, "[lsat_gen_aux] Error: %s Unmatched length: read: %d %d.\tref: %d %d\n", APP->read_name, read_i, read_len, ref_i, ref_len);
-            printcigar(stderr, cigar, r->cigar_len); 
+            printcigar(stderr, cigar, r->cigar_len); fprintf(stderr, "\n");
             exit(0); }
         // calculate NM and AS
         r->NM = n_mm + n_e;
