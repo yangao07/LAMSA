@@ -636,11 +636,11 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	return ksw_global2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, n_cigar_, cigar_);
 }
 
-/******************************************
- * Gap allowed extension, with backtrack  *
- * combined 'ksw_extend' and 'ksw_global' *
- * and make some modification             *
- ******************************************/
+/***********************************************
+ * Gap allowed extension  with backtrack       *
+ * combined 'ksw_extend' and 'ksw_global'      *
+ * add soft_penalty and make some modification *
+ ***********************************************/
 
 int ksw_extend_softP(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int h0, int soft_p, int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
@@ -794,7 +794,10 @@ int ksw_extend_softP(int qlen, const uint8_t *query, int tlen, const uint8_t *ta
 	return soft_max; //max;
 }
 
-int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int h0, int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_)
+/*********************************
+ * add 'cigar_gen' to ksw_extend *
+ *********************************/
+int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
@@ -817,10 +820,10 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	k = m * m;
 	for (i = 0, max = 0; i < k; ++i) // get the max score
 		max = max > mat[i]? max : mat[i];
-	max_ins = (int)((double)(qlen * max - o_ins) / e_ins + 1.);
+	max_ins = (int)((double)(qlen * max + end_bonus - o_ins) / e_ins + 1.);
 	max_ins = max_ins > 1? max_ins : 1;
 	w = w < max_ins? w : max_ins;
-	max_del = (int)((double)(qlen * max - o_del) / e_del + 1.);
+	max_del = (int)((double)(qlen * max + end_bonus - o_del) / e_del + 1.);
 	max_del = max_del > 1? max_del : 1;
 	w = w < max_del? w : max_del; // TODO: is this necessary?
     n_col = qlen < 2 * w + 1 ? qlen : 2 * w + 1; // added
@@ -885,13 +888,13 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 		if (m > max) {
 			max = m, max_i = i, max_j = mj;
 			max_off = max_off > abs(mj - i)? max_off : abs(mj - i);
-		} /*else if (zdrop > 0) {
+		} else if (zdrop > 0) {
 			if (i - max_i > mj - max_j) {
 				if (max - m - ((i - max_i) - (mj - max_j)) * e_del > zdrop) break;
 			} else {
 				if (max - m - ((mj - max_j) - (i - max_i)) * e_ins > zdrop) break;
 			}
-		}*/
+		}
 		// update beg and end for the next round
         for (j = beg; LIKELY(j < end) && eh[j].h == 0 && eh[j].e == 0; ++j);
 		beg = j;
@@ -972,7 +975,7 @@ int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
 int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
 {
     *n_cigar_ = *m_cigar_ = 0;
-    int score = ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
+    int score = ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 3, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
     if (score > h0) {
         if (*_qle < qlen) return 1;
         else return 0;
