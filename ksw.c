@@ -379,7 +379,10 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
+int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
+                int w, int end_bonus, int zdrop, int h0, 
+                int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
@@ -906,7 +909,13 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 		int n_cigar = 0, m_cigar = 0, which = 0;
 		int32_t *cigar = 0, tmp;
 		//i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
-        i = max_i; k = max_j;
+        if (gscore <= 0 || gscore <= max - end_bonus) {
+            i = max_i; k = max_j;
+        } else {
+            i = max_ie; k = qlen-1;
+        }
+        if (_qle) *_qle = k + 1;
+        if (_tle) *_tle = i + 1;
 		while (i >= 0 && k >= 0) {
 			which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
@@ -921,10 +930,8 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	}
 
 	free(eh); free(qp); free(z);
-	if (_qle) *_qle = max_j + 1;
-	if (_tle) *_tle = max_i + 1;
-    //if (_gscore) *_gscore = gscore;
-    //if (_max_off) *_max_off = max_off;
+	//if (_qle) *_qle = max_j + 1;
+	//if (_tle) *_tle = max_i + 1;
 	return max; //max;
 }
 
