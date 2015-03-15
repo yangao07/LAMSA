@@ -776,8 +776,6 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 		//i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
         i = max_i; k = max_j;
 		while (i >= 0 && k >= 0) {
-            if (z[(long)i * n_col + (k - (i > w? i - w : 0))] == 255)
-                printf("debug");
 			which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
 			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
@@ -796,7 +794,7 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	return soft_max; //max;
 }
 
-int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
+int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
 {
     int res;
     int n_cigar, m_cigar; int32_t *cigar = 0;
@@ -838,6 +836,21 @@ int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target
     // set trigger
     if (*_qle < qlen) return 1;
     else return 0;
+}
+// XXX polish 'extend' 
+int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
+{
+    *n_cigar_ = *m_cigar_ = 0;
+    int score = ksw_extend(qlen, query, tlen, target, m, mat, gapo, gape, w, 0, -1, h0, _qle, _tle, 0, 0, 0);
+    if (score > h0) {
+        _push_cigar1(cigar_, n_cigar_, m_cigar_, (*_qle)<<4 | CMATCH);
+        if (*_qle != *_tle) {
+            fprintf(stderr, "extend: %d %d (%d)\n", *_qle, *_tle, *_qle-*_tle);
+            while (1);
+        }
+        if (*_qle < qlen) return 1;
+        else return 0;
+    } else return 1;
 }
 
 /***************************************

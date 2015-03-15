@@ -2762,6 +2762,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             }
             seed_out = 0;
             ++read_n;
+            if (read_n % 1000 == 0) fprintf(stderr, "%16d reads have been aligned.\n", read_n);
         }
     }
     //free variables and close file handles
