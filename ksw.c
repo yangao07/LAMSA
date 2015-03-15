@@ -930,8 +930,6 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	}
 
 	free(eh); free(qp); free(z);
-	//if (_qle) *_qle = max_j + 1;
-	//if (_tle) *_tle = max_i + 1;
 	return max; //max;
 }
 
@@ -983,13 +981,8 @@ int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target
 {
     *n_cigar_ = *m_cigar_ = 0;
     int score = ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 3, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
-    if (score > h0) {
-        if (*_qle < qlen) return 1;
-        else return 0;
-    } else {
-        *n_cigar_ = 0;
-        return 1;
-    }
+    if (*_qle < qlen) return 1;
+    else return 0;
 }
 
 /***************************************
