@@ -342,7 +342,9 @@ static inline void revseq(int l, uint8_t *s)
 		t = s[i], s[i] = s[l - 1 - i], s[l - 1 - i] = t;
 }
 
-kswr_t ksw_align2(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int xtra, kswq_t **qry)
+kswr_t ksw_align2(int qlen, uint8_t *query, int tlen, uint8_t *target,
+                  int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
+                  int xtra, kswq_t **qry)
 {
 	int size;
 	kswq_t *q;
@@ -484,7 +486,10 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	return max;
 }
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+               int m, const int8_t *mat, int gapo, int gape, 
+               int w, int end_bonus, int zdrop, int h0, 
+               int *qle, int *tle, int *gtle, int *gscore, int *max_off)
 {
 	return ksw_extend2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, end_bonus, zdrop, h0, qle, tle, gtle, gscore, max_off);
 }
@@ -530,7 +535,9 @@ static inline int32_t *push_cigar(int *n_cigar, int *m_cigar, int32_t *cigar, in
 	*cigar_len = i;
 }*/
 
-int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, int32_t **cigar_)
+int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
+                int w, int *n_cigar_, int32_t **cigar_)
 {
 	eh_t *eh;
 	int8_t *qp; // query profile
@@ -634,7 +641,9 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	return score;
 }
 
-int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, int32_t **cigar_)
+int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+               int m, const int8_t *mat, int gapo, int gape, 
+               int w, int *n_cigar_, int32_t **cigar_)
 {
 	return ksw_global2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, n_cigar_, cigar_);
 }
@@ -645,7 +654,10 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
  * add soft_penalty and make some modification *
  ***********************************************/
 
-int ksw_extend_softP(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int h0, int soft_p, int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_)
+int ksw_extend_softP(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
+                     const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
+                     int w, int h0, int soft_p, int *_qle, int *_tle, 
+                     int32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
@@ -800,7 +812,10 @@ int ksw_extend_softP(int qlen, const uint8_t *query, int tlen, const uint8_t *ta
 /*********************************
  * add 'cigar_gen' to ksw_extend *
  *********************************/
-int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_)
+int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                    int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
+                    int w, int end_bonus, int zdrop, int h0, 
+                    int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
@@ -933,7 +948,9 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	return max; //max;
 }
 
-int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
+int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                  int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, 
+                  int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
 {
     int res;
     int n_cigar, m_cigar; int32_t *cigar = 0;
@@ -977,10 +994,12 @@ int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     else return 0;
 }
 // XXX polish 'extend' 
-int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
+int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
+                 const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p,
+                 int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_)
 {
     *n_cigar_ = *m_cigar_ = 0;
-    int score = ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 3, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
+    int score = ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 5, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
     if (*_qle < qlen) return 1;
     else return 0;
 }
@@ -989,7 +1008,9 @@ int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target
  * Extend both left and right boundary *
  ***************************************/
 
-int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, int *n_cigar_, int32_t **cigar_)
+int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
+                    const int8_t *mat, int gapo, int gape, int w, 
+                    int lh0, int rh0, int *n_cigar_, int32_t **cigar_)
 {
     int i;
     //    fprintf(stderr, "target: ");

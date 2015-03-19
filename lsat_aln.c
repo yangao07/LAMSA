@@ -7,9 +7,11 @@
 #include <ctype.h>
 #include <time.h>
 #include "lsat_aln.h"
+#include "bwt.h"
 #include "bntseq.h"
 #include "frag_check.h"
 #include "split_mapping.h"
+#include "bwt_aln.h"
 #include "lsat_heap.h"
 #include "kseq.h"
 #include "kstring.h"
@@ -354,6 +356,30 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
     return 0;
 }
 
+aln_res *aln_init_res(int l_m, int read_len)
+{
+    int i, j;
+    aln_res *a_res;
+    a_res = (aln_res*)malloc(sizeof(aln_res));
+    a_res->l_m = l_m, a_res->l_n = 0;
+    a_res->la = (line_aln_res*)malloc(l_m * sizeof(line_aln_res));
+    a_res->read_len = read_len;
+    for (i = 0; i < l_m; ++i) {
+        a_res->la[i].res_m = 10, a_res->la[i].cur_res_n = 0, a_res->la[i].split_flag = 0;
+        a_res->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
+        for (j = 0; j < 10; ++j) {
+            a_res->la[i].res[j].c_m = 100;
+            a_res->la[i].res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
+            a_res->la[i].res[j].cigar_len = 0;
+        }
+        a_res->la[i].tol_score = a_res->la[i].tol_NM = 0;
+        a_res->la[i].trg_m = 10, a_res->la[i].trg_n = 0;
+        a_res->la[i].trg = (line_node*)malloc(10 * sizeof(line_node));
+        //a_res->la[i].merg_msg = ((*f_msg)+i)->merg_msg;
+    }
+    return a_res;
+}
+
 void aln_res_free(aln_res *res)
 {
     int i,j,k;
@@ -368,20 +394,99 @@ void aln_res_free(aln_res *res)
     free(res);
 }
 
-void aln_res_output(aln_res *res, lsat_aln_per_para *APP) 
+aln_reg *aln_init_reg(int read_len)
+{
+    aln_reg *reg = (aln_reg*)malloc(sizeof(aln_reg));
+    reg->reg_n = 0; reg->reg_m = 1;
+    reg->read_len = read_len;
+    reg->reg = (reg_t*)malloc(sizeof(reg_t));
+    return reg;
+}
+
+void aln_free_reg(aln_reg *reg) { free(reg->reg); free(reg); }
+
+int reg_comp(const void *a, const void *b) { return (*(reg_t*)b).beg - (*(reg_t*)a).beg; }
+void aln_sort_reg(aln_reg *a_reg) { qsort(a_reg->reg, a_reg->reg_n, sizeof(reg_t), reg_comp); }
+
+void aln_merg_reg(aln_reg *a_reg, lsat_aln_para *AP) {
+    //if (a_reg->reg_n == 0)return;
+    int cur_i = 0, i;
+    for (i = 1; i < a_reg->reg_n; ++i) {
+        if(a_reg->reg[i].beg - a_reg->reg[cur_i].end - 1 < 19) //XXX
+            a_reg->reg[cur_i].end = a_reg->reg[i].end;
+        else {
+            cur_i++;
+            a_reg->reg[cur_i].beg = a_reg->reg[i].beg;
+            a_reg->reg[cur_i].end = a_reg->reg[i].end;
+        }
+    }
+    a_reg->reg_n = cur_i+1;
+}
+
+void push_reg(aln_reg *reg, reg_t r)
+{
+    int i;
+    if (reg->reg_n == reg->reg_m) {
+        reg->reg_m <<= 1;
+        if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
+            fprintf(stderr, "[push_reg] Not enough memory.\n");
+            exit(0);
+        }
+    }
+    reg->reg[reg->reg_n].beg = r.beg;
+    reg->reg[reg->reg_n].end = r.end;
+    reg->reg_n++;
+}
+
+int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para *AP)
+{
+    if (a_reg->reg_n == 0) return 0;
+    aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP);
+    int i;
+    if (a_reg->reg[0].beg > 19) push_reg(remain_reg, (reg_t){1, a_reg->reg[0].beg-1});
+    for (i = 1; i < a_reg->reg_n; ++i) {
+        if (a_reg->reg[i].end - a_reg->reg[i-1].beg  > 19)
+            push_reg(remain_reg, (reg_t){a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
+    }
+    return remain_reg->reg_n;
+}
+
+void push_reg_res(aln_reg *reg, res_t res)
+{
+    int i;
+    if (reg->reg_n == reg->reg_m) {
+        reg->reg_m <<= 1;
+        if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
+            fprintf(stderr, "[push_reg_res] Not enough memory.\n");
+            exit(0);
+        }
+    }
+    if (res.nsrand == 1) { // '+'
+        reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (res.cigar[0]>>4+1):0;
+        reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - res.cigar[res.cigar_len-1]>>4):reg->read_len;
+    } else { // '-'
+        reg->reg[reg->reg_n].beg = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (res.cigar[res.cigar_len-1]>>4 + 1):0;
+        reg->reg[reg->reg_n].end = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - res.cigar[0]>>4):reg->read_len;
+    }
+    reg->reg_n++;
+}
+
+void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para *APP) 
 {
     int i, j;
-    for (i = 0; i < res->l_m; ++i) {
+    for (i = 0; i < res->l_n; ++i) {
         if (res->la[i].merg_msg.x==1) {
             for (j = 0; j <= res->la[i].cur_res_n; ++j) {
-                //fprintf(stdout, "line: #%d\n", i+1);
+                // primary res
                 fprintf(stdout, "%s\t%d\t%c\t%lld\t", APP->read_name, res->la[i].res[j].chr, "-++"[res->la[i].res[j].nsrand], (long long)res->la[i].res[j].offset); 
                 printcigar(stdout, res->la[i].res[j].cigar, res->la[i].res[j].cigar_len); 
                 fprintf(stdout, "\tAS:i:%d\tNM:i:%d", res->la[i].res[j].score, res->la[i].res[j].NM);
+                if (reg) push_reg_res(reg, res->la[i].res[j]);
                 check_cigar(res->la[i].res[j].cigar, res->la[i].res[j].cigar_len, APP->read_name, APP->read_len); 
                 if (j == 0 && res->la[i].merg_msg.y != -1) {
                     int alt = res->la[i].merg_msg.y;
                     int k;
+                    // alternative res
                     for (k = 0; k <= res->la[alt].cur_res_n; ++k) {
                         fprintf(stdout, "\tXA:Z:%d,%c%lld,", res->la[alt].res[k].chr, "-+"[res->la[alt].res[k].nsrand], (long long)res->la[alt].res[k].offset); 
                         printcigar(stdout, res->la[alt].res[k].cigar, res->la[alt].res[k].cigar_len); 
@@ -391,17 +496,9 @@ void aln_res_output(aln_res *res, lsat_aln_per_para *APP)
                 fprintf(stdout, "\n"); 
             }
         }
-        /*else {
-            fprintf(stdout, "Dumped: line #%d Score: %d NM: %d\n", i+1, res->la[i].tol_score, res->la[i].tol_NM);
-            for (j = 0; j <= res->la[i].cur_res_n; ++j) {
-                fprintf(stdout, "%s\t%d\t%c\t%lld\t", APP->read_name, res->la[i].res[j].chr, "-++"[res->la[i].res[j].nsrand], (long long)res->la[i].res[j].offset); 
-                printcigar(stdout, res->la[i].res[j].cigar, res->la[i].res[j].cigar_len); 
-                check_cigar(res->la[i].res[j].cigar, res->la[i].res[j].cigar_len, APP->read_name, APP->read_len); 
-                fprintf(stdout, "\n"); 
-            }
-        }*/
     }
 }
+
 sam_msg *sam_init_msg(void)
 {
     sam_msg *s = (sam_msg*)malloc(sizeof(sam_msg));
@@ -549,8 +646,8 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
             case 'M':	op = CMATCH;	break;
             case 'I':	op = CINS;		bi += x;	break;
             case 'D':	op = CDEL;		bd += x;	break;
-            //case 'S':	op = CSOFT_CLIP;		bi += x;	break;
-            //case 'H':	op = CHARD_CLIP;		bi += x;	break;
+                        //case 'S':	op = CSOFT_CLIP;		bi += x;	break;
+                        //case 'H':	op = CHARD_CLIP;		bi += x;	break;
             default:	fprintf(stderr, "\n[lsat_aln] Cigar ERROR 2.\n"); exit(-1); break;
         }
         if (a_msg[seed_i].at[aln_i].cigar_len == a_msg[seed_i].at[aln_i].cmax)
@@ -568,7 +665,7 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
 }
 
 void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y, 
-             int read_id, sam_t sam)
+        int read_id, sam_t sam)
     //   char srand, int NM, char *cigar)
 {   //read_x: (除去unmap和repeat的)read序号, aln_y: read对应的比对结果序号(从1开始)
     a_msg[read_x-1].read_id = read_id;			//from 1
@@ -583,7 +680,7 @@ void setAmsg(aln_msg *a_msg, int32_t read_x, int aln_y,
 void set_cigar(aln_t *at, cigar_t *cigar)
 {
     int i, bd=0, bi=0;
-	at->cigar_len = 0;
+    at->cigar_len = 0;
     for (i = 0; i < cigar->cigar_n; ++i) {
         _push_cigar1(&(at->cigar), &(at->cigar_len), &(at->cmax), cigar->cigar[i]);
         if (((cigar->cigar[i]) & 0xf) == CINS) bi += (cigar->cigar[i] >> 4);
@@ -637,6 +734,9 @@ void init_aln_para(lsat_aln_para *AP)
     AP->hash_len = HASH_LEN;
     AP->hash_key_len = HASH_KEY;
     AP->hash_step = HASH_STEP;
+    
+    AP->bwt_seed_len = 19; //XXX
+
     AP->gapo = 5; AP->gape = 2;
     AP->match = 1; AP->mis = 3;
 }
@@ -2523,7 +2623,7 @@ void lsat_unmap(char *read_name)
     fprintf(stdout, "%s\t*\t*\t*\t*\n", read_name);
 }
 
-int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para *AP)
+int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para *AP)
 {
     int read_n/*1-based*/, seed_out, i, j;
     int seed_id;
@@ -2605,7 +2705,8 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             //fnode_init(*f_node, s_msg->seed_max+2, AP->per_aln_m);
             
             int max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
-            aln_res *a_res;
+            aln_res *a_res = aln_init_res(1, APP->read_len); // line_n
+            aln_reg *a_reg = aln_init_reg(APP->read_len);
             // main line process
             strcpy(READ_NAME, APP->read_name);
             line_n = frag_line_BCC(a_msg, APP, AP, line, line_end, f_node, _line, _line_end, max_multi);
@@ -2613,8 +2714,8 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 lsat_unmap(s_msg->read_name[read_n]);
             else {
                 frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node, _line, _line_end);
-                a_res = frag_check(a_msg, &f_msg, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
-                aln_res_output(a_res, APP);
+                frag_check(a_msg, &f_msg, a_res, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
+                aln_res_output(a_res, a_reg, APP);
                 // trigger-line
                 for (i=0; i<line_n; ++i) {
                     if (a_res->la[i].merg_msg.x == 1) {
@@ -2622,12 +2723,13 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                             tri_n = trg_dp_line(*f_node, a_msg, &f_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, _line, _line_end, max_multi);
                             if (tri_n == 0) continue;
                             frag_dp_path(a_msg, &f_msg, APP, AP, &tri_n, &line_m, line, line_end, f_node, _line, _line_end);
-                            aln_res *tri_res = frag_check(a_msg, &f_msg, bns, pac, read_prefix, read_seq, APP, AP, tri_n, &hash_num, &hash_node);
-                            aln_res_output(tri_res, APP); aln_res_free(tri_res);
+                            aln_res *tri_res = aln_init_res(1, APP->read_len);
+                            frag_check(a_msg, &f_msg, tri_res, bns, pac, read_prefix, read_seq, APP, AP, tri_n, &hash_num, &hash_node);
+                            aln_res_output(tri_res, a_reg, APP); aln_res_free(tri_res);
                         }
                     }
                 }
-                aln_res_free(a_res);
+                aln_res_free(a_res); aln_free_reg(a_reg);
             }
             seed_out = 0;
             ++read_n;
@@ -2657,7 +2759,7 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
 }
 
 // for GEM
-int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para *AP)
+int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para *AP)
 {
     int read_n/*1-based*/, seed_out, i, j;
     int seed_id;
@@ -2736,7 +2838,8 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             //fnode_init(*f_node, s_msg->seed_max+2, AP->per_aln_m);
             
             int max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
-            aln_res *a_res;
+            aln_res *a_res = aln_init_res(1, APP->read_len);
+            aln_reg *a_reg = aln_init_reg(APP->read_len);
             // main line process
             strcpy(READ_NAME, APP->read_name);
             line_n = frag_line_BCC(a_msg, APP, AP, line, line_end, f_node, _line, _line_end, max_multi);
@@ -2744,8 +2847,8 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 lsat_unmap(s_msg->read_name[read_n]);
             else {
                 frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node, _line, _line_end);
-                a_res = frag_check(a_msg, &f_msg, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
-                aln_res_output(a_res, APP);
+                frag_check(a_msg, &f_msg, a_res, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
+                aln_res_output(a_res, a_reg, APP);
                 // trigger-line
                 for (i=0; i<line_n; ++i) {
                     if (a_res->la[i].merg_msg.x == 1) {
@@ -2753,12 +2856,19 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                             tri_n = trg_dp_line(*f_node, a_msg, &f_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, _line, _line_end, max_multi);
                             if (tri_n == 0) continue;
                             frag_dp_path(a_msg, &f_msg, APP, AP, &tri_n, &line_m, line, line_end, f_node, _line, _line_end);
-                            aln_res *tri_res = frag_check(a_msg, &f_msg, bns, pac, read_prefix, read_seq, APP, AP, tri_n, &hash_num, &hash_node);
-                            aln_res_output(tri_res, APP); aln_res_free(tri_res);
+                            aln_res *tri_res = aln_init_res(1, APP->read_len);
+                            frag_check(a_msg, &f_msg, tri_res, bns, pac, read_prefix, read_seq, APP, AP, tri_n, &hash_num, &hash_node);
+                            aln_res_output(tri_res, a_reg, APP); aln_res_free(tri_res);
                         }
                     }
                 }
                 aln_res_free(a_res);
+                // bwt aln for remain gaps
+                bwt_aln_remain(a_reg, a_res, bwt, bns, pac, read_seq, APP, AP);
+                aln_res_output(a_res, 0, APP);
+                // free 
+                aln_res_free(a_res);
+                aln_free_reg(a_reg);
             }
             seed_out = 0;
             ++read_n;
@@ -2819,7 +2929,6 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
 {
     clock_t t = clock();
     seed_msg *s_msg;
-    bntseq_t *bns;
 
     /* split-seeding */
     s_msg = seed_init_msg();
@@ -2847,22 +2956,28 @@ int lsat_aln_core(const char *ref_prefix, const char *read_prefix, int seed_info
     }
 
     /* frag-clustering */
-    /* SW-extending for per-frag */
+    /* load index */
     fprintf(stderr, "[lsat_aln] Restoring ref-indices ... ");
+    bwt_t *bwt; bntseq_t *bns;
+    char *str = (char*)calloc(strlen(ref_prefix)+5, 1);
+    strcpy(str, ref_prefix); strcat(str, ".bwt"); bwt = bwt_restore_bwt(str);
+    strcpy(str, ref_prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
+    free(str);
+
     bns = bns_restore(ref_prefix);
     uint8_t *pac = (uint8_t*)calloc(bns->l_pac/4+1, 1);
     fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);	fprintf(stderr, "done.\n");
+
     fprintf(stderr, "[lsat_aln] Clustering frag ... ");
     if (seed_program == 0)
-        frag_map_cluster(read_prefix, seed_result, s_msg, bns, pac, APP, AP);	
+        frag_map_cluster(read_prefix, seed_result, s_msg, bwt,  bns, pac, APP, AP);	
     else
-        frag_sam_cluster(read_prefix, seed_result, s_msg, bns, pac, APP, AP);	
+        frag_sam_cluster(read_prefix, seed_result, s_msg, bwt, bns, pac, APP, AP);	
     fprintf(stderr, "done.\n");
     fprintf(stderr, "[lsat_aln] Time Consupmtion: %.3f sec.\n", (float)(clock() -t )/CLOCKS_PER_SEC);
 
     seed_free_msg(s_msg);
-    free(pac);
-    bns_destroy(bns);
+    bwt_destroy(bwt); bns_destroy(bns); free(pac);
     return 0;
 }
 

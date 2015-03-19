@@ -51,18 +51,20 @@ typedef struct {
     cigar32_t *cigar;
     int c_m; int cigar_len;
 
+    int score;          // alignment score
     uint8_t mapq;       // mapping quality
     int NM;             // edit distance
-    //cigar32_t *MD;      // mis-match postion string XXX
-    int m_m, m_n;   
-    //char *XA;           // alternative alignment results XXX
-    int score;          // alignment score
+    //cigar32_t *MD;    // mis-match postion string XXX
+    //int m_m, m_n;   
+    //char *XA;         // alternative alignment results XXX
+
+    int read_beg, read_end;
 } res_t;
 
 typedef struct {
-    line_node merg_msg; // after filtering:
-                        // 1,x: keep
-                        // 0,x: dump
+    line_node merg_msg;    // after filtering:
+                           // 1,x: keep
+                           // 0,x: dump
 
     int res_m, cur_res_n;
     res_t *res;
@@ -74,7 +76,7 @@ typedef struct {
 } line_aln_res;
 
 typedef struct {
-	int l_m, cur_l_n;
+	int l_m, l_n;
 	line_aln_res *la;	
 
     int read_len;
@@ -91,7 +93,7 @@ void frag_free_msg(frag_msg *f_msg, int line_num);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i);//FLAG 0: start/1:end / 2:seed
 int frag_trg_set(frag_dp_node f_node, frag_msg *f_msg, int frag_i);
 int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg);
-aln_res *frag_check(aln_msg *a_msg, frag_msg **f_msg,
+void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
                bntseq_t *bns, uint8_t *pac, const char *read_prefix,
                char *read_seq,
                lsat_aln_per_para *APP, lsat_aln_para *AP,

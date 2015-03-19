@@ -73,8 +73,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 		strcpy(str, prefix); strcat(str, ".lsat.ann");
 		fp = fopen(str, "w");
 		fprintf(fp, "%lld %d\n", (long long)bns->l_pac, bns->n_seqs);
-		for (i = 0; i != bns->n_seqs; ++i) 
-		{
+		for (i = 0; i != bns->n_seqs; ++i) {
 			bntann1_t *p = bns->anns + i;
 			fprintf(fp, "%d %s", p->gi, p->name);
 			if (p->anno[0]) fprintf(fp, " %s\n", p->anno);
@@ -98,13 +97,11 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 void bns_destroy(bntseq_t *bns)
 {
 	if (bns == 0) return;
-	else
-	{
+	else {
 		int i;
 		if (bns->fp_pac)	fclose(bns->fp_pac);
 		free(bns->ambs);
-		for (i = 0; i != bns->n_seqs; ++i)
-		{
+		for (i = 0; i != bns->n_seqs; ++i) {
 			free(bns->anns[i].name);
 			free(bns->anns[i].anno);
 		}
@@ -278,6 +275,45 @@ bntseq_t *bns_restore(const char *prefix)
 	strcat(strcpy(amb_filename, prefix), ".lsat.amb");
 	strcat(strcpy(pac_filename, prefix), ".lsat.pac");
 	return bns_restore_core(ann_filename, amb_filename, pac_filename);
+}
+
+int bns_pos2rid(const bntseq_t *bns, int64_t pos_f)
+{
+	int left, mid, right;
+	if (pos_f >= bns->l_pac) return -1;
+	left = 0; mid = 0; right = bns->n_seqs;
+	while (left < right) { // binary search
+		mid = (left + right) >> 1;
+		if (pos_f >= bns->anns[mid].offset) {
+			if (mid == bns->n_seqs - 1) break;
+			if (pos_f < bns->anns[mid+1].offset) break; // bracketed
+			left = mid + 1;
+		} else right = mid;
+	}
+	return mid;
+}
+
+int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
+{
+	int left, mid, right, nn;
+	if (ref_id) *ref_id = bns_pos2rid(bns, pos_f);
+	left = 0; right = bns->n_holes; nn = 0;
+	while (left < right) {
+		mid = (left + right) >> 1;
+		if (pos_f >= bns->ambs[mid].offset + bns->ambs[mid].len) left = mid + 1;
+		else if (pos_f + len <= bns->ambs[mid].offset) right = mid;
+		else { // overlap
+			if (pos_f >= bns->ambs[mid].offset) {
+				nn += bns->ambs[mid].offset + bns->ambs[mid].len < pos_f + len?
+					bns->ambs[mid].offset + bns->ambs[mid].len - pos_f : len;
+			} else {
+				nn += bns->ambs[mid].offset + bns->ambs[mid].len < pos_f + len?
+					bns->ambs[mid].len : len - (bns->ambs[mid].offset - pos_f);
+			}
+			break;
+		}
+	}
+	return nn;
 }
 
 //@func: check if 'N' exist in the ref seq
