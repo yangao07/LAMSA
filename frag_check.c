@@ -364,8 +364,7 @@ void _invert_cigar(cigar32_t **cigar, int cigar_n) {
     if (cigar_n <= 1) return;
     int i;
     cigar32_t tmp;
-    for (i = 0; i < cigar_n/2; ++i)
-    {
+    for (i = 0; i < cigar_n/2; ++i) {
         tmp = (*cigar)[i];
         (*cigar)[i] = (*cigar)[cigar_n - i - 1];
         (*cigar)[cigar_n - i - 1] = tmp;

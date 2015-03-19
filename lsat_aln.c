@@ -462,11 +462,11 @@ void push_reg_res(aln_reg *reg, res_t res)
         }
     }
     if (res.nsrand == 1) { // '+'
-        reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (res.cigar[0]>>4+1):0;
-        reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - res.cigar[res.cigar_len-1]>>4):reg->read_len;
+        reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? ((res.cigar[0]>>4)+1):0;
+        reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[res.cigar_len-1]>>4)):reg->read_len;
     } else { // '-'
-        reg->reg[reg->reg_n].beg = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (res.cigar[res.cigar_len-1]>>4 + 1):0;
-        reg->reg[reg->reg_n].end = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - res.cigar[0]>>4):reg->read_len;
+        reg->reg[reg->reg_n].beg = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res.cigar[res.cigar_len-1]>>4) + 1):0;
+        reg->reg[reg->reg_n].end = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[0]>>4)):reg->read_len;
     }
     reg->reg_n++;
 }

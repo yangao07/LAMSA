@@ -127,40 +127,69 @@ void bwt_set_bound(bwt_seed_t *seed_v, line_node *line, int node_n, int seed_len
     }
 }
 
-void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns,  uint8_t *pac, const char *reg_seq, int reg_len,
-                 bwt_bound left, bwt_bound right, lsat_aln_para *AP, lsat_aln_per_para *APP, line_aln_res *la)
+void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, const char *read_seq, int reg_beg, int reg_len,
+                 bwt_bound *left, bwt_bound *right, lsat_aln_para *AP, lsat_aln_per_para *APP, line_aln_res *la)
 {
     la->cur_res_n = 0;
     int i; uint8_t *query = (uint8_t*)malloc(reg_len * sizeof(uint8_t));
-    if (is_rev) for (i = 0; i < reg_len; ++i) query[reg_len-1-i] = com_nst_nt4_table[reg_seq[i]]; 
-    else for (i = 0; i < reg_len; ++i) query[i] = nst_nt4_table[reg_seq[i]];
+    if (is_rev) for (i = 0; i < reg_len; ++i) query[reg_len-1-i] = com_nst_nt4_table[(int)read_seq[reg_beg-1+i]]; 
+    else for (i = 0; i < reg_len; ++i) query[i] = nst_nt4_table[(int)read_seq[reg_beg-1+i]];
 
-    uint64_t ref_start = (left.ref_pos - (left.read_pos - 1) - AP->bwt_seed_len < 1) ? 1 : (left.ref_pos - (left.read_pos - 1) - AP->bwt_seed_len);
-    int ref_len = (int)(right.ref_pos + reg_len - right.read_pos + AP->bwt_seed_len - ref_start + 1);
+    uint64_t ref_start = (left->ref_pos - (left->read_pos - 1) - AP->bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos - 1) - AP->bwt_seed_len);
+    int ref_len = (int)(right->ref_pos + reg_len - right->read_pos + AP->bwt_seed_len - ref_start + 1);
     uint8_t *target = (uint8_t*)malloc(ref_len * sizeof(uint8_t)); int N_flag, N_len;
     pac2fa_core(bns, pac, ref_id, ref_start-1, &ref_len, 1, &N_flag, &N_len, target);
 
-    int qlen, tlen; uint8_t *_q=0, *_t=0;
+    int _qle, _tle, qlen, tlen; uint8_t *_q=0, *_t=0;
+    qlen = right->read_pos-left->read_pos+1, tlen = right->ref_pos-left->ref_pos+1;
+    cigar32_t *mid_cigar; int mid_cigar_n;
+    // push head 'S'
+    _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_beg-1) << 4) | CSOFT_CLIP);
+
+    // mid global-sw
+    ksw_global(qlen, query+left->read_pos-1, tlen, target+left->ref_pos-1, 5, bwasw_sc_mat, 5, 2, abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
+
     cigar32_t *cigar=NULL; int cigar_n, cigar_m;
-    if (left.read_pos > 1) { // left extend
+    if (left->read_pos > 1) { // left extend
         // invert query and target,
-        qlen = left.read_pos-1;
+        qlen = left->read_pos-1;
         _q = (uint8_t*)malloc(qlen * sizeof(uint8_t));
         for (i = 0; i < qlen; ++i) _q[i] = query[qlen-1-i];
-        tlen = left.ref_pos-ref_start;
+        tlen = left->ref_pos-ref_start;
         _t = (uint8_t*)malloc(tlen * sizeof(uint8_t));
         for (i = 0; i < tlen; ++i) _t[i] = target[tlen-1-i];
         // ksw_extend
-        int _qle, _tle;
         ksw_extend_core(qlen, _q, tlen, _t, 5, bwasw_sc_mat, 5, 2, 5, 2, abs(qlen-tlen)+3, 5, 100, AP->bwt_seed_len*bwasw_sc_mat[0], &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
+            left->read_pos -= _qle;
+            left->ref_pos -= _tle;
+            _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((left->read_pos-1)<<4)|CSOFT_CLIP);
+            _invert_cigar(&cigar, cigar_n);
+            _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), cigar, cigar_n);
+            free(cigar);
         }
-        // invert cigar
         free(_q); free(_t);
+    } 
+    la->res[la->cur_res_n].offset = left->ref_pos;
+    // push mid-cigar
+    _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), mid_cigar, mid_cigar_n);
+    free(mid_cigar);
+
+    if (right->read_pos < reg_len) { // right extend
+        qlen = reg_len - right->read_pos;
+        tlen = ref_start+ref_len-1-right->ref_pos;
+        ksw_extend_core(qlen, query+right->read_pos, tlen, target+ref_len-tlen, 5, bwasw_sc_mat, 5, 2, 5, 2, abs(qlen-tlen)+3, 5, 100, AP->bwt_seed_len*bwasw_sc_mat[0], &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        if (cigar!=NULL) {
+            _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), cigar, cigar_n);
+            right->read_pos += _qle;
+            right->ref_pos += _tle;
+            _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_len-right->read_pos)<<4)|CSOFT_CLIP);
+            free(cigar);
+        }
     }
-    // mid global-sw
-    if (right.read_pos < reg_len) { // right extend
-    }
+
+    // push tail 'S'
+    _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), (APP->read_len-(reg_beg+reg_len-1))<<4 | CSOFT_CLIP);
     free(query); free(target);
 }
 
@@ -174,7 +203,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, const char *read_seq, 
     // locate bwt-seeds (exact-match seeds)
     for (i = 0; i <= reg_len-seed_len; ++i) {
         (*seed_v)[i].pos = i+1; // 1-base, on reg
-        for (j = i; j < i+seed_len; ++j) bwt_seed[j-i] = nst_nt4_table[read_seq[reg_beg-1+j]];
+        for (j = i; j < i+seed_len; ++j) bwt_seed[j-i] = nst_nt4_table[(int)read_seq[reg_beg-1+j]];
         uint64_t k = 0, l = bwt->seq_len, m;
         if (bwt_match_exact_alt(bwt, seed_len, bwt_seed, &k, &l)) {
             for (m = k; m <=l; ++m) {
@@ -190,9 +219,8 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, const char *read_seq, 
     int node_n; bwt_bound left_bound, right_bound;
     if ((node_n = bwt_cluster_seed(seed_v, reg_len-seed_len+1, &line)) > 0) {
         bwt_set_bound(*seed_v, line, node_n, seed_len, reg_len, &left_bound, &right_bound);
-        bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_seq+reg_beg-1, reg_len, left_bound, right_bound, AP, APP, a_res->la+a_res->l_n);
+        bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_seq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, a_res->la+a_res->l_n);
         a_res->l_n++;
-        // push 'S'
     }
     // free
     free(bwt_seed); bwt_free_seed(seed_v, reg_len-seed_len+1);

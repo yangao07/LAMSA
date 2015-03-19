@@ -1585,8 +1585,7 @@ int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		if (cigar_ != NULL) {
 			if (read_end < read_len-readINcigar) _push_cigar1(&cigar_, &n_cigar_, &m_cigar_, (((read_len-readINcigar-read_end) << 4) | CSOFT_CLIP));//'S' exsit
 			//invert cigar
-			int32_t tmp;
-			for (i = 0; i < n_cigar_/2; ++i) tmp = cigar_[i], cigar_[i] = cigar_[n_cigar_-i-1], cigar_[n_cigar_-i-1] = tmp;
+            _invert_cigar(&cigar_, n_cigar_);
 			_push_cigar(cigar, cigar_len, cigar_m, cigar_, n_cigar_);
 			free(cigar_);
 		} else
