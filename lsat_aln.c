@@ -405,15 +405,18 @@ aln_reg *aln_init_reg(int read_len)
 
 void aln_free_reg(aln_reg *reg) { free(reg->reg); free(reg); }
 
-int reg_comp(const void *a, const void *b) { return (*(reg_t*)b).beg - (*(reg_t*)a).beg; }
+int reg_comp(const void *a, const void *b) { return (*(reg_t*)a).beg - (*(reg_t*)b).beg; }
 void aln_sort_reg(aln_reg *a_reg) { qsort(a_reg->reg, a_reg->reg_n, sizeof(reg_t), reg_comp); }
 
 void aln_merg_reg(aln_reg *a_reg, lsat_aln_para *AP) {
     //if (a_reg->reg_n == 0)return;
     int cur_i = 0, i;
     for (i = 1; i < a_reg->reg_n; ++i) {
-        if(a_reg->reg[i].beg - a_reg->reg[cur_i].end - 1 < 19) //XXX
-            a_reg->reg[cur_i].end = a_reg->reg[i].end;
+		// merge
+        if(a_reg->reg[i].beg - a_reg->reg[cur_i].end - 1 < 19) { //XXX
+		    if(a_reg->reg[i].end > a_reg->reg[cur_i].end) 
+				a_reg->reg[cur_i].end = a_reg->reg[i].end;
+		}
         else {
             cur_i++;
             a_reg->reg[cur_i].beg = a_reg->reg[i].beg;
@@ -425,7 +428,6 @@ void aln_merg_reg(aln_reg *a_reg, lsat_aln_para *AP) {
 
 void push_reg(aln_reg *reg, reg_t r)
 {
-    int i;
     if (reg->reg_n == reg->reg_m) {
         reg->reg_m <<= 1;
         if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
@@ -445,15 +447,15 @@ int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para *AP)
     int i;
     if (a_reg->reg[0].beg > 19) push_reg(remain_reg, (reg_t){1, a_reg->reg[0].beg-1});
     for (i = 1; i < a_reg->reg_n; ++i) {
-        if (a_reg->reg[i].end - a_reg->reg[i-1].beg  > 19)
+        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > 19)
             push_reg(remain_reg, (reg_t){a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
     }
+	if (a_reg->read_len - a_reg->reg[i-1].end > 19) push_reg(remain_reg, (reg_t){a_reg->reg[i-1].end+1, a_reg->read_len});
     return remain_reg->reg_n;
 }
 
 void push_reg_res(aln_reg *reg, res_t res)
 {
-    int i;
     if (reg->reg_n == reg->reg_m) {
         reg->reg_m <<= 1;
         if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
@@ -462,10 +464,10 @@ void push_reg_res(aln_reg *reg, res_t res)
         }
     }
     if (res.nsrand == 1) { // '+'
-        reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? ((res.cigar[0]>>4)+1):0;
+        reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? ((res.cigar[0]>>4)+1):1;
         reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[res.cigar_len-1]>>4)):reg->read_len;
     } else { // '-'
-        reg->reg[reg->reg_n].beg = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res.cigar[res.cigar_len-1]>>4) + 1):0;
+        reg->reg[reg->reg_n].beg = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res.cigar[res.cigar_len-1]>>4) + 1):1;
         reg->reg[reg->reg_n].end = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[0]>>4)):reg->read_len;
     }
     reg->reg_n++;
@@ -2864,6 +2866,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 }
                 aln_res_free(a_res);
                 // bwt aln for remain gaps
+				a_res = aln_init_res(1, APP->read_len);
                 bwt_aln_remain(a_reg, a_res, bwt, bns, pac, read_seq, APP, AP);
                 aln_res_output(a_res, 0, APP);
                 // free 
