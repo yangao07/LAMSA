@@ -289,10 +289,8 @@ int init_hash(uint8_t *read_seq, int read_len, int hash_len,
 
 //1-mismatch betweed two adjacent nodes is allowed
 //@para: bound_flag: 1 -> _head,_tail both are set as 1, 0 -> only one.
-//对于每一个节点，依据于已经存在的 split_offset，设定其对应的 split_offset	XXX
 int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, int hash_step, 
-				  int *con_flag, int split_offset, 	//XXX
-				  int bound_flag, int bound_len)
+				  int *con_flag, int bound_flag, int bound_len)
 {
 	int dis;
 	if (a_i > b_i) dis = a_offset - b_offset;
@@ -306,14 +304,6 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, in
 				*con_flag = F_MATCH;
 			else *con_flag = F_MISMATCH;
 		}
-	}
-	else if (dis == split_offset)
-	{
-		if (dis <= (0-abs(a_i-b_i)))	//overlap-allowed
-			*con_flag = F_UNCONNECT;
-		else if (abs(b_i - a_i) < hash_len + 2 * hash_step)	//1-mismatch seed allowed
-			*con_flag = F_SPLIT_MATCH;
-		else *con_flag = F_MISMATCH;
 	}
 	else	//SV or F_UNCONNECT
 	{
@@ -376,7 +366,7 @@ int hash_dp_init(hash_dp_node **h_node,
 				 int node_i, int ref_i, 
 				 line_node head, 
 				 int hash_len, int hash_step, int dp_flag, 
-				 int split_offset, int bound_flag, int bound_len)
+				 int bound_flag, int bound_len)
 {
 	int i;
 	if (h_node[head.x][head.y].dp_flag == UNLIMITED_FLAG)
@@ -400,7 +390,7 @@ int hash_dp_init(hash_dp_node **h_node,
 		{
 			h_node[node_i][i].ref_i = ref_i;
 			h_node[node_i][i].offset = hash_pos[start_a[node_i]+i] - ref_i;
-			hash_main_dis(h_node[head.x][head.y].ref_i, h_node[head.x][head.y].offset, ref_i, hash_pos[start_a[node_i]+i] - ref_i, hash_len, hash_step, &con_flag, split_offset-h_node[head.x][head.y].offset, bound_flag, bound_len);
+			hash_main_dis(h_node[head.x][head.y].ref_i, h_node[head.x][head.y].offset, ref_i, hash_pos[start_a[node_i]+i] - ref_i, hash_len, hash_step, &con_flag, bound_flag, bound_len);
 
 			if (con_flag == F_UNCONNECT)
 			{
@@ -428,7 +418,7 @@ int hash_dp_init(hash_dp_node **h_node,
 //                                                                 h_len: whole number of hash-dp-node
 
 #ifndef __NEW__
-int hash_min_extend(hash_dp_node **h_node, int *len_a, int node_i, int h_len, int min_len, int dp_flag, int hash_len, int hash_step, int split_offset)
+int hash_min_extend(hash_dp_node **h_node, int *len_a, int node_i, int h_len, int min_len, int dp_flag, int hash_len, int hash_step)
 {
 	int i, j, k;
 	// (node_i, i), (j, k)
@@ -461,10 +451,8 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a, int node_i, int h_len, in
 #ifdef __NEW__
 int hash_min_extend(hash_dp_node **h_node, int *len_a, 
 					int node_x, int node_y, 
-					int h_len, int min_len, 
-					int dp_flag, 
-					int hash_len, int hash_step,
-					int split_offset)
+					int h_len, int min_len, int dp_flag, 
+					int hash_len, int hash_step)
 {
     int i, j, con_flag;
     int last_x = node_x, last_y = node_y;
@@ -481,7 +469,7 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
                 //counter++;
                 if (h_node[i][j].dp_flag < 0)
                     continue;
-                hash_main_dis(h_node[i][j].ref_i, h_node[i][j].offset, h_node[last_x][last_y].ref_i, h_node[last_x][last_y].offset, hash_len, hash_step, &con_flag, split_offset-h_node[i][j].offset, 0, 0);
+                hash_main_dis(h_node[i][j].ref_i, h_node[i][j].offset, h_node[last_x][last_y].ref_i, h_node[last_x][last_y].offset, hash_len, hash_step, &con_flag, 0, 0);
                 if (con_flag == F_MATCH)
                 //if (h_node[last_x][last_y].ref_i - h_node[i][j].ref_i <= hash_len+1 && h_node[i][j].offset == h_node[last_x][last_y].offset)
                 {
@@ -510,7 +498,7 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
             {
                 if (h_node[i][j].dp_flag < 0)
                     continue;
-                hash_main_dis(h_node[last_x][last_y].ref_i, h_node[last_x][last_y].offset, h_node[i][j].ref_i, h_node[i][j].offset, hash_len, hash_step, &con_flag, split_offset-h_node[last_x][last_y].offset, 0, 0);
+                hash_main_dis(h_node[last_x][last_y].ref_i, h_node[last_x][last_y].offset, h_node[i][j].ref_i, h_node[i][j].offset, hash_len, hash_step, &con_flag, 0, 0);
                 if (con_flag == F_MATCH)
                 //if (h_node[i][j].ref_i - h_node[last_x][last_y].ref_i <= hash_len + 1 && h_node[i][j].offset == h_node[last_x][last_y].offset)
                 {
@@ -536,8 +524,7 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
 int hash_dp_update(hash_dp_node **h_node, int *len_a, 
 				   int node_x, int node_y, 
 				   int start, int hash_len, int hash_step,
-				   int dp_flag,
-				   int split_offset, int bound_flag, int bound_len)
+				   int dp_flag, int bound_flag, int bound_len)
 {
 	int i, j, con_flag;
 	line_node max_from;
@@ -555,7 +542,7 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 			{
 				if (h_node[i][j].dp_flag == dp_flag)
 				{
-					hash_main_dis(h_node[i][j].ref_i, h_node[i][j].offset, h_node[node_x][node_y].ref_i, h_node[node_x][node_y].offset, hash_len, hash_step, &con_flag, split_offset-h_node[i][j].offset, bound_flag, bound_len);
+					hash_main_dis(h_node[i][j].ref_i, h_node[i][j].offset, h_node[node_x][node_y].ref_i, h_node[node_x][node_y].offset, hash_len, hash_step, &con_flag, bound_flag, bound_len);
 					if (con_flag == F_UNCONNECT)
 						continue;
 					//overlap of pre-node and cur-node may exist
@@ -612,7 +599,7 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 int hash_mini_dp_init(hash_dp_node **h_node, int *len_a, 
 					  int node_i, line_node head, 
 					  int hash_len, int hash_step, int mini_dp_flag, 
-					  int split_offset, int bound_flag, int bound_len)
+					  int bound_flag, int bound_len)
 {
 	int i;
 	if (h_node[head.x][head.y].dp_flag == UNLIMITED_FLAG)
@@ -631,7 +618,7 @@ int hash_mini_dp_init(hash_dp_node **h_node, int *len_a,
 		int con_flag;
 		for (i = 0; i < len_a[node_i]; ++i)
 		{
-			hash_main_dis(h_node[head.x][head.y].ref_i, h_node[head.x][head.y].offset, h_node[node_i][i].ref_i, h_node[node_i][i].offset, hash_len, hash_step, &con_flag, split_offset-h_node[head.x][head.y].offset, bound_flag, bound_len);
+			hash_main_dis(h_node[head.x][head.y].ref_i, h_node[head.x][head.y].offset, h_node[node_i][i].ref_i, h_node[node_i][i].offset, hash_len, hash_step, &con_flag, bound_flag, bound_len);
 			if (con_flag == F_UNCONNECT)
 			{
 				h_node[node_i][i].from = (line_node){-1,0};
@@ -659,12 +646,12 @@ int mini_hash_main_line(hash_dp_node **h_node,
 					    int hash_len, int hash_step, 
 						line_node head, line_node tail, 
 						line_node *line, 
-						int split_offset, int bound_flag, int bound_len)
+						int bound_flag, int bound_len)
 {
 	int i, j, mini_dp_flag = MULTI_FLAG;
 	for (i = head.x+1; i < tail.x; ++i)
 		//only part of the dp-node members need to be re-inited
-		hash_mini_dp_init(h_node, len_a, i, head, hash_len, hash_step, mini_dp_flag, split_offset, 1/*bound_flag*/, bound_len);
+		hash_mini_dp_init(h_node, len_a, i, head, hash_len, hash_step, mini_dp_flag, 1/*bound_flag*/, bound_len);
 
 	h_node[tail.x][tail.y].from = head;
 	h_node[tail.x][tail.y].score = 0;
@@ -676,10 +663,10 @@ int mini_hash_main_line(hash_dp_node **h_node,
 		for (j = 0; j < len_a[i]; ++j)
 		{
 			if (h_node[i][j].dp_flag == mini_dp_flag)
-				hash_dp_update(h_node, len_a, i, j, head.x+1, hash_len, hash_step, mini_dp_flag, split_offset, bound_flag, bound_len);
+				hash_dp_update(h_node, len_a, i, j, head.x+1, hash_len, hash_step, mini_dp_flag, bound_flag, bound_len);
 		}
 	}
-	hash_dp_update(h_node, len_a, tail.x, tail.y, head.x+1, hash_len, hash_step, mini_dp_flag, split_offset, bound_flag, bound_len);
+	hash_dp_update(h_node, len_a, tail.x, tail.y, head.x+1, hash_len, hash_step, mini_dp_flag, bound_flag, bound_len);
 
 	int node_i = h_node[tail.x][tail.y].node_n-1;
 	int last_x, last_y;
@@ -712,7 +699,6 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 	int min_len = HASH_MIN_LEN, min_exist=0;
 	line_node head={0,0}, tail={hash_seed_n+1, 0};
 	int bound_flag = 0, bound_len = read_len;	//XXX
-	int split_offset=read_len-ref_len;
 
 	//dp init
 	{
@@ -730,10 +716,10 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 		//seed init
 		for (i = 1; i <= hash_seed_n; ++i) {
 			if (len_a[i] == min_len) {
-				hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*ref offset*/, head, hash_len, hash_step, MIN_FLAG, split_offset, 1/*bound_flag*/, bound_len);
+				hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*ref offset*/, head, hash_len, hash_step, MIN_FLAG, 1/*bound_flag*/, bound_len);
 				min_exist = 1;
 			}
-			else hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*ref offset*/, head, hash_len, hash_step, MULTI_FLAG, split_offset, 1/*bound_flag*/, bound_len);
+			else hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*ref offset*/, head, hash_len, hash_step, MULTI_FLAG, 1/*bound_flag*/, bound_len);
 		}
 	}
 	//dp update and backtrack
@@ -744,27 +730,27 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 #ifndef __NEW__
 			for (i = 1; i <= hash_seed_n; ++i) {
 				if (len_a[i] > min_len)
-					hash_min_extend(h_node, len_a, i, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step, split_offset);
+					hash_min_extend(h_node, len_a, i, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step);
 			}
 #endif
 #ifdef __NEW__
-			if (_head) hash_min_extend(h_node, len_a, head.x, head.y, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step, split_offset);
+			if (_head) hash_min_extend(h_node, len_a, head.x, head.y, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step);
 			for (i = 1; i <= hash_seed_n; ++i) {
 				if (len_a[i] <= min_len && len_a[i] > 0) {
 					for (j = 0; j < len_a[i]; ++j) 
-						hash_min_extend(h_node, len_a, i, j, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step, split_offset);
+						hash_min_extend(h_node, len_a, i, j, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step);
 				}
 			}
-			if (_tail) hash_min_extend(h_node, len_a, tail.x, tail.y, hash_seed_n+2, min_len, MIN_FLAG, split_offset, hash_len, hash_step);
+			if (_tail) hash_min_extend(h_node, len_a, tail.x, tail.y, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step);
 #endif
 			//min update
 			for (i = 2; i <= hash_seed_n; ++i) {
 				for (j = 0; j < len_a[i]; ++j) {
 					if (h_node[i][j].dp_flag == MIN_FLAG)
-						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG, split_offset, bound_flag, bound_len);
+						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG, bound_flag, bound_len);
 				}
 			}
-			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG, split_offset, bound_flag, bound_len);
+			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG, bound_flag, bound_len);
 			//backtrack and update for remaining blank
 			int mini_len;
 			line_node *_line = (line_node*)malloc(hash_seed_n * sizeof(line_node));;
@@ -778,7 +764,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 				{
 					if ((right.x == tail.x && _tail == 0 )|| (left.x == head.x && _head == 0)) bound_flag = 0;
 					else bound_flag = 1;
-					mini_len = mini_hash_main_line(h_node, hash_pos, start_a, len_a, hash_len, hash_step, left, right, _line, split_offset, bound_flag, bound_len);
+					mini_len = mini_hash_main_line(h_node, hash_pos, start_a, len_a, hash_len, hash_step, left, right, _line, bound_flag, bound_len);
 					//add mini-line to the main-line, _line is forward, but the line is reverse
 					for (i = mini_len-1; i >= 0; --i)
 						line[node_i++] = _line[i];
@@ -805,10 +791,10 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 			for (i = 2; i <= hash_seed_n; ++i) {
 				for (j = 0; j < len_a[i]; ++j) {
 					if (h_node[i][j].dp_flag == MULTI_FLAG)
-						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG, split_offset, bound_flag, bound_len);
+						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG, bound_flag, bound_len);
 				}
 			}
-			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG, split_offset, bound_flag, bound_len);
+			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG, bound_flag, bound_len);
 			node_i = h_node[tail.x][tail.y].node_n-1;
 
 			int last_x, last_y;

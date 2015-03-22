@@ -100,12 +100,6 @@ int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,
 					 int hash_len, int hash_step, int split_len,
 					 uint32_t **hash_num, uint64_t ***hash_node, 
 					 int key_len, int hash_size);
-/*int split_insert_map(uint32_t **res_cigar, int *res_len, int *res_m,
-					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
-					 int64_t ref_offset, 
-					 int hash_len, int hash_step, 
-					 uint32_t **hash_num, uint64_t ***hash_node, 
-					 int key_len, int hash_size);*/
 int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 						uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
 		                uint32_t **hash_num, uint64_t ***hash_node, 

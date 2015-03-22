@@ -24,6 +24,6 @@ typedef struct {
     uint64_t ref_pos;
 } bwt_bound;
 
-void bwt_aln_remain(aln_reg *a_reg, aln_res *a_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, const char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP);
+void bwt_aln_remain(aln_reg *a_reg, aln_res *a_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP);
 
 #endif

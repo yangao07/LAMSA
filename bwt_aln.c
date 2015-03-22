@@ -128,7 +128,7 @@ void bwt_set_bound(bwt_seed_t *seed_v, line_node *line, int node_n, int seed_len
     }
 }
 
-void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, const char *read_seq, int reg_beg, int reg_len,
+void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *read_seq, int reg_beg, int reg_len,
                  bwt_bound *left, bwt_bound *right, lsat_aln_para *AP, lsat_aln_per_para *APP, line_aln_res *la)
 {
     la->cur_res_n = 0;
@@ -207,7 +207,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, const 
     free(query); free(target);
 }
 
-int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, const char *read_seq, int reg_beg, int reg_len, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *a_res)
+int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, int reg_beg, int reg_len, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *a_res)
 {
     int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
@@ -259,13 +259,14 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, const char *read_seq, 
     return 0;
 }
 
-void bwt_aln_remain(aln_reg *a_reg, aln_res *a_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, const char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP)
+void bwt_aln_remain(aln_reg *a_reg, aln_res *a_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP)
 {
     a_res->l_n = 0;
     int i;
     aln_reg *re_reg = aln_init_reg(APP->read_len); 
     if (get_remain_reg(a_reg, re_reg, AP) == 0) return;
 
+    // extend the remain_reg or not?XXX
     for (i = 0; i < re_reg->reg_n; ++i) {
         int reg_len = re_reg->reg[i].end - re_reg->reg[i].beg + 1;
         bwt_aln_core(bwt, bns, pac, read_seq, re_reg->reg[i].beg, reg_len, AP, APP, a_res);
