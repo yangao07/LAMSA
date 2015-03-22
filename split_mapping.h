@@ -49,9 +49,9 @@ typedef struct {
 
 typedef struct {
 	line_node from;
-	int32_t ref_i;
-	//	int32_t read_i;
-	int32_t offset;		//hash_pos[]
+	//int32_t ref_i;
+	int32_t read_i;
+	int32_t offset; // offset = ref_i - read_i
 	int32_t score;
 	int32_t node_n;
 	uint8_t match_flag;

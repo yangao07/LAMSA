@@ -1022,7 +1022,7 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     //    fprintf(stderr, "\n");
     if (*n_cigar_) *n_cigar_ = 0;
     int lqe, lte;
-    int32_t *lcigar=0;
+    cigar32_t *lcigar=0;
     int ln_cigar, lm_cigar;
     //left boundary extension
     ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, 0, &lqe, &lte, &ln_cigar, &lcigar, &lm_cigar);
@@ -1031,7 +1031,7 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     //right boundary extension
     uint8_t *r_query = (uint8_t*)malloc(qlen * sizeof(uint8_t));
     uint8_t *r_target = (uint8_t*)malloc(tlen * sizeof(uint8_t));
-    int32_t *rcigar=0;
+    cigar32_t *rcigar=0;
     int rqe, rte, rn_cigar, rm_cigar;
     for (i = 0; i < qlen; ++i) r_query[i] = query[qlen-i-1];
     for (i = 0; i < tlen; ++i) r_target[i] = target[tlen-i-1];
@@ -1074,7 +1074,6 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 #include <stdio.h>
 #include <zlib.h>
 #include "kseq.h"
-//KSEQ_INIT(gzFile, err_gzread)
 KSEQ_INIT(gzFile, gzread)
 
 unsigned char seq_nt4_table[256] = {
@@ -1096,87 +1095,16 @@ unsigned char seq_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
 
-/*int main(int argc, char *argv[])
-{
-	int c, sa = 1, sb = 3, i, j, k, forward_only = 0, max_rseq = 0;
-	int8_t mat[25];
-	int gapo = 5, gape = 2, minsc = 0, xtra = KSW_XSTART;
-	uint8_t *rseq = 0;
-	gzFile fpt, fpq;
-	kseq_t *kst, *ksq;
-
-	// parse command line
-	while ((c = getopt(argc, argv, "a:b:q:r:ft:1")) >= 0) {
-		switch (c) {
-			case 'a': sa = atoi(optarg); break;
-			case 'b': sb = atoi(optarg); break;
-			case 'q': gapo = atoi(optarg); break;
-			case 'r': gape = atoi(optarg); break;
-			case 't': minsc = atoi(optarg); break;
-			case 'f': forward_only = 1; break;
-			case '1': xtra |= KSW_XBYTE; break;
-		}
-	}
-	if (optind + 2 > argc) {
-		fprintf(stderr, "Usage: ksw [-1] [-f] [-a%d] [-b%d] [-q%d] [-r%d] [-t%d] <target.fa> <query.fa>\n", sa, sb, gapo, gape, minsc);
-		return 1;
-	}
-	if (minsc > 0xffff) minsc = 0xffff;
-	xtra |= KSW_XSUBO | minsc;
-	// initialize scoring matrix
-	for (i = k = 0; i < 4; ++i) {
-		for (j = 0; j < 4; ++j)
-			mat[k++] = i == j? sa : -sb;
-		mat[k++] = 0; // ambiguous base
-	}
-	for (j = 0; j < 5; ++j) mat[k++] = 0;
-	// open file
-	fpt = xzopen(argv[optind],   "r"); kst = kseq_init(fpt);
-	fpq = xzopen(argv[optind+1], "r"); ksq = kseq_init(fpq);
-	// all-pair alignment
-	while (kseq_read(ksq) > 0) {
-		kswq_t *q[2] = {0, 0};
-		kswr_t r;
-		for (i = 0; i < (int)ksq->seq.l; ++i) ksq->seq.s[i] = seq_nt4_table[(int)ksq->seq.s[i]];
-		if (!forward_only) { // reverse
-			if ((int)ksq->seq.m > max_rseq) {
-				max_rseq = ksq->seq.m;
-				rseq = (uint8_t*)realloc(rseq, max_rseq);
-			}
-			for (i = 0, j = ksq->seq.l - 1; i < (int)ksq->seq.l; ++i, --j)
-				rseq[j] = ksq->seq.s[i] == 4? 4 : 3 - ksq->seq.s[i];
-		}
-		gzrewind(fpt); kseq_rewind(kst);
-		while (kseq_read(kst) > 0) {
-			for (i = 0; i < (int)kst->seq.l; ++i) kst->seq.s[i] = seq_nt4_table[(int)kst->seq.s[i]];
-			r = ksw_align(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[0]);
-			if (r.score >= minsc)
-				err_printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, r.qb, r.qe+1, r.score, r.score2, r.te2);
-			if (rseq) {
-				r = ksw_align(ksq->seq.l, rseq, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[1]);
-				if (r.score >= minsc)
-					err_printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, (int)ksq->seq.l - r.qb, (int)ksq->seq.l - 1 - r.qe, r.score, r.score2, r.te2);
-			}
-		}
-		free(q[0]); free(q[1]);
-	}
-	free(rseq);
-	kseq_destroy(kst); err_gzclose(fpt);
-	kseq_destroy(ksq); err_gzclose(fpq);
-	return 0;
-}*/
 int main(int argc, char *argv[])
 {
 	int c, /*sa = 1, sb = 3,*/ i, j, k;
-    int sa=1, sb=5;
+    int sa=1, sb=3;
 	int8_t mat[25];
 	//int gapo = 5, gape = 2;
-    int gapo = 2, gape=1;
+    int gapo = 5, gape=2;
 	gzFile fpt, fpq;
 	kseq_t *kst, *ksq;
     int score, te, qe;
-    //int n_cigar;
-    //int32_t *cigar=0;
 
 	// initialize scoring matrix
 	for (i = k = 0; i < 4; ++i) {
@@ -1196,12 +1124,10 @@ int main(int argc, char *argv[])
 			
             int qle, tle, m_cigar, n_cigar;
             int32_t* cigar;
-            //score = ksw_extend2(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 0, 1, 10, &qle, &tle, &gtle, &gscore, &max_off);
-            score = ksw_extend_core(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 2, &qle, &tle, &cigar, &n_cigar, &m_cigar);
-            //score = ksw_global(0/*ksq->seq.l*/, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, &n_cigar, &cigar);
-            printf("%d\nte:%d\tqe:%d\n", score, tle, qle);
+            int score = ksw_both_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 10, &n_cigar, &cigar);
+            printf("%d\n", score);
             for (i = 0; i < n_cigar; ++i)
-                printf("%d%c", cigar[i] >> 4 , "MIDSH"[cigar[i] & 0xf]);
+                printf("%d%c", cigar[i] >> 4 , CIGAR_STR[cigar[i] & 0xf]);
             printf("\n");
             free(cigar);
 		}
