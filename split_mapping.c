@@ -872,6 +872,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					_t_len = h_node[line[0].x][line[0].y].ref_i+tail_in;
 					_q_len = h_node[line[0].x][line[0].y].ref_i + h_node[line[0].x][line[0].y].offset+tail_in;
 					if (abs(_t_len - _q_len) > hash_len) { //XXX >hash_len?
+						_b_w = hash_len; // XXX hash_len?
 						res |= 1;
 						ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
 					} else {
@@ -927,6 +928,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 						_t_len = h_node[line[i+1].x][line[i+1].y].ref_i - h_node[line[i].x][line[i].y].ref_i - hash_len + head_in + tail_in;
 						_q_len = _t_len + h_node[line[i+1].x][line[i+1].y].offset - h_node[line[i].x][line[i].y].offset;
 						if (abs(_t_len - _q_len) > hash_len) {
+							_b_w = hash_len;
 							res |= 1;
 							ksw_both_extend(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset - head_in, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
 						} else {
@@ -963,6 +965,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					_t_len = ref_len - h_node[line[m_len-1].x][line[m_len-1].y].ref_i - hash_len + head_in;
 					_q_len = read_len - h_node[line[m_len-1].x][line[m_len-1].y].ref_i - hash_len - h_node[line[m_len-1].x][line[m_len-1].y].offset + head_in;
 					if (abs(_t_len - _q_len) > hash_len) {
+						_b_w = hash_len;
                         res |= 1;
                         ksw_both_extend(_q_len, read_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset+hash_len - head_in, _t_len, ref_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
 					} else {
@@ -981,6 +984,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 	} else { // no hash-dp line nodes exist
 		if (_head && _tail) {
 			_t_len = ref_len; _q_len = read_len;
+			_b_w = hash_len;
 			res |= 1;
 			ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
 			_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);

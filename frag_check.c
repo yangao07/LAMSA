@@ -749,7 +749,8 @@ void split_mapping(cigar32_t **s_cigar, int *s_clen, int *s_cm,
 
 		//fprintf(stdout, "s1: %lld, exp_s2: %lld act_s2: %lld %d\n", (long long)pos, (long long)exp, (long long)act, dis);
 #ifdef __DEBUG__
-        fprintf(stdout, "%d\t%lld\t%d\t%s\n", a_msg[s1_i].at[s1_aln_i].chr, (long long)pos, abs(dis), dis>0?"DEL":"INS");
+        if (abs(dis) > APP->match_dis) 
+			fprintf(stdout, "%d\t%lld\t%d\t%s\n", a_msg[s1_i].at[s1_aln_i].chr, (long long)pos, abs(dis), dis>0?"DEL":"INS");
 #endif
 		if (dis > APP->match_dis) {	
             s_tlen = s_qlen + dis;
@@ -788,8 +789,17 @@ void split_mapping(cigar32_t **s_cigar, int *s_clen, int *s_cm,
                 ref_offset = a_msg[s2_i].at[s2_aln_i].offset - s_tlen;
                 pac2fa_core(bns, pac, a_msg[s2_i].at[s2_aln_i].chr, ref_offset-1, &s_tlen, 1, &N_flag, &N_len, s_tseq);
                 // reverse ref and read seq
-                for (i = 0; i < s_qlen>>1; ++i) s_qseq[s_qlen-1-i] = s_qseq[i];
-                for (i = 0; i < s_tlen>>1; ++i) s_tseq[s_tlen-1-i] = s_tseq[i];
+				char tmp;
+                for (i = 0; i < s_qlen>>1; ++i) {
+					tmp = s_qseq[s_qlen-1-i];
+					s_qseq[s_qlen-1-i] = s_qseq[i];
+					s_qseq[i] = tmp;
+				}
+                for (i = 0; i < s_tlen>>1; ++i) {
+					tmp = s_tseq[s_tlen-1-i];
+					s_tseq[s_tlen-1-i] = s_tseq[i];
+					s_tseq[i] = tmp;
+				}
                 ksw_extend_core(s_qlen, s_qseq, s_tlen, s_tseq, 5, bwasw_sc_mat, 5, 2, 5, 2, 3, 5, 100, 10, &rqe, &rte, &cigar, &c_len, &c_m);
                 _invert_cigar(&cigar, c_len);
                 // merge, add overlap-flag('S/H')
