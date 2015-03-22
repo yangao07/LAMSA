@@ -295,8 +295,7 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, in
 	int dis;
 	if (a_i > b_i) dis = a_offset - b_offset;
 	else dis = b_offset - a_offset;
-	if (dis == 0)
-	{	//match or mismatch
+	if (dis == 0) {	//match or mismatch
 		//if (bound_flag)
 		{
             if (abs(b_i - a_i) < hash_len + 2 * hash_step)	//1-mismatch seed allowed

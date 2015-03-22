@@ -13,11 +13,9 @@
 #ifdef _GEM_MAIN_
 void printcigar(FILE *outp, cigar32_t *cigar, int cigar_len)
 {
-	int i;
-
-    //fprintf(stdout, "cigar %d: ", cigar_len);
-	for (i = 0; i < cigar_len; i++)
-		fprintf(outp, "%d%c", (int)(cigar[i]>>4), "MIDNSHP=X"[(int)(cigar[i] & 0xf)]);
+	int i; 
+    for (i = 0; i < cigar_len; i++)
+		fprintf(outp, "%d%c", (int)(cigar[i]>>4), CIGAR_STR[(int)(cigar[i] & 0xf)]);
 	fprintf(stdout, "\n");
 }
 

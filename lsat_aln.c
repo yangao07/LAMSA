@@ -748,18 +748,14 @@ void init_aln_para(lsat_aln_para *AP)
 int get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, lsat_aln_per_para *APP, lsat_aln_para *AP)    //(i,j)对应节点，来自pre的第pre_a个aln
 {
     if (pre == -1 || i == -1) { *flag = F_MATCH; return 0; }	//for bound node
-    if (pre == i)// XXX overlap???
-    {
-        if (pre_a == j)
-            *flag = F_MATCH; 
-        else
-            *flag = F_UNCONNECT;
+    if (pre == i) {// XXX overlap???
+        if (pre_a == j) *flag = F_MATCH; 
+        else *flag = F_UNCONNECT;
         return 0;
     }
     if (a_msg[i].at[j].chr != a_msg[pre].at[pre_a].chr || a_msg[i].at[j].nsrand != a_msg[pre].at[pre_a].nsrand)	//different chr or different srnad
     {
-        *flag = F_CHR_DIF;
-        return 0;//PRICE_DIF_CHR;
+        *flag = F_CHR_DIF; return 0;//PRICE_DIF_CHR;
     }
 
     int seed_len = APP->seed_len; int seed_inv = APP->seed_inv;
@@ -773,11 +769,11 @@ int get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, l
         else if (abs(a_msg[pre].read_id - a_msg[i].read_id) < 10) *flag = F_MISMATCH; // XXX long dis
         else *flag = F_LONG_MISMATCH;
     } else if (dis > mat_dis && dis < AP->SV_len_thd) *flag = F_DELETE;
-    else if (dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*(seed_len+seed_inv)-seed_len))) *flag = F_INSERT;
-    //else if (dis < -10 && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*2+1)*seed_len)) *flag = F_INSERT; // overlap ins XXX
+    //else if (dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*(seed_len+seed_inv)-seed_len))) *flag = F_INSERT; // nonoverlap
+    else if (dis < -mat_dis && dis >= -AP->SV_len_thd) *flag = F_INSERT; // overlap ins XXX
     else { *flag = F_UNCONNECT; return 0; }
     dis=abs(dis); dis += (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id - a_msg[i].read_id) < 0)? a_msg[i].at[j].cigar_len : a_msg[pre].at[pre_a].cigar_len);
-    return dis; // XXX dis..
+    return dis; 
 }
 
 void fnode_set(frag_dp_node *f_node, line_node from, 
