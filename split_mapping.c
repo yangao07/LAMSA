@@ -522,37 +522,25 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
 
 //pruning XXX
 int hash_dp_update(hash_dp_node **h_node, int *len_a, 
-				   int node_x, int node_y, 
-				   int start, int hash_len, int hash_step,
+				   int node_x, int node_y, int start, int hash_len, int hash_step,
 				   int dp_flag, int bound_flag, int bound_len)
 {
 	int i, j, con_flag;
 	line_node max_from;
-	int max_score;
-	//int score_plus, ref_plus, read_plus, pen;
-	int max_flag;
+	int max_score, max_flag;
 
 	max_from = h_node[node_x][node_y].from;
 	max_score = h_node[node_x][node_y].score;
 	if (h_node[node_x][node_y].dp_flag != UNLIMITED_FLAG)
 	{
-		for (i = node_x-1; i >= start; --i)
-		{
-			for (j = 0; j < len_a[i]; ++j)
-			{
+		for (i = node_x-1; i >= start; --i) {
+			for (j = 0; j < len_a[i]; ++j) {
 				if (h_node[i][j].dp_flag == dp_flag)
 				{
 					hash_main_dis(h_node[i][j].ref_i, h_node[i][j].offset, h_node[node_x][node_y].ref_i, h_node[node_x][node_y].offset, hash_len, hash_step, &con_flag, bound_flag, bound_len);
 					if (con_flag == F_UNCONNECT)
 						continue;
-					//overlap of pre-node and cur-node may exist
-					//ref_plus = ((h_node[node_x][node_y].ref_i - h_node[i][j].ref_i) > hash_len) ? hash_len : (h_node[node_x][node_y].ref_i - h_node[i][j].ref_i);
-					//read_plus = ((h_node[node_x][node_y].ref_i + h_node[node_x][node_y].offset - h_node[i][j].ref_i - h_node[i][j].offset) > hash_len) ? hash_len : (h_node[node_x][node_y].ref_i + h_node[node_x][node_y].offset - h_node[i][j].ref_i - h_node[i][j].offset);
-					//pen = (con_flag == F_MATCH)?0:HASH_SV_PEN;
-					//score_plus = ref_plus + read_plus - pen;
-					if (h_node[i][j].score + 1 - ((con_flag<=F_SPLIT_MATCH)?0:HASH_SV_PEN) > max_score)
-					//if ((HASH_DP_SCORE(h_node[i][j].score, 1, (con_flag==F_MATCH)?0:HASH_SV_PEN)) > max_score)
-					{
+					if (h_node[i][j].score + 1 - ((con_flag<=F_SPLIT_MATCH)?0:HASH_SV_PEN) > max_score) {
 						max_score = h_node[i][j].score + 1 - ((con_flag<=F_SPLIT_MATCH)?0:HASH_SV_PEN);
 						max_from = (line_node){i, j};
 						max_flag = con_flag;
@@ -570,11 +558,8 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 				h_node[max_from.x][max_from.y].dp_flag = 0 - dp_flag;       //extend the mathc-node-line as long as possible, in forward direction
 			h_node[node_x][node_y].node_n += h_node[max_from.x][max_from.y].node_n;
 		}
-	}
-	else
-	{
-		for (i = node_x-1; i >= start; --i)
-		{
+	} else {
+		for (i = node_x-1; i >= start; --i) {
 			for (j = 0; j < len_a[i]; ++j)
 			{
 				if (h_node[i][j].dp_flag == dp_flag)
@@ -588,9 +573,7 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 			}
 		}
 		if (max_score > 0)
-		{
 			h_node[node_x][node_y] = (hash_dp_node){max_from, -1, -1, max_score, h_node[max_from.x][max_from.y].node_n, F_MATCH, UNLIMITED_FLAG}; 
-		}	
 	}
 	
 	return 0;
@@ -817,356 +800,6 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 	}
 }
 
-
-//return: length of node-path
-/*int hash_main_line(int *hash_pos, int *start_a, int *len_a, int ref_len, int read_len, int hash_seed_n, int hash_len, int hash_step, hash_dp_node **h_node, line_node *line, int _head, int _tail)
-{
-	int i, j;
-	int node_i;
-	int min_len = HASH_MIN_LEN, dp_flag = 0, flag=0;
-	line_node head, tail;
-	//dp init
-		//						from, ref_i, offset, score, node_n, match_flag, dp_flag
-		if (_head == 1) 
-		{
-			head = (line_node){0, 0}; 
-			h_node[0][0] = (hash_dp_node){(line_node){-1,0}, 0-hash_len, 0, 0, 0, F_MATCH, MIN_FLAG};
-		}
-		else 
-		{
-			head = (line_node){-1, 0};
-			h_node[0][0].dp_flag = 0 - MIN_FLAG;
-		}
-		if (_tail == 1) 
-		{
-			tail = (line_node){hash_seed_n+1, 0}; 
-			h_node[hash_seed_n+1][0] = (hash_dp_node){head, ref_len, read_len-ref_len, 0, 0, F_UNMATCH, MIN_FLAG};
-		}
-		else 
-		{
-			tail = (line_node){-1, 0};
-			h_node[hash_seed_n+1][0].dp_flag = 0 - MIN_FLAG;
-		}
-
-		//for min_len, dp_flag = 1, else 0
-		for (i = 1; i <= hash_seed_n; ++i)
-		{
-			if (len_a[i] == min_len)
-			{
-				dp_flag = MIN_FLAG;
-				flag = 1;
-			}
-			else dp_flag = MULTI_FLAG;
-			hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step, head, hash_len, dp_flag);
-		}
-#ifdef __DEBUG__    
-    printf("init:\n");
-    for (i = 0; i <= hash_seed_n+1; ++i)
-    {
-        for (j = 0; j < len_a[i]; ++j)
-        {
-            printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
-        }
-    }
-#endif
-
-	if (flag) {	//min_len aln exist
-		//min-aln match-extend
-#ifndef __NEW__
-		for (i = 1; i < hash_seed_n+1; ++i)
-		{
-			if (len_a[i] > min_len)
-				hash_min_extend(h_node, len_a, i, hash_seed_n+2, min_len, MIN_FLAG);
-		}
-#endif
-#ifdef __NEW__
-        for (i = 0; i <= hash_seed_n; ++i)
-        {
-            if (len_a[i] <= min_len)
-            {
-                for (j = 0; j < len_a[i]; ++j)
-                {
-                    hash_min_extend(h_node, len_a, i, j, hash_seed_n+2, min_len, MIN_FLAG, hash_len);
-                }
-            }
-        }
-		if (_tail == 1)
-			hash_min_extend(h_node, len_a, hash_seed_n+1, 0, hash_seed_n+2, min_len, MIN_FLAG, hash_len);
-#endif
-#ifdef __DEBUG__    
-        printf("extend:\n");
-        for (i = 0; i <= hash_seed_n+1; ++i)
-        {
-            for (j = 0; j < len_a[i]; ++j)
-            {
-                printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
-            }
-        }
-#endif
-        //dp-update for min-aln match-line nodes, whose dp_flag = MIN_FLAG 
-		int start = 1;
-		for (i = 2; i <= hash_seed_n; ++i)
-		{
-			for (j = 0; j < len_a[i]; ++j)
-			{
-				if (h_node[i][j].dp_flag == MIN_FLAG)
-					hash_dp_update(h_node, len_a, i, j, start, hash_len, MIN_FLAG);
-			}
-		}
-		if (_tail == 1) hash_dp_update(h_node, len_a, hash_seed_n+1, 0, start, hash_len, MIN_FLAG);
-#ifdef __DEBUG__    
-        printf("update:\n");
-        for (i = 0; i <= hash_seed_n+1; ++i)
-        {
-            for (j = 0; j < len_a[i]; ++j)
-            {
-                printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
-            }
-        }
-#endif
-
-		//dp-update for the blank remaining, backtrack for existing blank
-		//line: reverse firstly, convert to be forward
-		int mini_len;
-		line_node *_line = (line_node*)malloc(hash_seed_n * sizeof(line_node));;
-		line_node right, left;
-		node_i = 0;
-
-		right = tail;
-		left = h_node[tail.x][tail.y].from;
-		while (1)
-		{
-			if (h_node[right.x][right.y].match_flag != F_MATCH && left.x < right.x-1)// there is a seed left
-			//if (h_node[left.x][left.y].ref_i 
-			{
-				mini_len = mini_hash_main_line(h_node, hash_pos, start_a, len_a, hash_len, hash_step, left, right, _line);
-				//add mini-line to the main-line, _line is forward, but the line is reverse
-				for (i = 0; i < mini_len; ++i)
-					line[node_i++] = _line[mini_len - 1 - i];
-			}
-			if (left.x == head.x)
-				break;
-			line[node_i++] = left;
-			right = left;
-			left = h_node[right.x][right.y].from;
-		}
-		free(_line);
-		//convert line to be forward
-		line_node tmp;
-		for (i = 0; i < node_i/2; ++i)
-		{
-			tmp = line[i];
-			line[i] = line[node_i-1-i];
-			line[node_i-1-i] = tmp;	
-		}
-		return node_i;
-	} else { 
-		//dp-update for the whole seeds' aln result
-        //init again? XXX
-		for (i = 2; i < hash_seed_n+1; ++i)
-		{
-			for (j = 0; j < len_a[i]; ++j)
-            {
-                if (h_node[i][j].dp_flag == MULTI_FLAG)
-                {
-                    hash_dp_update(h_node, len_a, i, j, head.x+1, hash_len, MULTI_FLAG);
-                }
-            }
-		}
-		hash_dp_update(h_node, len_a, tail.x, tail.y, head.x+1, hash_len, MULTI_FLAG);
-#ifdef __DEBUG__
-		printf("whole-update\n");
-        for (i = 0; i <= hash_seed_n+1; ++i)
-        {
-            for (j = 0; j < len_a[i]; ++j)
-            {
-                printf("%d %d: from %d %d ref_i %d offset %d node_n %d score %d dp_flag %d\n",i,j, h_node[i][j].from.x, h_node[i][j].from.y, h_node[i][j].ref_i, h_node[i][j].offset, h_node[i][j].node_n, h_node[i][j].score, h_node[i][j].dp_flag);
-            }
-        }
-#endif
-
-		//line_node right, left;
-		node_i = h_node[tail.x][tail.y].node_n-1;
-		int last_x, last_y;
-		//right = tail;
-		i = h_node[tail.x][tail.y].from.x;
-		j = h_node[tail.x][tail.y].from.y;
-		//left = h_node[right.x][right.y].from;
-		while (i != head.x)
-		{
-			if (node_i < 0) { fprintf(stderr, "[hash main line] bug: node_i < 0.\n"); exit(-1); }
-			line[node_i].x = i;
-			line[node_i].y = j;
-			--node_i;
-			last_x = h_node[i][j].from.x;
-			last_y = h_node[i][j].from.y;
-			i = last_x;
-			j = last_y;
-		}
-		//while (left.x != head.x)
-		//{
-		//	if (node_i < 0) 
-        //    {
-        //        fprintf(stderr, "[hash main line] bug: node_i < 0.\n"); 
-        //        exit(-1);
-        //    }
-		//	line[node_i] = left;
-		//	node_i--;
-		//	right = left;
-		//	left = h_node[right.x][right.y].from;
-		//}
-		if (node_i >= 0) {fprintf(stderr, "[hash main line] bug: node_i >= 0.\n"); exit(-1);}
-		return h_node[tail.x][tail.y].node_n;
-	}
-}*/
-
-/*
-int hash_split_map(ucigar32_t **split_cigar, uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, int hash_len, int key_len, ucigar32_t *hash_num, uint64_t **hash_node, cigar32_t *hash_pos)
-{
-	int i, read_i;//q_key_int, q_kmer_int, 
-	uint8_t *ref_query;
-	int cur_ref_bound, new_ref_bound, cur_read_bound, new_read_bound;
-	int q_key_int, q_kmer_int, node_i;
-
-	//add (ref_len, read_len)
-	int *start_a = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
-	int *len_a = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
-	if (start_a == NULL || len_a == NULL) {fprintf(stderr, "[hash_split_map] Not enougy memory.\n");}
-
-	for (i = 0; i <= ref_len - hash_len; ++i)
-	{
-		ref_query = ref_seq + i;
-		hash_calcu(&q_key_int, &q_kmer_int, ref_query, hash_len, key_len);
-		if (hash_hit(hash_num, hash_node, &node_i, q_key_int, q_kmer_int, hash_len-key_len) == 1)
-		{
-			start_a[i] = ((hash_node[q_key_int][node_i] & 0xffff0000) >> 16);
-			len_a[i] = (hash_node[q_key_int][node_i] & 0xffff);
-		}
-		else start_a[i] = len_a[i] = 0;	//XXX
-	}
-
-	
-	   //for (i = 0; i <= ref_len - hash_len; ++i) 
-	   //{
-	   //int j;
-	   //fprintf(stdout, "%d %d -> ", i, len_a[i]);
-	   //for (j = 0; j < len_a[i]; ++j)
-	   //fprintf(stdout, "%d ", hash_pos[start_a[i]+j]);
-	   //fprintf(stdout,"\n");
-	   //}
-	//main line
-	int **line, *line_end, m_i;
-	hash_DP_node *h_node;
-
-	line = (int**)malloc(((ref_len-hash_len+1)*(read_len-hash_len+1)+2) * sizeof(int*));
-	h_node = (hash_DP_node*)malloc(((ref_len-hash_len+1)*(read_len-hash_len+1)+2) * sizeof(hash_DP_node));
-	for (i = 0; i < (ref_len-hash_len+1)*(read_len-hash_len+1)+2; ++i) {
-		line[i] = (int*)malloc((ref_len-hash_len+1+1) * sizeof(int));
-		//XXX 100 * sizeof
-		h_node[i].line.line_i = (int32_t*)malloc(100 * sizeof(int32_t));
-	}
-	line_end = (int*)malloc(((ref_len-hash_len+1)*(read_len-hash_len+1)+2) * sizeof(int));
-	if (line == NULL || h_node == NULL || line_end == NULL)
-	{
-		fprintf(stderr, "[hash split map]Not enough memory.\n");
-		exit(-1);
-	}
-
-	//line[m_i][]: [(offset, start, len),(),()...]
-	m_i = hash_main_line(hash_pos, start_a, len_a, ref_len, read_len, hash_len, line, line_end, h_node);
-	if (line_end[m_i] == 0) {fprintf(stderr, "[hash_split_map] no hash-node is uniquely aligned to the read.\n"); return 0; }
-
-	//fill blank with SV and SW, return the WHOLE cigar
-	int _q_len, _t_len, _clen, _b_w, _score; 
-	int split_clen=0;
-	int line_off;
-	uint32_t *_cigar=NULL;
-	uint32_t *g_cigar;
-	g_cigar = (uint32_t*)malloc(100 * sizeof(uint32_t));
-
-	//1. fix the region between left bound and first line
-	if (line[m_i][1] !=0 && (line[m_i][1] + line[m_i][0]) != 0)//blank exists
-	{
-		//split ref
-		_t_len = line[m_i][1]; 
-		//split read
-		_q_len = line[m_i][1] + line[m_i][0];
-		_b_w = abs(_t_len - _q_len);
-		_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-		//fprintf(stdout, "before(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");
-		_push_cigar(split_cigar, &split_clen, _cigar, _clen);
-	}
-	else//add cigar
-	{
-		//         ref_left, read_left, ref_rigth,    read_right
-		make_indel_cigar(-1, -1,        line[m_i][1], line[m_i][1]+line[m_i][0], &_clen, &g_cigar);
-		//fprintf(stdout, "before: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
-		_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
-	}
-	//2. fix the region betweed each lines
-	for (i = 0; i < line_end[m_i]; ++i)
-	{
-		//generate cigar for every main-lines
-		//generate_mem_cigar(,);
-		if ((line[m_i][i*3+2]+hash_len-1)==0) _clen = 0;
-		else {g_cigar[0] = ((line[m_i][i*3+2]+hash_len-1) << 4) | CMATCH; _clen = 1;}
-		//fprintf(stdout, "line: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
-		_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
-
-		//check blank
-		if (i == (line_end[m_i]-1)) break;
-		if ((line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2) < (line[m_i][(i+1)*3+1]-1) 
-				&& (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3]) < (line[m_i][(i+1)*3+1]+line[m_i][(i+1)*3]-1))	//blank exists
-		{
-			_t_len = (line[m_i][(i+1)*3+1]-1) - (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2);
-			_q_len = (line[m_i][(i+1)*3+1]+line[m_i][(i+1)*3]-1) - (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3]); 	//blank exists
-			_b_w = abs(_t_len - _q_len);
-			_score = ksw_global(_q_len, read_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len+line[m_i][i*3])-1, _t_len, ref_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-1), 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-			//fprintf(stdout, "blank(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");
-			_push_cigar(split_cigar, &split_clen, _cigar, _clen);
-		}
-		else //add cigar
-		{
-			line_off = make_indel_cigar((line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2), line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3], line[m_i][(i+1)*3+1], line[m_i][(i+1)*3+1]+line[m_i][(i+1)*3], &_clen, &g_cigar);
-			//for overlaps between lines
-			line[m_i][(i+1)*3+1] -= line_off;
-			line[m_i][(i+1)*3+2] += line_off;
-			//fprintf(stdout, "sv: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
-			_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
-		}
-	}
-	//3. fix the region between last line and right bound	//i = line_end[m_i]-1
-	if ((line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2) < (ref_len - 1) && (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3]) < (read_len-1))	//blank exists
-	{
-		_t_len = (ref_len-1) - (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2);
-		_q_len = (read_len-1) - (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3]);
-		_b_w = abs(_t_len - _q_len);
-		_score = ksw_global(_q_len, read_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len+line[m_i][i*3]-1), _t_len, ref_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-1), 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-		//_score = ksw_global(_t_len, ref_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-1), _q_len, read_seq+(line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len+line[m_i][i*3]-1), 5, &bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-		//fprintf(stdout, "last(%d %d): ", _t_len, _q_len);printcigar(_cigar, _clen);fprintf(stdout, "\n");
-		_push_cigar(split_cigar, &split_clen, _cigar, _clen);
-	}
-	else //add cigar
-	{
-		make_indel_cigar((line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2), (line[m_i][i*3+1]+line[m_i][i*3+2]+hash_len-2+line[m_i][i*3]), ref_len, read_len, &_clen, &g_cigar);
-		//fprintf(stdout, "last: ");printcigar(g_cigar, _clen);fprintf(stdout, "\n");
-		_push_cigar(split_cigar, &split_clen, g_cigar, _clen);
-	}
-
-	if (_cigar != NULL) free(_cigar); 
-	free(g_cigar);
-
-	free(start_a); free(len_a);	
-	for (i = 0; i < (ref_len-hash_len+1)*(read_len-hash_len+1)+2; ++i) 
-	{ 
-		free(line[i]); 
-		free(h_node[i].line.line_i);
-	}
-	free(line); free(line_end);
-	free(h_node);
-	return split_clen;
-}
-*/
 int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 				   uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
 				   int hash_len, int hash_step, int key_len, int split_len,
@@ -1239,51 +872,15 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					tail_in = hash_len/2;
 					_t_len = h_node[line[0].x][line[0].y].ref_i+tail_in;
 					_q_len = h_node[line[0].x][line[0].y].ref_i + h_node[line[0].x][line[0].y].offset+tail_in;
-					_b_w = abs(_t_len - _q_len)+3;
-					_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-					//XXX plus hash-len all the time, OR just when the score < 0 ???
-					/*if (_score < 0)
-					{
-						int j;
-						printf("hash old ref:\t"); for (j = 0; j < _t_len; ++j) printf("%c", "ACGT"[(ref_seq)[j]]); printf("\n");
-						printf("hash old read:\t"); for(j = 0; j < _q_len; ++j) printf("%c", "ACGT"[(read_seq)[j]]); printf("\n");
-						printf("hash old head cigar:\t");
-						printcigar(_cigar, _clen);
-						k = 0;
-						for (j = 0; j < _clen; ++j)
-						{
-							if ((_cigar[j] & 0xf) != CMATCH)
-								k++;
-						}
-						fprintf(stdout, "\t%d\t%d\n", k, _clen);
-
-					
-						//	_t_len = h_node[line[0].x][line[0].y].ref_i+hash_len;
-						//	_q_len = h_node[line[0].x][line[0].y].ref_i + h_node[line[0].x][line[0].y].offset+hash_len;
-						//	_b_w = abs(_t_len - _q_len);
-						//	_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-						//	printf("head hash new ref:\t"); for (j = 0; j < _t_len; ++j) printf("%c", "ACGT"[(ref_seq)[j]]); printf("\n");
-						//	printf("hash new read:\t"); for(j = 0; j < _q_len; ++j) printf("%c", "ACGT"[(read_seq)[j]]); printf("\n");
-						//	printf("hash new head cigar:\t");
-						//	printcigar(_cigar, _clen);
-						//	fprintf(stdout, "\n");
-					}*/
-					//XXX
-					if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100)
-					{
+					if (abs(_t_len - _q_len) > hash_len) { //XXX >hash_len?
 						res |= 1;
-                        //free(_cigar);
-                        cigar32_t *k_cigar=0;
-                        int k_clen = 0;
-						if (ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
-                        {
-                            free(_cigar);
-                            _cigar = k_cigar;
-                            _clen = k_clen;
-                        }
-                    }
+						ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
+					} else {
+						_b_w = abs(_t_len - _q_len)+3;
+						_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+					}
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
-                    free(_cigar);
+					free(_cigar);
 				}
 				else//no blank, add SV cigar
 				{	
@@ -1318,16 +915,11 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					{	//blank exists
 						//split_cigar head_in
 						if (((*split_cigar)[*split_clen-1] & 0xf) != CMATCH) head_in = 0;
-						else 
-						{
-							if (((*split_cigar)[*split_clen-1] >> 4) > hash_len/2)
-							{
+						else {
+							if (((*split_cigar)[*split_clen-1] >> 4) > hash_len/2) {
 								(*split_cigar)[*split_clen-1] -= ((hash_len/2)<<4 | CMATCH);
-								//printf("split both "); printcigar(*split_cigar, *split_clen); printf("\n");
 								head_in = hash_len/2;
-							}
-							else
-							{
+							} else {
 								head_in = ((*split_cigar)[*split_clen-1] >> 4);
 								--(*split_clen);
 							}
@@ -1335,25 +927,17 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 						tail_in = hash_len/2;
 						_t_len = h_node[line[i+1].x][line[i+1].y].ref_i - h_node[line[i].x][line[i].y].ref_i - hash_len + head_in + tail_in;
 						_q_len = _t_len + h_node[line[i+1].x][line[i+1].y].offset - h_node[line[i].x][line[i].y].offset;
-						_b_w = abs(_t_len - _q_len)+3;
-						_score = ksw_global(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset - head_in, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-						
-						if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100) {
+						if (abs(_t_len - _q_len) > hash_len) {
 							res |= 1;
-                            cigar32_t *k_cigar=0; int k_clen=0;
-                            if (ksw_both_extend(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset - head_in, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
-                            {
-                                free(_cigar);
-                                _cigar = k_cigar;
-                                _clen = k_clen;
-                            }
-                        }
+							ksw_both_extend(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset - head_in, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
+						} else {
+							_b_w = abs(_t_len - _q_len)+3;
+							_score = ksw_global(_q_len, read_seq+h_node[line[i].x][line[i].y].ref_i+hash_len+h_node[line[i].x][line[i].y].offset - head_in, _t_len, ref_seq+h_node[line[i].x][line[i].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+						}
                         _push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
                         overlap = 0;
 						free(_cigar);
-					}
-					else//no blank, add SV cigar
-					{
+					} else {//no blank, add SV cigar
 						tail_in = 0;
 						overlap = make_indel_cigar(h_node[line[i].x][line[i].y].ref_i+hash_len-1, h_node[line[i].x][line[i].y].ref_i+hash_len-1+h_node[line[i].x][line[i].y].offset, h_node[line[i+1].x][line[i+1].y].ref_i, h_node[line[i+1].x][line[i+1].y].ref_i+h_node[line[i+1].x][line[i+1].y].offset, &_clen, &g_cigar, split_len, &res);
 						_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
@@ -1363,74 +947,43 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 				else continue;
 			}
 		//3. fix the region between last line and right bound	//i = line_end[m_i]-1
-			if (_tail)
-			{
+			if (_tail) {
 				//XXX end node, hash_step
 				if (h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len < ref_len && h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset + hash_len < read_len)//blank exists
 				{
 					if (((*split_cigar)[*split_clen-1] & 0xf) != CMATCH) head_in = 0;
-					else 
-					{
-						if (((*split_cigar)[*split_clen-1] >> 4) > hash_len/2)
-						{
+					else {
+						if (((*split_cigar)[*split_clen-1] >> 4) > hash_len/2) {
 							(*split_cigar)[*split_clen-1] -= ((hash_len/2)<<4 | CMATCH);
-							//printf("tail both "); printcigar(*split_cigar, *split_clen); printf("\n");
 							head_in = hash_len/2;
-						}
-						else
-						{
+						} else {
 							head_in = (*split_cigar)[*split_clen-1] >> 4;
 							--(*split_clen);
 						}
 					}
 					_t_len = ref_len - h_node[line[m_len-1].x][line[m_len-1].y].ref_i - hash_len + head_in;
 					_q_len = read_len - h_node[line[m_len-1].x][line[m_len-1].y].ref_i - hash_len - h_node[line[m_len-1].x][line[m_len-1].y].offset + head_in;
-					_b_w = abs(_t_len - _q_len)+3;
-                    _score = ksw_global(_q_len, read_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset+hash_len - head_in, _t_len, ref_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-
-                    if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100)
-                    {
+					if (abs(_t_len - _q_len) > hash_len) {
                         res |= 1;
-                        cigar32_t *k_cigar=0;
-                        int k_clen = 0;
-                        if (ksw_both_extend(_q_len, read_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset+hash_len - head_in, _t_len, ref_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
-                        {
-                            free(_cigar);
-                            _cigar = k_cigar;
-                            _clen = k_clen;
-                        }
-                    }
+                        ksw_both_extend(_q_len, read_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset+hash_len - head_in, _t_len, ref_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
+					} else {
+						_b_w = abs(_t_len - _q_len)+3;
+						_score = ksw_global(_q_len, read_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+h_node[line[m_len-1].x][line[m_len-1].y].offset+hash_len - head_in, _t_len, ref_seq+h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+					}
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					free(_cigar);
-				}
-				else //no blank, add SV cigar
-				{
+				} else { // no blank, add SV cigar
 					make_indel_cigar(h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len-1, h_node[line[m_len-1].x][line[m_len-1].y].ref_i+hash_len-1+h_node[line[m_len-1].x][line[m_len-1].y].offset, ref_len, read_len, &_clen, &g_cigar, split_len, &res);
 					_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
 				}
 			}
 		//free variables
 		free(g_cigar);
-	}
-	else	//no hash-dp line nodes exist
-	{
-		if (_head && _tail)
-		{
+	} else { // no hash-dp line nodes exist
+		if (_head && _tail) {
 			_t_len = ref_len; _q_len = read_len;
-			_b_w = abs(_t_len - _q_len)+3;
-			_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
-			if ((_clen>>1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100)
-			{
-				res |= 1;
-                cigar32_t *k_cigar=0;
-                int k_clen = 0;
-                if (ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &k_clen, &k_cigar) == 1)
-                {
-                    free(_cigar);
-                    _cigar = k_cigar;
-                    _clen = k_clen;
-                }
-            }
+			res |= 1;
+			ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
 			_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 			free(_cigar);
 		}

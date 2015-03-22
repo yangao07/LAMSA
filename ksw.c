@@ -1042,23 +1042,7 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     //merge and construct result-cigar
     int Sn = qlen - lqe - rqe; 
     int Hn = tlen - lte - rte;
-    /*if (Sn < 0 || Hn < 0)
-    {
-        fprintf(stderr, "[ksw_both_extend] Overlap exist.\n");
-        fprintf(stderr, "target: ");
-        for (i = 0; i < tlen; ++i)
-            fprintf(stderr, "%c", "ACGTN"[target[i]]);
-        fprintf(stderr, "\nquery : ");
-        for (i = 0; i < qlen; ++i)
-            fprintf(stderr, "%c", "ACGTN"[query[i]]);
-        fprintf(stderr, "\n");
-        free(lcigar); free(rcigar);
-        return 0;
-    }*/
-    //XXX
-    //if (Sn < 0) { rqe = qlen - lqe; Sn = 0; }
-    //if (Hn < 0) { rte = tlen - lte; Hn = 0; }
-    int32_t Scigar, Hcigar;
+	int32_t Scigar, Hcigar;
     int32_t *cigar = (int32_t*)malloc(10 * sizeof(int32_t));
     int cigar_n = 0, cigar_m = 10;
 
