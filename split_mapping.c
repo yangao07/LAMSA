@@ -332,36 +332,6 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, in
 	return abs(dis);
 } 
 
-//return the overlap len of two nodes 
-//return value >= 0
-int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right, int *clen, cigar32_t **cigar, int split_len, int *split_flag)
-{
-	int dlen, ilen;
-	dlen = ref_left - ref_right + 1;
-	ilen = read_left - read_right + 1;
-	if ((dlen < 0) && (ilen < 0))
-	{
-		fprintf(stderr, "[make_indel_cigar] Error: dlen: %d, ilen: %d.\n", dlen, ilen);
-		exit(-1);
-	}
-	int len = ilen - dlen;
-	if (len > 0)
-	{
-		(*clen) = 1;
-		(*cigar)[0] = (len << 4) + CDEL;
-        if (len >= split_len) *split_flag |= 2;
-	}
-	else if (len < 0)
-	{
-		(*clen) = 1;
-		(*cigar)[0] = ((0-len) << 4) + CINS;
-        if ((-len) >= split_len) *split_flag |= 2;
-	}
-	else //len==0
-		(*clen) = 0;
-	return (dlen > ilen ? dlen : ilen); 
-}
-
 // init for dp node, head and tail node NOT include
 int hash_dp_init(hash_dp_node **h_node, 
 				 int *hash_pos, int *start_a, int *len_a, 
@@ -767,8 +737,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
             return node_i;
 		}
 		//whole-multi update
-		else	
-		{
+		else {
 			for (i = 2; i <= hash_seed_n; ++i) {
 				for (j = 0; j < len_a[i]; ++j) {
 					if (h_node[i][j].dp_flag == MULTI_FLAG)
@@ -796,6 +765,36 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 			return h_node[tail.x][tail.y].node_n;
 		}
 	}
+}
+
+//return the overlap len of two nodes 
+//return value >= 0
+int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right, int *clen, cigar32_t **cigar, int split_len, int *split_flag)
+{
+	int dlen, ilen;
+	dlen = ref_left - ref_right + 1;
+	ilen = read_left - read_right + 1;
+	if ((dlen < 0) && (ilen < 0))
+	{
+		fprintf(stderr, "[make_indel_cigar] Error: dlen: %d, ilen: %d.\n", dlen, ilen);
+		exit(-1);
+	}
+	int len = ilen - dlen;
+	if (len > 0)
+	{
+		(*clen) = 1;
+		(*cigar)[0] = (len << 4) + CDEL;
+        if (len >= split_len) *split_flag |= 2;
+	}
+	else if (len < 0)
+	{
+		(*clen) = 1;
+		(*cigar)[0] = ((0-len) << 4) + CINS;
+        if ((-len) >= split_len) *split_flag |= 2;
+	}
+	else //len==0
+		(*clen) = 0;
+	return (dlen > ilen ? dlen : ilen); 
 }
 
 int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
@@ -855,13 +854,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 
 	int _q_len, _t_len, _clen, _b_w, _score; 
 	cigar32_t *_cigar=0;
-    if (m_len > 0)
-	{
+    if (m_len > 0) {
 		//fill blank with generated SV and SW, return the whole cigar
-			cigar32_t *g_cigar;
-			g_cigar = (cigar32_t*)malloc(sizeof(cigar32_t));
-			int tail_in, head_in;
-			//XXX hash read len == 0 XXX
+        cigar32_t *g_cigar;
+        g_cigar = (cigar32_t*)malloc(sizeof(cigar32_t));
+        int tail_in, head_in;
+        //XXX hash read len == 0 XXX
 		//1. fix the region between left bound and first line
 			if (_head) {
 				if (h_node[line[0].x][line[0].y].read_i != 0 && (h_node[line[0].x][line[0].y].read_i + h_node[line[0].x][line[0].y].offset) != 0)	//blank exists
@@ -888,27 +886,20 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 				}
 			}
 			else tail_in = 0;
-		//2. fix the region betweed each match-lines
-			int start_i;
-			int overlap = 0;	//F_UNMATCH seeds' overlap
+		//2. fix the region between match-lines
+			int start_i, overlap = 0;	//F_UNMATCH seeds' overlap
 			start_i = 0;
 			//XXX here only one node
-			for (i = 0; i < m_len; ++i)
-			{
-				if (i == m_len-1 || h_node[line[i+1].x][line[i+1].y].match_flag != F_MATCH)
-				{
+			for (i = 0; i < m_len; ++i) {
+				if (i == m_len-1 || h_node[line[i+1].x][line[i+1].y].match_flag != F_MATCH) {
 					//start -> i
 					//tail_in
 					g_cigar[0] = (h_node[line[i].x][line[i].y].read_i - h_node[line[start_i].x][line[start_i].y].read_i + hash_len - tail_in - overlap) << 4 | CMATCH;
 					_push_cigar1(split_cigar, split_clen, split_m, g_cigar[0]);
-                    //XXX
-                    if (g_cigar[0] >>4 > 10000) { fprintf(stderr, "match both tail:%d overlap: %d\t", tail_in, overlap); printcigar(stderr, g_cigar, _clen); printf("\n"); }
-
 					if (i == m_len-1) break;
-					//check blank OR generate sv cigar 
 					if (h_node[line[i].x][line[i].y].read_i + hash_len  < h_node[line[i+1].x][line[i+1].y].read_i 
-					 && h_node[line[i].x][line[i].y].read_i + hash_len + h_node[line[i].x][line[i].y].offset < h_node[line[i+1].x][line[i+1].y].read_i + h_node[line[i+1].x][line[i+1].y].offset)
-					{	//blank exists
+					 && h_node[line[i].x][line[i].y].read_i + hash_len + h_node[line[i].x][line[i].y].offset < h_node[line[i+1].x][line[i+1].y].read_i + h_node[line[i+1].x][line[i+1].y].offset) {
+						// blank exists
 						//split_cigar head_in
 						if (((*split_cigar)[*split_clen-1] & 0xf) != CMATCH) head_in = 0;
 						else {
@@ -934,7 +925,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                         _push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
                         overlap = 0;
 						free(_cigar);
-					} else {//no blank, add SV cigar
+					} else if (h_node[line[i].x][line[i].y].read_i + hash_len + h_node[line[i].x][line[i].y].offset >= h_node[line[i+1].x][line[i+1].y].read_i + h_node[line[i+1].x][line[i+1].y].offset) { // overlap exists
+                        // left-extend
+                        // right-extend
+                        // merge, add overlap-flag('S/H')
+                    }
+                    else {// no blank & overlap, push SV cigar
 						tail_in = 0;
 						overlap = make_indel_cigar(h_node[line[i].x][line[i].y].read_i+hash_len-1+h_node[line[i].x][line[i].y].offset, h_node[line[i].x][line[i].y].read_i+hash_len-1, h_node[line[i+1].x][line[i+1].y].read_i+h_node[line[i+1].x][line[i+1].y].offset, h_node[line[i+1].x][line[i+1].y].read_i, &_clen, &g_cigar, split_len, &res);
 						_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
@@ -975,7 +971,6 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
 				}
 			}
-		//free variables
 		free(g_cigar);
 	} else { // no hash-dp line nodes exist
 		if (_head && _tail) {

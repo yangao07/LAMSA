@@ -808,12 +808,14 @@ void split_mapping(cigar32_t **s_cigar, int *s_clen, int *s_cm,
                 _push_cigar1(s_cigar, s_clen, s_cm, (Sn<<4)|CSOFT_CLIP); _push_cigar1(s_cigar, s_clen, s_cm, (Hn<<4)|CHARD_CLIP);
                 _push_cigar(s_cigar, s_clen, s_cm, cigar, c_len);
             } else {
+                //XXX here
                 s_tseq = (uint8_t*)malloc(s_tlen * sizeof(uint8_t));
                 ref_offset = a_msg[s1_i].at[s1_aln_i].offset + APP->seed_len + a_msg[s1_i].at[s1_aln_i].len_dif;
                 pac2fa_core(bns, pac, a_msg[s1_i].at[s1_aln_i].chr, ref_offset-1, &s_tlen, 1, &N_flag, &N_len, s_tseq);
                 if (s_tlen < hash_len) {
                     cigar32_t *k_cigar=0;
                     int k_clen;
+                    // both_extend?
                     int score = ksw_global(s_qlen, s_qseq, s_tlen, s_tseq, 5, bwasw_sc_mat, 5, 2, abs(s_tlen-s_qlen)+3, &k_clen, &k_cigar);
                     //printf("score3: %d\n", score);
                     _push_cigar(s_cigar, s_clen, s_cm, k_cigar, k_clen);
