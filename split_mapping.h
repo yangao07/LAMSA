@@ -97,7 +97,7 @@ extern const int8_t hash_nt4_table[5];
 
 int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,
 					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
-					 int64_t ref_offset, 
+					 int ref_offset, // for DUP
 					 int hash_len, int hash_step, int split_len,
 					 uint32_t **hash_num, uint64_t ***hash_node, 
 					 int key_len, int hash_size);
