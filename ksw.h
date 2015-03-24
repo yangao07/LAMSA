@@ -2,6 +2,7 @@
 #define __AC_KSW_H
 
 #include <stdint.h>
+#include "lsat_aln.h"
 
 #define KSW_XBYTE  0x10000
 #define KSW_XSTOP  0x20000
@@ -80,8 +81,8 @@ extern "C" {
 	 *
 	 * @return        score of the alignment
 	 */
-	int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar, int32_t **cigar);
-	int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar, int32_t **cigar);
+	int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar, cigar32_t **cigar);
+	int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar, cigar32_t **cigar);
 
 	/**
 	 * Extend alignment
@@ -108,12 +109,19 @@ extern "C" {
 	int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off);
 
     // added
-int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                    int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
-                    int w, int end_bonus, int zdrop, int h0, 
-                    int *_qle, int *_tle, int32_t **cigar_, int *n_cigar_, int *m_cigar_);
-    int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, int *_qle, int *_tle, int *n_cigar_, int32_t **cigar_, int *m_cigar_);
-    int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, int *n_cigar_, int32_t **cigar_);
+    int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                        int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
+                        int w, int end_bonus, int zdrop, int h0, 
+                        int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
+    int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                     int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, 
+                     int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
+    int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                        int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, 
+                        cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
+    int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                      int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, 
+                      cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
 
 #ifdef __cplusplus
 }
