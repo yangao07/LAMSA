@@ -1049,10 +1049,10 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     _push_cigar(&cigar, &cigar_n, &cigar_m, lcigar, ln_cigar);
 
     Scigar = Sn << 4 | CSOFT_CLIP;
-    _push_cigar(&cigar, &cigar_n, &cigar_m, &Scigar, 1);
+    _push_cigar0(&cigar, &cigar_n, &cigar_m, Scigar);
 
     Hcigar = Hn << 4 | CHARD_CLIP;
-    _push_cigar(&cigar, &cigar_n, &cigar_m, &Hcigar, 1);
+    _push_cigar0(&cigar, &cigar_n, &cigar_m, Hcigar);
 
     _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
 

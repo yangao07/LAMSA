@@ -2504,8 +2504,8 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
     for (i = 0; i < line_n; ++i) {
         printf("%d(%d,%d score: %d):\t", i+1, L_MF(line, line_end, i), L_MH(line, line_end,i), L_LS(line, line_end, i));
         for (l = 0; l < line_end[i]; ++l)
-            //printf("(%d, %d)\t", a_msg[line[i][l].x].read_id-1, line[i][l].y);
-            printf("(%d, %d)\t", line[i][l].x, line[i][l].y);
+            printf("(%d, %d)\t", a_msg[line[i][l].x].read_id-1, line[i][l].y);
+            //printf("(%d, %d)\t", line[i][l].x, line[i][l].y);
         printf("\n");
     }
 #endif

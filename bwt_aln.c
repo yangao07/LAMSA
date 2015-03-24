@@ -264,12 +264,13 @@ void bwt_aln_remain(aln_reg *a_reg, aln_res *a_res, bwt_t *bwt, bntseq_t *bns, u
     a_res->l_n = 0;
     int i;
     aln_reg *re_reg = aln_init_reg(APP->read_len); 
-    if (get_remain_reg(a_reg, re_reg, AP) == 0) return;
+    if (get_remain_reg(a_reg, re_reg, AP) == 0) goto End;
 
     // extend the remain_reg or not?XXX
     for (i = 0; i < re_reg->reg_n; ++i) {
         int reg_len = re_reg->reg[i].end - re_reg->reg[i].beg + 1;
         bwt_aln_core(bwt, bns, pac, read_seq, re_reg->reg[i].beg, reg_len, AP, APP, a_res);
     }
+End:
     aln_free_reg(re_reg);
 }

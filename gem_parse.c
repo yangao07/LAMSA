@@ -118,12 +118,10 @@ void md2cigar(char *md, map_t *map)
 	while (i < md_len) {
 		if (md[i] == '>') { // indel
 			sscanf(md+i, ">%[^+-]%[+-]", indel_c, &id);
-			{
-				indel_n = atoi(indel_c);
-				_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
-				map->NM += (indel_n+mm);
-				i += (strlen(indel_c)+2);
-			}
+			indel_n = atoi(indel_c);
+			_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
+			map->NM += (indel_n+mm);
+			i += (strlen(indel_c)+2);
 		} else {
 			c_i = i;
 			for (; md[i] && md[i]!='>'; ++i) {

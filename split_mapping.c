@@ -804,7 +804,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 				   uint32_t *hash_num, uint64_t **hash_node, int **hash_node_num, int32_t *hash_pos, 
 				   int _head, int _tail)
 {
-	int i, res=0;   //res: 0x01 -> pull trigger & cut cigar/ 0x10 -> split result
+	int i, j, res=0;   //res: 0x01 -> pull trigger & cut cigar/ 0x10 -> split result
 	uint8_t *read_query;
 	int q_key_int, q_kmer_int, node_i;
 
@@ -876,6 +876,10 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					} else {
 						_b_w = abs(_t_len - _q_len)+3;
 						_score = ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+						if ((_clen>>1)>10 && _score < 0 && _q_len > 100 && _t_len > 100) {
+							res |= 1;
+							ksw_both_extend(_q_len, read_seq, _t_len, ref_seq, 5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
+						}
 					}
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					free(_cigar);
@@ -926,8 +930,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                               5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
 						} else {
 							_b_w = abs(_t_len - _q_len)+3;
-							_score = ksw_global(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 
-                            5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+							_score = ksw_global(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+							if ((_clen >> 1) > 10 && _score < 0 && _q_len > 100 && _t_len > 100) {
+								res |= 1;
+								ksw_both_extend(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 
+								  5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
+							}
 						}
                         _push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
                         overlap = 0;
@@ -940,17 +948,18 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                         // left-extend
                         ksw_extend_core(_q_len, read_seq+l_readi+1, _t_len, ref_seq+l_refi+1, 5, bwasw_sc_mat, 5, 2, 5, 2, 3, 5, 100, 10, &lqe, &lte, &d_cigar, &c_len, &c_m);
                         _push_cigar(split_cigar, split_clen, split_m, d_cigar, c_len);
+						free(d_cigar);
                         // right-extend
                         uint8_t *re_qseq = (uint8_t*)malloc(_q_len * sizeof(uint8_t));
                         uint8_t *re_tseq = (uint8_t*)malloc(_t_len * sizeof(uint8_t));
-                        for (i = 0; i < _q_len; ++i) re_qseq[i] = read_seq[r_readi-1-i];
-                        for (i = 0; i < _t_len; ++i) re_tseq[i] = ref_seq[r_refi-1-i];
+                        for (j = 0; j < _q_len; ++j) re_qseq[j] = read_seq[r_readi-1-j];
+                        for (j = 0; j < _t_len; ++j) re_tseq[j] = ref_seq[r_refi-1-j];
                         ksw_extend_core(_q_len, re_qseq, _t_len, re_tseq, 5, bwasw_sc_mat, 5, 2, 5, 2, 3, 5, 100, 10, &rqe, &rte, &d_cigar, &c_len, &c_m);
                         _invert_cigar(&d_cigar, c_len);
                         free(re_qseq); free(re_tseq);
                         // merge, add overlap-flag('S/H')
                         int Sn = _q_len - lqe - rqe, Hn = r_refi - l_refi - 1 - lte - rte;
-                        _push_cigar1(split_cigar, split_clen, split_m, (Sn<<4)|CSOFT_CLIP); _push_cigar1(split_cigar, split_clen, split_m, (Hn<<4)|CHARD_CLIP);
+                        _push_cigar0(split_cigar, split_clen, split_m, (Sn<<4)|CSOFT_CLIP); _push_cigar0(split_cigar, split_clen, split_m, (Hn<<4)|CHARD_CLIP);
                         _push_cigar(split_cigar, split_clen, split_m, d_cigar, c_len);
                         free(d_cigar);
                         tail_in = 0;
@@ -987,8 +996,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                           5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
 					} else {
 						_b_w = abs(_t_len - _q_len)+3;
-						_score = ksw_global(_q_len, read_seq+ _readi+1 - head_in, _t_len, ref_seq+ _refi+1 - head_in, 
-                          5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+						_score = ksw_global(_q_len, read_seq+ _readi+1 - head_in, _t_len, ref_seq+ _refi+1 - head_in, 5, bwasw_sc_mat, 5, 2, _b_w, &_clen, &_cigar);
+						if ((_clen>>1)>10 && _score<0 && _q_len>100 && _t_len>100) {
+							res |= 1;
+							ksw_both_extend(_q_len, read_seq+ _readi+1 - head_in, _t_len, ref_seq+ _refi+1 - head_in, 
+							  5, bwasw_sc_mat, 5, 2, _b_w, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], &_clen, &_cigar);
+						}
 					}
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					free(_cigar);
