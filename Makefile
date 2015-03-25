@@ -6,6 +6,7 @@ OBJS=		main.o build_ref.o bntseq.o lsat_heap.o lsat_aln.o frag_check.o split_map
 			./lsat_sam_parse/kstring.o ./lsat_sam_parse/sam_header.o ./lsat_sam_parse/sam_view.o \
 			bwt.o bwt_aln.o utils.o
 PROG=		lsat
+PROG1=      ~/bin/lsat
 LIB=		-lm -lz
 #MACRO=		-D __DEBUG__
 .SUFFIXES:.c .o
@@ -13,8 +14,10 @@ LIB=		-lm -lz
 .c.o:
 	$(CC) -c $(CFLAGS) $(MACRO) $< -o $@
 
-all:$(PROG)
+all:$(PROG) $(PROG1)
 $(PROG):$(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) $(LIB) -o $@
+$(PROG1):$(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) $(LIB) -o $@
 
 clean:

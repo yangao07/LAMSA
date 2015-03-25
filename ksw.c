@@ -1002,8 +1002,9 @@ int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target
 {
     *n_cigar_ = *m_cigar_ = 0;
     int score = ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 5, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
-    if (*_qle < qlen) return 1; // not-to-edn
-    else return 0;              // to-end
+    if (*_qle == qlen) return 0;      // to-edn
+    else if (*_tle == tlen) return 1; // to-end
+    else return 2;              
 }
 
 /***************************************
@@ -1079,10 +1080,11 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     int ln_cigar, lm_cigar;
     //left boundary extension
     res = ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, 0, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
-    if (res == 0) { // to-end extension
+    if (res < 2) { // to-end extension
         *cigar_ = lcigar;
         *n_cigar_ = ln_cigar;
         *m_cigar_ = lm_cigar;
+        _push_cigar1(cigar_, n_cigar_, m_cigar_, (res==0?(((tlen-lte)<<4)|CDEL):(((qlen-lqe)<<4)|CINS)));
         return 0;
     }
     //right boundary extension
@@ -1093,10 +1095,11 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     for (i = 0; i < qlen; ++i) r_query[i] = query[qlen-i-1];
     for (i = 0; i < tlen; ++i) r_target[i] = target[tlen-i-1];
     res = ksw_extend_c(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, rh0, 0, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
-    _invert_cigar(&rcigar, rn_cigar);
     free(r_query), free(r_target);
 
-    if (res == 0) { // to-end extension
+    if (res < 2) { // to-end extension
+        _push_cigar1(&rcigar, &rn_cigar, &rm_cigar, (res==0?(((tlen-rte)<<4)|CDEL):(((qlen-rqe)<<4)|CINS)));
+        _invert_cigar(&rcigar, rn_cigar);
         *cigar_ = rcigar;
         *n_cigar_ = rn_cigar;
         *m_cigar_ = rm_cigar;
@@ -1118,6 +1121,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     Hcigar = Hn << 4 | CHARD_CLIP;
     _push_cigar0(&cigar, &cigar_n, &cigar_m, Hcigar);
 
+    _invert_cigar(&rcigar, rn_cigar);
     _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
 
     *cigar_ = cigar; *n_cigar_ = cigar_n; *m_cigar_ = cigar_m;
@@ -1185,7 +1189,7 @@ int main(int argc, char *argv[])
 			
             int qle, tle, m_cigar, n_cigar;
             cigar32_t *cigar;
-            int score = ksw_both_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 10, &n_cigar, &cigar);
+            int score = ksw_both_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 10, &n_cigar, &cigar, &m_cigar);
             printf("%d\n", score);
             for (i = 0; i < n_cigar; ++i)
                 printf("%d%c", cigar[i] >> 4 , CIGAR_STR[cigar[i] & 0xf]);
