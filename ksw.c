@@ -1087,6 +1087,14 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         _push_cigar1(cigar_, n_cigar_, m_cigar_, (res==0?(((tlen-lte)<<4)|CDEL):(((qlen-lqe)<<4)|CINS)));
         return 0;
     }
+   	else if (abs(qlen-tlen) < 100 && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
+		//  do global, disallow cigar like '3S4H50M'
+		if (lcigar) free(lcigar);
+		w = abs(qlen-tlen)+3;
+		ksw_global(qlen, query, tlen, target, m, mat, gapo, gape, w, n_cigar_, cigar_);
+		*m_cigar_ = *n_cigar_;
+		return 0;
+	}
     //right boundary extension
     uint8_t *r_query = (uint8_t*)malloc(qlen * sizeof(uint8_t));
     uint8_t *r_target = (uint8_t*)malloc(tlen * sizeof(uint8_t));
@@ -1105,7 +1113,15 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = rm_cigar;
         free(lcigar); 
         return 0;
-    }
+    } 
+	else if (abs(qlen-tlen) < 100 && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
+		// do global
+		if (lcigar) free(lcigar); if (rcigar) free(rcigar);
+		w = abs(qlen-tlen)+3;
+		ksw_global(qlen, query, tlen, target, m, mat, gapo, gape, w, n_cigar_, cigar_);
+		*m_cigar_ = *n_cigar_;
+		return 0;
+	}
     //merge and construct result-cigar
     int Sn = qlen - lqe - rqe; 
     int Hn = tlen - lte - rte;
@@ -1125,8 +1141,9 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
 
     *cigar_ = cigar; *n_cigar_ = cigar_n; *m_cigar_ = cigar_m;
-    free(lcigar); free(rcigar);
-    if (Sn > 0) return 1; // gap exists
+    if (lcigar) free(lcigar); 
+	if (rcigar) free(rcigar);
+    if (Sn > 100) return 1; // gap exists
     else return 0; 
 }
 /*******************************************

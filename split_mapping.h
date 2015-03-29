@@ -66,7 +66,7 @@ typedef struct {
 #define HASH_KEY 2
 //#define HASH_STEP 1
 //#define HASH_STEP 15 //for un-overlap
-#define HASH_STEP 11
+#define HASH_STEP 10
 #define NT_N 4	//XXX for N
 
 #define HASH_MIN_LEN 1

@@ -267,7 +267,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
         exit(-1);
     }
     m_read = s_msg->read_m;
-    fprintf(stderr, "[last_aln] Parsing seeds' information ... ");
+    fprintf(stderr, "[lsat_aln] Parsing seeds' information ... ");
     
     while ((n = fscanf(infofp, "%s %d %d %d %d %d %d", read_name, &seed_len, &seed_inv, &read_level, &seed_all, &last_len, &len)) != EOF)
     {
@@ -437,6 +437,10 @@ void push_reg(aln_reg *reg, reg_t r)
     }
     reg->reg[reg->reg_n].beg = r.beg;
     reg->reg[reg->reg_n].end = r.end;
+	reg->reg[reg->reg_n].refid = r.refid;
+	reg->reg[reg->reg_n].is_rev = r.is_rev;
+	reg->reg[reg->reg_n].ref_beg = r.ref_beg;
+	reg->reg[reg->reg_n].ref_end = r.ref_end;
     reg->reg_n++;
 }
 
@@ -445,12 +449,24 @@ int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para *AP)
     if (a_reg->reg_n == 0) return 0;
     aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP);
     int i;
-    if (a_reg->reg[0].beg > 19) push_reg(remain_reg, (reg_t){1, a_reg->reg[0].beg-1});
+    if (a_reg->reg[0].beg > 19) 
+		push_reg(remain_reg, (reg_t){a_reg->reg[0].refid, a_reg->reg[0].is_rev, 
+				                     0, a_reg->reg[0].ref_beg, 
+				                     1, a_reg->reg[0].beg-1});
     for (i = 1; i < a_reg->reg_n; ++i) {
-        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > 19)
-            push_reg(remain_reg, (reg_t){a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
+        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > 19) {
+			if (a_reg->reg[i].refid == a_reg->reg[i-1].refid && a_reg->reg[i].is_rev == a_reg->reg[i-1].is_rev)
+				push_reg(remain_reg, (reg_t){a_reg->reg[i].refid, a_reg->reg[i].is_rev,
+						                     a_reg->reg[i-1].ref_end, a_reg->reg[i].ref_beg, 
+						                     a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
+			else 
+				push_reg(remain_reg, (reg_t){-1, -1, 0, 0, a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
+		}
     }
-	if (a_reg->read_len - a_reg->reg[i-1].end > 19) push_reg(remain_reg, (reg_t){a_reg->reg[i-1].end+1, a_reg->read_len});
+	if (a_reg->read_len - a_reg->reg[i-1].end > 19) 
+		push_reg(remain_reg, (reg_t){a_reg->reg[i-1].refid, a_reg->reg[i-1].is_rev,
+				                     a_reg->reg[i-1].ref_end, 0,
+				                     a_reg->reg[i-1].end+1, a_reg->read_len});
     return remain_reg->reg_n;
 }
 
@@ -463,12 +479,19 @@ void push_reg_res(aln_reg *reg, res_t res)
             exit(0);
         }
     }
+	reg->reg[reg->reg_n].refid = res.chr-1;
+	reg->reg[reg->reg_n].is_rev = 1-res.nsrand;
     if (res.nsrand == 1) { // '+'
         reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? ((res.cigar[0]>>4)+1):1;
-        reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[res.cigar_len-1]>>4)):reg->read_len;
+        //reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[res.cigar_len-1]>>4)):reg->read_len;
+		reg->reg[reg->reg_n].end = res.readend;
+		reg->reg[reg->reg_n].ref_beg = res.offset;
+		reg->reg[reg->reg_n].ref_end = res.refend;
     } else { // '-'
         reg->reg[reg->reg_n].beg = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res.cigar[res.cigar_len-1]>>4) + 1):1;
         reg->reg[reg->reg_n].end = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[0]>>4)):reg->read_len;
+		reg->reg[reg->reg_n].ref_end = res.offset;
+		reg->reg[reg->reg_n].ref_beg = res.refend;
     }
     reg->reg_n++;
 }
@@ -2815,8 +2838,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
     while (read_n <= s_msg->read_all) { // get seeds' aln-msg of every read
         init_aln_per_para(APP, s_msg, read_n);
         if ((r = gem_map_read(mapf, m_msg, APP->per_aln_n)) < 0) break;
-        if (APP->per_aln_n > AP->per_aln_m)
-        {
+        if (APP->per_aln_n > AP->per_aln_m) {
             aln_realc_msg(a_msg, s_msg->seed_max, AP->per_aln_m, APP->per_aln_n);
             fnode_realc(f_node, s_msg->seed_max+2, AP->per_aln_m, APP->per_aln_n);
             AP->per_aln_m = APP->per_aln_n;
@@ -2837,6 +2859,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             
             int max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
             aln_res *a_res = aln_init_res(1, APP->read_len);
+			aln_res *remain_res = aln_init_res(1, APP->read_len);
             aln_reg *a_reg = aln_init_reg(APP->read_len);
             // main line process
             strcpy(READ_NAME, APP->read_name);
@@ -2860,13 +2883,13 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                         }
                     }
                 }
-                aln_res_free(a_res);
+                //aln_res_free(a_res);
                 // bwt aln for remain gaps
-				a_res = aln_init_res(1, APP->read_len);
-                bwt_aln_remain(a_reg, a_res, bwt, bns, pac, read_seq, APP, AP);
-                aln_res_output(a_res, 0, APP);
+				//a_res = aln_init_res(1, APP->read_len);
+                bwt_aln_remain(a_reg, remain_res, bwt, bns, pac, read_seq, APP, AP);
+                aln_res_output(remain_res, 0, APP);
                 // free 
-                aln_res_free(a_res);
+                aln_res_free(a_res); aln_res_free(remain_res);
                 aln_free_reg(a_reg);
             }
             seed_out = 0;

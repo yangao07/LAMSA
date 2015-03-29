@@ -187,8 +187,21 @@ typedef struct {
 #define nodeEq(a,b) (a.x==b.x && a.y==b.y)
 
 typedef struct {
+	int refid, is_rev;
+	uint64_t ref_beg, ref_end;
     int beg, end;
 } reg_t;
+
+/*typedef struct {
+    // ref_beg
+	int b_refid, b_is_rev;
+	uint64_t ref_beg;
+	// ref_end   
+	int e_refid, e_is_rev;
+	uint64_t ref_end;
+	// read
+    int beg, end;
+} reg_t;*/
 
 typedef struct {
     reg_t *reg;

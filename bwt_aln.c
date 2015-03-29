@@ -30,6 +30,8 @@ void bwt_free_seed(bwt_seed_t **v, int seed_n)
 
 void bwt_set_seed(bwt_seed_t *v, int ref_id, uint8_t is_rev, bwtint_t ref_pos, int read_i)
 {
+	if (ref_id == 22 && is_rev==1)
+		fprintf(stderr, "%d\tchr23\t-\t%lld\n", read_i, ref_pos);
     if (v[read_i].n == v[read_i].m) {
         v[read_i].n = 0;
         return;
@@ -207,51 +209,60 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
     free(query); free(target);
 }
 
-int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, int reg_beg, int reg_len, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *a_res)
+int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, int reg_beg, int reg_len, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *re_res)
 {
     int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
+	int max_hit = 100;
 
-    bwt_seed_t **seed_v = bwt_init_seed(reg_len-seed_len+1, 10);
+    bwt_seed_t **seed_v = bwt_init_seed(reg_len-seed_len+1, max_hit);
 
     // locate bwt-seeds (exact-match seeds)
     for (i = 0; i <= reg_len-seed_len; ++i) {
         (*seed_v)[i].pos = i+1; // 1-base, on reg
         for (j = i; j < i+seed_len; ++j) bwt_seed[j-i] = nst_nt4_table[(int)read_seq[reg_beg-1+j]];
         uint64_t k = 0, l = bwt->seq_len, m;
-        if (bwt_match_exact_alt(bwt, seed_len, bwt_seed, &k, &l) && l-k+1 <= 10) {
+		if (!bwt_match_exact_alt(bwt, seed_len, bwt_seed, &k, &l)) continue;
+        if (l-k+1 <= max_hit) { // set_seed directly
             for (m = k; m <=l; ++m) {
                 bwtint_t ref_pos = bwt_sa(bwt, m);
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
                 bwt_set_seed(*seed_v, ref_id, is_rev, pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0), i);
             }
-        }
+        } else { // seclect specific seed-results, which are close to the existing result.
+			     // keep 100 seed-results, at most.
+			for (m = k; m <=l; ++m) {
+                bwtint_t ref_pos = bwt_sa(bwt, m);
+                bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
+                bns_cnt_ambi(bns, pos, seed_len, &ref_id);
+			}
+		}
     }
     // cluster seeds, find one best cluster //XXX
     line_node *line = (line_node*)malloc((reg_len-seed_len+1) * sizeof(line_node));
     int node_n; bwt_bound left_bound, right_bound;
     if ((node_n = bwt_cluster_seed(seed_v, reg_len-seed_len+1, &line)) > 0) {
-		if (a_res->l_n == a_res->l_m) {
-			a_res->l_m <<= 1;
-			if ((a_res->la = (line_aln_res*)realloc(a_res->la, a_res->l_m * sizeof(line_aln_res))) == NULL) { fprintf(stderr, "[bwt_aln_core] Not enough memory for aln_res.\n"); exit(0); }
-			for (i = (a_res->l_m)>>1; i < a_res->l_m; ++i) {
-				a_res->la[i].res_m = 10, a_res->la[i].cur_res_n = 0, a_res->la[i].split_flag = 0;
-				a_res->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
+		if (re_res->l_n == re_res->l_m) {
+			re_res->l_m <<= 1;
+			if ((re_res->la = (line_aln_res*)realloc(re_res->la, re_res->l_m * sizeof(line_aln_res))) == NULL) { fprintf(stderr, "[bwt_aln_core] Not enough memory for aln_res.\n"); exit(0); }
+			for (i = (re_res->l_m)>>1; i < re_res->l_m; ++i) {
+				re_res->la[i].res_m = 10, re_res->la[i].cur_res_n = 0, re_res->la[i].split_flag = 0;
+				re_res->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
 				for (j = 0; j < 10; ++j) {
-					a_res->la[i].res[j].c_m = 100;
-					a_res->la[i].res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
-					a_res->la[i].res[j].cigar_len = 0;
+					re_res->la[i].res[j].c_m = 100;
+					re_res->la[i].res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
+					re_res->la[i].res[j].cigar_len = 0;
 				}
-				a_res->la[i].tol_score = a_res->la[i].tol_NM = 0;
-				a_res->la[i].trg_m = 10, a_res->la[i].trg_n = 0;
-				a_res->la[i].trg = (line_node*)malloc(10 * sizeof(line_node));
+				re_res->la[i].tol_score = re_res->la[i].tol_NM = 0;
+				re_res->la[i].trg_m = 10, re_res->la[i].trg_n = 0;
+				re_res->la[i].trg = (line_node*)malloc(10 * sizeof(line_node));
 			}
 		}
 		bwt_set_bound(*seed_v, line, node_n, seed_len, reg_len, &left_bound, &right_bound);
-		bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_seq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, a_res->la+a_res->l_n);
-		a_res->la[a_res->l_n].merg_msg = (line_node){1,-1};
-        a_res->l_n++;
+		bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_seq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
+		re_res->la[re_res->l_n].merg_msg = (line_node){1,-1};
+        re_res->l_n++;
     }
     // free
     free(bwt_seed); bwt_free_seed(seed_v, reg_len-seed_len+1);
@@ -259,9 +270,9 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, int re
     return 0;
 }
 
-void bwt_aln_remain(aln_reg *a_reg, aln_res *a_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP)
+void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP)
 {
-    a_res->l_n = 0;
+    re_res->l_n = 0;
     int i;
     aln_reg *re_reg = aln_init_reg(APP->read_len); 
     if (get_remain_reg(a_reg, re_reg, AP) == 0) goto End;
@@ -269,7 +280,7 @@ void bwt_aln_remain(aln_reg *a_reg, aln_res *a_res, bwt_t *bwt, bntseq_t *bns, u
     // extend the remain_reg or not?XXX
     for (i = 0; i < re_reg->reg_n; ++i) {
         int reg_len = re_reg->reg[i].end - re_reg->reg[i].beg + 1;
-        bwt_aln_core(bwt, bns, pac, read_seq, re_reg->reg[i].beg, reg_len, AP, APP, a_res);
+        bwt_aln_core(bwt, bns, pac, read_seq, re_reg->reg[i].beg, reg_len, AP, APP, re_res);
     }
 End:
     aln_free_reg(re_reg);
