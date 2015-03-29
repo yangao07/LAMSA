@@ -30,8 +30,8 @@ void bwt_free_seed(bwt_seed_t **v, int seed_n)
 
 void bwt_set_seed(bwt_seed_t *v, int ref_id, uint8_t is_rev, bwtint_t ref_pos, int read_i)
 {
-	if (ref_id == 22 && is_rev==1)
-		fprintf(stderr, "%d\tchr23\t-\t%lld\n", read_i, ref_pos);
+	//if (ref_id == 22 && is_rev==1)
+	//	fprintf(stderr, "%d\tchr23\t-\t%lld\n", read_i, ref_pos);
     if (v[read_i].n == v[read_i].m) {
         v[read_i].n = 0;
         return;
@@ -209,11 +209,12 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
     free(query); free(target);
 }
 
-int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, int reg_beg, int reg_len, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *re_res)
+int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t reg, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *re_res)
 {
     int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
 	int max_hit = 100;
+    int reg_beg = reg.beg, reg_len = reg_beg-reg.end+1;
 
     bwt_seed_t **seed_v = bwt_init_seed(reg_len-seed_len+1, max_hit);
 
@@ -230,12 +231,29 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, int re
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
                 bwt_set_seed(*seed_v, ref_id, is_rev, pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0), i);
             }
-        } else { // seclect specific seed-results, which are close to the existing result.
+        } else { // select specific seed-results, which are close to the existing result.
 			     // keep 100 seed-results, at most.
+            int cnt=0;
 			for (m = k; m <=l; ++m) {
                 bwtint_t ref_pos = bwt_sa(bwt, m);
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
+                uint64_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
+                bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
+                if (ref_id == reg.refid && is_rev == reg.is_rev) {
+                    if (is_rev) {
+                        if ((!reg.ref_beg || abs_pos < reg.ref_beg) && (!reg.ref_end || abs_pos > reg.ref_beg)) {
+                            bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
+                            cnt++;
+                        }
+                    } else {
+                        if ((!reg.ref_beg || abs_pos > reg.ref_beg) && (!reg.ref_end || abs_pos < reg.ref_beg)) {
+                            bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
+                            cnt++;
+                        }
+                    }
+                    if (cnt == max_hit) break;
+                }
 			}
 		}
     }
@@ -279,8 +297,7 @@ void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, 
 
     // extend the remain_reg or not?XXX
     for (i = 0; i < re_reg->reg_n; ++i) {
-        int reg_len = re_reg->reg[i].end - re_reg->reg[i].beg + 1;
-        bwt_aln_core(bwt, bns, pac, read_seq, re_reg->reg[i].beg, reg_len, AP, APP, re_res);
+        bwt_aln_core(bwt, bns, pac, read_seq, re_reg->reg[i], AP, APP, re_res);
     }
 End:
     aln_free_reg(re_reg);
