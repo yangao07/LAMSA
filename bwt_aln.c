@@ -30,8 +30,6 @@ void bwt_free_seed(bwt_seed_t **v, int seed_n)
 
 void bwt_set_seed(bwt_seed_t *v, int ref_id, uint8_t is_rev, bwtint_t ref_pos, int read_i)
 {
-	//if (ref_id == 22 && is_rev==1)
-	//	fprintf(stderr, "%d\tchr23\t-\t%lld\n", read_i, ref_pos);
     if (v[read_i].n == v[read_i].m) {
         v[read_i].n = 0;
         return;
@@ -214,7 +212,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t 
     int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
 	int max_hit = 100;
-    int reg_beg = reg.beg, reg_len = reg_beg-reg.end+1;
+    int reg_beg = reg.beg, reg_len = reg.end-reg_beg+1;
 
     bwt_seed_t **seed_v = bwt_init_seed(reg_len-seed_len+1, max_hit);
 
@@ -231,35 +229,37 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t 
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
                 bwt_set_seed(*seed_v, ref_id, is_rev, pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0), i);
             }
-        } else { // select specific seed-results, which are close to the existing result.
-			     // keep 100 seed-results, at most.
+        } else if (l-k+1 <= 5 * max_hit){ 
+			// select specific seed-results, which are close to the existing result.
+			// keep 100 seed-results, at most.
             int cnt=0;
 			for (m = k; m <=l; ++m) {
                 bwtint_t ref_pos = bwt_sa(bwt, m);
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
+				if (is_rev != reg.is_rev) continue;
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
+				if (ref_id != reg.refid) continue;
                 uint64_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
-                bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
-                if (ref_id == reg.refid && is_rev == reg.is_rev) {
-                    if (is_rev) {
-                        if ((!reg.ref_beg || abs_pos < reg.ref_beg) && (!reg.ref_end || abs_pos > reg.ref_beg)) {
-                            bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
-                            cnt++;
-                        }
-                    } else {
-                        if ((!reg.ref_beg || abs_pos > reg.ref_beg) && (!reg.ref_end || abs_pos < reg.ref_beg)) {
-                            bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
-                            cnt++;
-                        }
-                    }
-                    if (cnt == max_hit) break;
-                }
+                //bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
+				if (is_rev) {
+					if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos< AP->SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP->SV_len_thd))) {
+						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
+						cnt++;
+					}
+				} else {
+					if ((!reg.ref_beg || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP->SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP->SV_len_thd))) {
+						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
+						cnt++;
+					}
+				}
+				if (cnt == max_hit) break;
 			}
 		}
     }
     // cluster seeds, find one best cluster //XXX
     line_node *line = (line_node*)malloc((reg_len-seed_len+1) * sizeof(line_node));
     int node_n; bwt_bound left_bound, right_bound;
+	// XXX use DP, Spanning-tree and Pruning
     if ((node_n = bwt_cluster_seed(seed_v, reg_len-seed_len+1, &line)) > 0) {
 		if (re_res->l_n == re_res->l_m) {
 			re_res->l_m <<= 1;

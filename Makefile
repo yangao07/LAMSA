@@ -9,7 +9,7 @@ PROG=		lsat
 PROG1=      ~/bin/lsat
 LIB=		-lm -lz
 #MARCRO=     -D __NEW__
-MACRO=		-D __DEBUG__
+#MACRO=		-D __DEBUG__
 .SUFFIXES:.c .o
 
 .c.o:
