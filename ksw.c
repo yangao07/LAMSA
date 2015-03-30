@@ -996,14 +996,32 @@ int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     else return 0;
 }
 // XXX polish 'extend' 
-int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
-                 const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p,
+int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+		         int m, const int8_t *mat, int gapo, int gape, int w, int h0,
                  int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_,  int *m_cigar_)
 {
     *n_cigar_ = *m_cigar_ = 0;
-    int score = ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 5, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
-    if (*_qle == qlen) return 0;      // to-edn
-    else if (*_tle == tlen) return 1; // to-end
+    ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 5, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
+    if (*_qle == qlen) return 0;      // query-to-end
+    else if (*_tle == tlen) return 1; // target-to-end
+    else return 2;              
+}
+
+int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+		         int m, const int8_t *mat, int gapo, int gape, int w, int h0,
+                 int *_qre, int *_tre, cigar32_t **cigar_, int *n_cigar_,  int *m_cigar_)
+{
+	int i;
+    *n_cigar_ = *m_cigar_ = 0;
+	uint8_t *r_query = (uint8_t*)malloc(qlen * sizeof(uint8_t));
+	uint8_t *r_target = (uint8_t*)malloc(tlen * sizeof(uint8_t));
+	for (i = 0; i < qlen; ++i) r_query[qlen-1-i] = query[i];
+	for (i = 0; i < tlen; ++i) r_target[tlen-1-i] = target[i];
+    ksw_extend_core(qlen, r_query, tlen, r_target, m, mat, gapo, gape, gapo, gape, w, 5, 100, h0, _qre, _tre, cigar_, n_cigar_, m_cigar_);
+	free(r_query); free(r_target);
+
+    if (*_qre == qlen) return 0;      // query-to-end
+    else if (*_tre == tlen) return 1; // target-to-end
     else return 2;              
 }
 
@@ -1028,7 +1046,7 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     cigar32_t *lcigar=0;
     int ln_cigar, lm_cigar;
     //left boundary extension
-    ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, 0, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
+    ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
     //printf("left: \n\tqe: %d\tte: %d\n\t", lqe, lte); _printcigar(stdout, lcigar, ln_cigar); printf("\n");
 
     //right boundary extension
@@ -1038,7 +1056,7 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     int rqe, rte, rn_cigar, rm_cigar;
     for (i = 0; i < qlen; ++i) r_query[i] = query[qlen-i-1];
     for (i = 0; i < tlen; ++i) r_target[i] = target[tlen-i-1];
-    ksw_extend_c(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, rh0, 0, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
+    ksw_extend_c(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, rh0, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
     //printf("right: \n\tqe: %d\tte: %d\n\t", rqe, rte); _printcigar(stdout, rcigar, rn_cigar); printf("\n");
     _invert_cigar(&rcigar, rn_cigar);
     free(r_query), free(r_target);
@@ -1075,11 +1093,10 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
 {
     int i, res;
     if (*n_cigar_) *n_cigar_ = 0;
-    int lqe, lte;
-    cigar32_t *lcigar=0;
-    int ln_cigar, lm_cigar;
     //left boundary extension
-    res = ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, 0, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
+    int lqe, lte, ln_cigar, lm_cigar;
+    cigar32_t *lcigar=0;
+    res = ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
     if (res < 2) { // to-end extension
         *cigar_ = lcigar;
         *n_cigar_ = ln_cigar;
@@ -1096,15 +1113,9 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
 		return 0;
 	}
     //right boundary extension
-    uint8_t *r_query = (uint8_t*)malloc(qlen * sizeof(uint8_t));
-    uint8_t *r_target = (uint8_t*)malloc(tlen * sizeof(uint8_t));
-    cigar32_t *rcigar=0;
     int rqe, rte, rn_cigar, rm_cigar;
-    for (i = 0; i < qlen; ++i) r_query[i] = query[qlen-i-1];
-    for (i = 0; i < tlen; ++i) r_target[i] = target[tlen-i-1];
-    res = ksw_extend_c(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, rh0, 0, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
-    free(r_query), free(r_target);
-
+    cigar32_t *rcigar=0;
+	res = ksw_extend_r(qlen, query, tlen, target, m, mat, gapo, gape, w, rh0, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
     if (res < 2) { // to-end extension
         _push_cigar1(&rcigar, &rn_cigar, &rm_cigar, (res==0?(((tlen-rte)<<4)|CDEL):(((qlen-rqe)<<4)|CINS)));
         _invert_cigar(&rcigar, rn_cigar);

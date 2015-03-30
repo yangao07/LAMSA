@@ -114,8 +114,11 @@ extern "C" {
                         int w, int end_bonus, int zdrop, int h0, 
                         int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
     int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                     int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, 
+                     int m, const int8_t *mat, int gapo, int gape, int w, int h0,
                      int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
+    int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
+                     int m, const int8_t *mat, int gapo, int gape, int w, int h0,
+                     int *_qre, int *_tre, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
     int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
                         int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, 
                         cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);

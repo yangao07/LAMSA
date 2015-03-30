@@ -483,8 +483,7 @@ void push_reg_res(aln_reg *reg, res_t res)
 	reg->reg[reg->reg_n].is_rev = 1-res.nsrand;
     if (res.nsrand == 1) { // '+'
         reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? ((res.cigar[0]>>4)+1):1;
-        //reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[res.cigar_len-1]>>4)):reg->read_len;
-		reg->reg[reg->reg_n].end = res.readend;
+        reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[res.cigar_len-1]>>4)):reg->read_len;
 		reg->reg[reg->reg_n].ref_beg = res.offset;
 		reg->reg[reg->reg_n].ref_end = res.refend;
     } else { // '-'
