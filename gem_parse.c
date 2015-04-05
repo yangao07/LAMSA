@@ -11,6 +11,7 @@
 #define LINE_SIZE 10000
 
 #ifdef _GEM_MAIN_
+
 void printcigar(FILE *outp, cigar32_t *cigar, int cigar_len)
 {
 	int i; 
@@ -158,7 +159,7 @@ void map_free_msg(map_msg *m_msg)
     free(m_msg->map); free(m_msg);
 }
 
-uint32_t fgetline(FILE *fp, char **line, int *len)
+uint32_t fgetline(FILE *fp, char **line, int *len, int *m)
 {
 	char ch; int i = 0;
 
@@ -175,6 +176,10 @@ uint32_t fgetline(FILE *fp, char **line, int *len)
 				}
 			}
 			(*line)[i++] = ch;
+			if (i == *m-1) {
+			   	(*line) = (char*)realloc(*line, (*m << 1) * sizeof(char));
+				(*m) <<= 1;
+			}
 			ch = fgetc(fp);
 		}
 		(*line)[i] = '\0';
@@ -258,15 +263,16 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 {
 	m_msg->map_n = 0;
 	int line_len = LINE_SIZE, aln_len = LINE_SIZE;
-	char *gem_line = (char*)malloc(LINE_SIZE * sizeof(char));
-	char *aln_msg = (char*)malloc(LINE_SIZE * sizeof(char));
+	int gem_line_m = LINE_SIZE;
+	char *gem_line = (char*)malloc(gem_line_m * sizeof(char));
+	char *aln_msg = (char*)malloc(aln_len * sizeof(char));
 	char name[100]; int msg_len;
 	char *t, *s; int t_i, _t_i;
 	char chr[10], strand, md[200];
 	long long offset;
 	int i;
 
-	fgetline(mapf, &gem_line, &line_len);
+	fgetline(mapf, &gem_line, &line_len, &gem_line_m);
 	if (line_len > aln_len)
 		aln_msg = (char*)realloc(aln_msg, line_len * sizeof(char));
 	sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg); //XXX

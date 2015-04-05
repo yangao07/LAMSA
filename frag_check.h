@@ -105,6 +105,7 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
 
 void check_cigar(cigar32_t *cigar, int cigar_len, char *read_name, int read_len);
 void printcigar(FILE *outp, cigar32_t *cigar, int cigar_len);
+int refInCigar(cigar32_t *cigar, int cigar_len);
 
 #define MAXOFTWO(a, b) ((a) > (b) ? (a) : (b))
 #define MINOFTWO(a, b) ((a) < (b) ? (a) : (b))

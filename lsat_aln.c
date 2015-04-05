@@ -485,12 +485,12 @@ void push_reg_res(aln_reg *reg, res_t res)
         reg->reg[reg->reg_n].beg = (res.cigar[0] & 0xf) == CSOFT_CLIP ? ((res.cigar[0]>>4)+1):1;
         reg->reg[reg->reg_n].end = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[res.cigar_len-1]>>4)):reg->read_len;
 		reg->reg[reg->reg_n].ref_beg = res.offset;
-		reg->reg[reg->reg_n].ref_end = res.refend;
+		reg->reg[reg->reg_n].ref_end = res.offset+refInCigar(res.cigar, res.cigar_len)-1;
     } else { // '-'
         reg->reg[reg->reg_n].beg = (res.cigar[res.cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res.cigar[res.cigar_len-1]>>4) + 1):1;
         reg->reg[reg->reg_n].end = (res.cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res.cigar[0]>>4)):reg->read_len;
 		reg->reg[reg->reg_n].ref_end = res.offset;
-		reg->reg[reg->reg_n].ref_beg = res.refend;
+		reg->reg[reg->reg_n].ref_beg = res.offset+refInCigar(res.cigar, res.cigar_len)-1;
     }
     reg->reg_n++;
 }
@@ -741,7 +741,7 @@ void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n)
     APP->min_thd = lsat_min_thd[APP->read_level]; // depend on seed_len XXX
     APP->frag_score_table = f_BCC_score_table;
 
-    APP->match_dis = APP->seed_step/10; // depend on seed_len, seed_inv
+    APP->match_dis = APP->seed_step/25; // depend on seed_len, seed_inv, 4% indel allowed XXX
 }
 
 void init_aln_para(lsat_aln_para *AP)
@@ -899,10 +899,8 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
     max_score = f_node[seed_i][aln_i].score;
     max_dis = 0; max_flag = 0;
 
-    for (i = seed_i - 1; i >= start; --i)
-    {
-        for (j = 0; j < a_msg[i].n_aln; ++j)
-        {
+    for (i = seed_i - 1; i >= start; --i) {
+        for (j = 0; j < a_msg[i].n_aln; ++j) {
             if (f_node[i][j].dp_flag == dp_flag)// || f_node[i][j].dp_flag == UPDATE_FLAG)
             {
                 dis = get_fseed_dis(a_msg, i, j, seed_i, aln_i, &con_flag, APP, AP);
@@ -1029,7 +1027,7 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
     }
     s = (s2 > s1) ? s2 : s1;
     e = (e2 < e1) ? e2 : e1;
-    // new strategy: mattter how big/small the overlap is, do the merging.
+    // new strategy: no mattter how big/small the overlap is, do merge.
     if (s <= e) {
         L_LB(line, line_end, hi) = s1+s2-s, L_RB(line, line_end, hi) = e1+e2-e;
         L_MF(line, line_end, hi) = L_MERGH;
@@ -1058,74 +1056,108 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
 }
 
 // select best/secondary merged-line, based on line-node number OR based on line-score? XXX
-// principle: 1. Better Score
-//            2. Short line, if Score is equal
-//            3. Random XXX third candidate?
+// rule: 1. Better Score
+//       2. Short line, if Score is equal
+//            
+// Best & Secondary: 1. Best is unique, 
+//                   2. Secondary is allowed to be multi, 
+//            		 3. Secondary is allowed to equal the Best
+// new
 void line_filter(line_node **line, int *line_end, int li, int len, trig_node **tri_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg)
 {
-    int i, m_ii;
-    line_node *m_b = (line_node*)malloc(len * sizeof(line_node));
+    int i, ii, j, k, l, m_ii;
+    line_node **m_b = (line_node**)malloc(len * sizeof(line_node*)); // (i, score)
+	int **m_f = (int**)malloc(len * sizeof(int*)); // merged line (after filtering)
+	for (i = 0; i < len; ++i) {
+		m_b[i] = (line_node*)malloc(len * sizeof(line_node));
+		m_f[i] = (int*)malloc((len+1) * sizeof(int));
+	}
+	int *m_bn = (int*)malloc(len * sizeof(int)); 
+	int *m_fn = (int*)malloc(len * sizeof(int));
     int m_i = -1, d_i=0;
-    int i_score, b_score, s_score;
+    int b_score, s_score;
+	int m_head, f_merge, min_l, max_r, head;
     // check merged-lines
     for (i = li; i < li+len; ++i) {
         if (L_MF(line, line_end, i) & L_NMERG) { // NOT merged
-            ++m_i; 
-            m_b[m_i].x = i, m_b[m_i].y = -2; // NOT merged
-        } else if (L_MF(line, line_end, i) & L_MERGH) { // merged, head
-            ++m_i;
-            m_b[m_i].x = i, m_b[m_i].y = -1; // NO secondary
-        } else { // merged, body : inter-line candidate
+			++m_i;
+			m_b[m_i][0].x = i, m_b[m_i][0].y = -2;
+			m_bn[m_i] = 1;
+		} else if (L_MF(line, line_end, i) & L_MERGH) { // merged, head
+			++m_i;
+            m_b[m_i][0].x = i, m_b[m_i][0].y = L_LS(line, line_end, i); // NO secondary
+			m_bn[m_i] = 1;
+		} else { // merged, body : inter-line candidate
             if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(-1); }
-            i_score = L_LS(line, line_end, i);
-            b_score = L_LS(line, line_end, m_b[m_i].x);
-            if (i_score > b_score || (i_score == b_score && line_end[i] < line_end[m_b[m_i].x])) {
-                if (m_b[m_i].y != -1) { 
-                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
-                    tri_n[m_b[m_i].y] = 0;
-                }
-                m_b[m_i].y = m_b[m_i].x;
-                m_b[m_i].x = i;
-            } else if (m_b[m_i].y == -1)
-                m_b[m_i].y = i;
-            else {
-                s_score = L_LS(line, line_end, m_b[m_i].y);
-                if (i_score > s_score || (i_score == s_score && line_end[i] < line_end[m_b[m_i].y])) {
-                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
-                    m_b[m_i].y = i;
-                    tri_n[m_b[m_i].y] = 0;
-                } else {
-                    L_MF(line, line_end, i) |= L_DUMP;
-                    tri_n[i] = 0;
-                }
-            }
+			m_b[m_i][m_bn[m_i]].x = i, m_b[m_i][m_bn[m_i]].y = L_LS(line, line_end, i);
+			m_bn[m_i]++;
         }
     }
-    // select best/secondary, remove merged line 
-    for (i = 0; i <= m_i; ++i) {
-        if (m_b[i].y == -2) continue; // NOT merged
-        int b = m_b[i].x, s = m_b[i].y;
-        if (L_LS(line, line_end, s) > L_LS(line, line_end, b)/2) { // best & seondary
-            int h = MINOFTWO(b,s), t = MAXOFTWO(b,s);
-            L_MF(line, line_end, t) = L_MERGB; L_MH(line, line_end, t) = h;
-            L_MF(line, line_end, h) = L_MERGH;
-            L_LB(line, line_end, h) = MINOFTWO(line[h][0].x, line[t][0].x);
-            L_RB(line, line_end, h) = MAXOFTWO(line[h][line_end[h]-1].x, line[t][line_end[t]-1].x);
-        } else { // only best
-            L_MF(line, line_end, b) = L_NMERG;
-            L_MF(line, line_end, s) |= L_DUMP;
-            tri_n[s] = 0;
-        }
-        // check inter-line: from b/s+1 -> merge_end
-        int j, k, l, head;
-        /// b/s
-        for (j = b; j ==b || j == s; j+=(s-b)) {
-            for (k = 0; k < tri_n[j]; ++k) {
+	// select best/secondary line, set flag, set inter-line
+	for (i = 0; i <= m_i; ++i) {
+		if (m_b[i][0].y == -2) { // not merged
+			m_f[i][0] = m_b[i][0].x;
+			m_fn[i] = 1;
+			continue;
+		}
+		b_score = s_score = 0;
+		for (j = 0; j < m_bn[i]; ++j) {
+			if (m_b[i][j].y > b_score) {
+				s_score = b_score;
+				b_score = m_b[i][j].y;
+			} else if (m_b[i][j].y > s_score)
+				s_score = m_b[i][j].y;
+		}
+		if (s_score > b_score/2) f_merge = 1;
+		else f_merge = 0;
+
+		m_fn[i] = 1; // m_f [0: best, 1: head, 1...: body
+		if (f_merge) {
+			head = 0;
+			for (j = 0; j < m_bn[i]; ++j) {
+				if (m_b[i][j].y == b_score || m_b[i][j].y == s_score) {
+					if (head) {
+						L_MF(line, line_end, m_b[i][j].x) = L_MERGB;
+						L_MH(line, line_end, m_b[i][j].x) = m_head;
+					} else {
+						L_MF(line, line_end, m_b[i][j].x) = L_MERGH;
+						m_head = m_b[i][j].x;
+						head = 1;
+						min_l = line[m_b[i][j].x][0].x;
+						max_r = line[m_b[i][j].x][line_end[m_b[i][j].x]-1].x;
+					}
+					min_l = MINOFTWO(min_l, line[m_b[i][j].x][0].x);
+					max_r = MAXOFTWO(max_r, line[m_b[i][j].x][line_end[m_b[i][j].x]-1].x);
+					if (m_b[i][j].y == b_score) m_f[i][0] = m_b[i][j].x; // best
+					m_f[i][m_fn[i]++] = m_b[i][j].x;
+				} else {
+					L_MF(line, line_end, m_b[i][j].x) |= L_DUMP;
+					tri_n[m_b[i][j].x] = 0;
+				}
+			} 	
+			L_LB(line, line_end, m_head) = MINOFTWO(line[m_head][0].x, min_l);
+			L_RB(line, line_end, m_head) = MAXOFTWO(line[m_head][line_end[m_head]-1].x, max_r);
+		} else {
+			for (j = 0; j < m_bn[i]; ++j) {
+				if (m_b[i][j].y == b_score) {
+					L_MF(line, line_end, m_b[i][j].x) =  L_NMERG;
+					m_f[i][0] = m_b[i][j].x; // best
+					m_f[i][m_fn[i]++] = m_b[i][j].x;
+				} else {
+					L_MF(line, line_end, m_b[i][j].x) |= L_DUMP;
+					tri_n[m_b[i][j].x] = 0;
+				}
+			}
+		}
+		for (ii = 1; ii < m_fn[i]; ++ii) {
+			j = m_f[i][ii];
+			for (k = 0; k < tri_n[j]; ++k) {
                 head = -1;
-                for (l = j+1; l < li+len && (L_MF(line, line_end, l) & 0x3)==0; ++l) {
+				// check inter-line: from j+1 -> merge_end
+                for (l = j+1; l < li+len && (L_MF(line, line_end, l) & 0x3)==0; ++l) { // L_MERGB
                     if (line[l][0].x > tri_node[j][k].n1.x && line[l][line_end[l]-1].x < tri_node[j][k].n2.x) {
                         // check for MIS(INV)
-                        if (f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].match_flag == F_MISMATCH ||
+						if (f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].match_flag == F_MISMATCH ||
                                 f_node[tri_node[j][k].n2.x][tri_node[j][k].n2.y].match_flag == F_LONG_MISMATCH) {
                             int x_s = line[l][0].x, y_s = line[l][0].y;
                             int x_e = line[l][line_end[l]-1].x, y_e = line[l][line_end[l]-1].y;
@@ -1155,79 +1187,98 @@ void line_filter(line_node **line, int *line_end, int li, int len, trig_node **t
                     }
                 }
             }
-        }
-    }
+		}
+	}
     // remove candidate "trigger-line", left-most or right-most line
     if (m_i > 0) {
-        int l, L;
+        int L;
         // left-boundary tri-line
         m_ii = 0;
-        l = line[m_b[m_ii].x][line_end[m_b[m_ii].x]-1].x - line[m_b[m_ii].x][0].x;
-        L = line[m_b[m_ii+1].x][line_end[m_b[m_ii+1].x]-1].x - line[m_b[m_ii+1].x][0].x;
+		// best line in merged-lines
+        l = line[m_f[m_ii][0]][line_end[m_f[m_ii][0]]-1].x - line[m_f[m_ii][0]][0].x;
+        L = line[m_f[m_ii+1][0]][line_end[m_f[m_ii+1][0]]-1].x - line[m_f[m_ii+1][0]][0].x;
         if (l < 2 && L >= 2) { // DUMP
-            L_MF(line, line_end, m_b[m_ii].x) = L_DUMP;
-            if (m_b[m_ii].y != -2) L_MF(line, line_end, m_b[m_ii].y) = L_DUMP;
+			for (i = 1; i < m_fn[m_ii]; ++i)
+				L_MF(line, line_end, m_f[m_ii][i]) = L_DUMP;
         }
         // right-boundary tri-line
         m_ii = m_i;
-        l = line[m_b[m_ii].x][line_end[m_b[m_ii].x]-1].x - line[m_b[m_ii].x][0].x;
-        L = line[m_b[m_ii-1].x][line_end[m_b[m_ii-1].x]-1].x - line[m_b[m_ii-1].x][0].x;
+        l = line[m_f[m_ii][0]][line_end[m_f[m_ii][0]]-1].x - line[m_f[m_ii][0]][0].x;
+        L = line[m_f[m_ii-1][0]][line_end[m_f[m_ii-1][0]]-1].x - line[m_f[m_ii-1][0]][0].x;
         if (l < 2 && L >= 2) { // DUMP
-            L_MF(line, line_end, m_b[m_ii].x) = L_DUMP;
-            if (m_b[m_ii].y != -2) L_MF(line, line_end, m_b[m_ii].y) = L_DUMP;
+			for (i = 1; i < m_fn[m_ii]; ++i)
+				L_MF(line, line_end, m_f[m_ii][i]) = L_DUMP;
         }
     }
-    free(m_b);
+	for (i = 0; i < len; ++i) { free(m_b[i]); free(m_f[i]); }
+    free(m_b); free(m_bn); free(m_f); free(m_fn);
 }
+
 void line_filter1(line_node **line, int *line_end, int li, int len)
 {
     int i,j, m_ii;
-    line_node *m_b = (line_node*)malloc(len * sizeof(line_node));
+	int *m_n = (int*)malloc(len * sizeof(int));
+    line_node **m_b = (line_node**)malloc(len * sizeof(line_node*)); // (i, score)
+	for (i = 0; i < len; ++i) m_b[i] = (line_node*)malloc(len * sizeof(line_node));
     int m_i = -1, d_i=0;
-    int i_score, b_score, s_score;
+    int b_score, s_score;
     for (i = li; i < li+len; ++i) {
         if (L_MF(line, line_end, i) & L_NMERG) continue; // NOT merged
-        else if (L_MF(line, line_end, i) & L_MERGH) { // merged, head
+        else if (L_MF(line, line_end, i) & L_MERGH) {    // merged, head
             ++m_i;
-            m_b[m_i].x = i, m_b[m_i].y = -1;
+            m_b[m_i][0].x = i, m_b[m_i][0].y = L_LS(line, line_end, i);
+			m_n[m_i] = 1;
         } else { // merged, body
             if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(-1); }
-            i_score = L_LS(line, line_end, i);
-            b_score = L_LS(line, line_end, m_b[m_i].x);
-            if (i_score > b_score || (i_score == b_score && line_end[i] < line_end[m_b[m_i].x])) {
-                if (m_b[m_i].y != -1) { 
-                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
-                }
-                m_b[m_i].y = m_b[m_i].x;
-                m_b[m_i].x = i;
-            } else if (m_b[m_i].y == -1)
-                m_b[m_i].y = i;
-            else {
-                s_score = L_LS(line, line_end, m_b[m_i].y);
-                if (i_score > s_score || (i_score == s_score && line_end[i] < line_end[m_b[m_i].y])) {
-                    L_MF(line, line_end, m_b[m_i].y) |= L_DUMP;
-                    m_b[m_i].y = i;
-                } else {
-                    L_MF(line, line_end, i) |= L_DUMP;
-                }
-            }
+			m_b[m_i][m_n[m_i]].x = i, m_b[m_i][m_n[m_i]].y = L_LS(line, line_end, i);
+			m_n[m_i]++;
         }
     }
-    for (i = 0; i <= m_i; ++i) {
-        int b = m_b[i].x, s = m_b[i].y;
-        /// if (line[m_b[i].y][line_end[m_b[i].y]+2].x > line[m_b[i].x][line_end[m_b[i].x]+2].x/2) { // best & seondary
-        if (L_LS(line, line_end, s) > L_LS(line, line_end, b)/2) {
-            int h = MINOFTWO(b,s), t = MAXOFTWO(b,s);
-            L_MF(line, line_end, t) = L_MERGB; L_MH(line, line_end, t) = h;
-            L_MF(line, line_end, h) = L_MERGH;
-            L_LB(line, line_end, h) = MINOFTWO(line[h][0].x, line[t][0].x);
-            L_RB(line, line_end, h) = MAXOFTWO(line[h][line_end[h]-1].x, line[t][line_end[t]-1].x);
-        } else { // only best
-            L_MF(line, line_end, b) = L_NMERG;
-            L_MF(line, line_end, s) |= L_DUMP;
-        }
-    }
-    free(m_b);
+    int min_l, max_r, f_merge, m_head;
+	for (i = 0; i <= m_i; ++i) { // m_b[i][0 ... m_n[i]-1]
+		// get best & secondary score
+		b_score = s_score = 0;
+		for (j = 0; j < m_n[i]; ++j) {
+			if (m_b[i][j].y > b_score) {
+				s_score = b_score;
+				b_score = m_b[i][j].y;
+			} else if (m_b[i][j].y > s_score)
+				s_score = m_b[i][j].y;
+		}
+		if (s_score > b_score/2) f_merge = 1;
+		else f_merge = 0;
+		// select best & secondary line, set flag
+		if (f_merge) {
+			int head = 0;
+			for (j = 0; j < m_n[i]; ++j) {
+				if (m_b[i][j].y == b_score || m_b[i][j].y == s_score) {
+					if (head) {
+						L_MF(line, line_end, m_b[i][j].x) = L_MERGB;
+						L_MH(line, line_end, m_b[i][j].x) = m_head;
+					} else {
+						L_MF(line, line_end, m_b[i][j].x) = L_MERGH;
+						m_head = m_b[i][j].x;
+						min_l = line[m_b[i][j].x][0].x;
+						max_r = line[m_b[i][j].x][line_end[m_b[i][j].x]-1].x;
+						head = 1;
+					}
+					min_l = MINOFTWO(min_l, line[m_b[i][j].x][0].x);
+					max_r = MAXOFTWO(max_r, line[m_b[i][j].x][line_end[m_b[i][j].x]-1].x);
+				} else 
+					L_MF(line, line_end, m_b[i][j].x) |= L_DUMP;
+			} 	
+			L_LB(line, line_end, m_head) = MINOFTWO(line[m_head][0].x, min_l);
+			L_RB(line, line_end, m_head) = MAXOFTWO(line[m_head][line_end[m_head]-1].x, max_r);
+		} else {
+			for (j = 0; j < m_n[i]; ++j) {
+				if (m_b[i][j].y == b_score)
+					L_MF(line, line_end, m_b[i][j].x) =  L_NMERG;
+				else L_MF(line, line_end, m_b[i][j].x) |= L_DUMP;
+			}
+		}
+	}
+	for (i = 0; i < len; ++i) free(m_b[i]);
+	free(m_b); free(m_n);
 }
 
 // internal mini merge ? XXX
@@ -2892,8 +2943,9 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 aln_free_reg(a_reg);
             }
             seed_out = 0;
+            //if (read_n % 1000 == 0) 
+			fprintf(stderr, "%16d reads have been aligned.\n", read_n);
             ++read_n;
-            if (read_n % 1000 == 0) fprintf(stderr, "%16d reads have been aligned.\n", read_n);
         }
     }
     //free variables and close file handles

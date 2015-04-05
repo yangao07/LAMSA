@@ -187,6 +187,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
             _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), cigar, cigar_n);
             right->read_pos += _qle;
             right->ref_pos += _tle;
+			free(cigar);
 		}
 		_push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_len-right->read_pos)<<4)|CSOFT_CLIP);
     }
@@ -209,6 +210,8 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
 
 int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t reg, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *re_res)
 {
+#ifdef __DEBUG__
+#endif
     int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
 	int max_hit = 100;
@@ -242,17 +245,19 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t 
                 uint64_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
                 //bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 				if (is_rev) {
-					if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos< AP->SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP->SV_len_thd))) {
+					//fprintf(stderr, "ref_beg: %d\nabs_pos: %d\nref_end: %d\n", reg.ref_beg, abs_pos, reg.ref_end);
+					if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos < AP->SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP->SV_len_thd))) {
 						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 						cnt++;
+						if (cnt == max_hit) break;
 					}
 				} else {
-					if ((!reg.ref_beg || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP->SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP->SV_len_thd))) {
+					if ((reg.ref_beg==0 || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP->SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP->SV_len_thd))) {
 						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 						cnt++;
+						if (cnt == max_hit) break;
 					}
 				}
-				if (cnt == max_hit) break;
 			}
 		}
     }
