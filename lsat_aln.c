@@ -33,6 +33,7 @@ int f_BCC_score_table[10] = {
      -6,  //F_UNMATCH
 };
 
+int lsat_read_leve_n = 10;
 int lsat_read_len[9]  = {2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
 
 int lsat_seed_len[10] = {  50,   50,   50,   75,   75,   75,  100,  100, 100, 100};
@@ -51,31 +52,41 @@ char READ_NAME[1024];
 int get_read_level(int read_len)
 {
     int l;
-    for (l = 0; l < 9; ++l)
+    for (l = 0; l < lsat_read_leve_n-1; ++l)
         if (read_len <= lsat_read_len[l]) return l;
     return l;
 }
 
-int lsat_aln_usage(void)		//aln usage
+int lsat_aln_usage(void)
 {
     fprintf(stderr, "\n");
     fprintf(stderr, "Usage:   lsat aln [options] <ref_prefix> <in.fa/fq>\n\n");
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "         -t [INT]      The align type, <Best Coverage and Connect(1)> or <All Valid Result(2)>. [Def=1]\n");
+    fprintf(stderr, "         -t [INT]      The align type, <Best Coverage and Connect(1)> or <All Valid Result(2)>. [Def=1]\n\n");
+
     fprintf(stderr, "         -m [INT]      Match score for SW-alignment. [Def=1]\n");
     fprintf(stderr, "         -M [INT]      Mismatch penalty for SW-alignment. [Def=3]\n");
     fprintf(stderr, "         -O [INT]      Gap open penalty for SW-alignment. [Def=5]\n");
     fprintf(stderr, "         -E [INT]      Gap extension penalty for SW-alignment. [Def=2]\n");
+    fprintf(stderr, "         -S [INT]      The score penalty of split-alignment. [Def=%d]\n\n", SPLIT_ALN_PEN);
+
     fprintf(stderr, "         -r [INT]      The maximun number of output results for a specific read region. [Def=%d]\n", RES_MAX_N);
     fprintf(stderr, "         -V [INT]      The expected maximun length of SV. [Def=%d]\n", SV_MAX_LEN);
-    fprintf(stderr, "         -g [INT]      The minimum length of gap that causes a split-alignment. [Def=%d]\n", SPLIT_ALN_LEN);
-    fprintf(stderr, "         -p [INT]      The score penalty of split-alignment. [Def=%d]\n", SPLIT_ALN_PEN);
+    fprintf(stderr, "         -g [INT]      The minimum length of gap that causes a split-alignment. [Def=%d]\n\n", SPLIT_ALN_LEN);
+
     fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [Def=0]\n");
+	fprintf(stderr, "         -l [INT]      The seed length. [Def=Auto]\n");
+	fprintf(stderr, "         -v [INT]      The interval length of adjacent seeds. [Def=Auto]\n");
+	fprintf(stderr, "         -p [INT]      The maximun allowed number of a seed's locations. [Def=Auto]\n");
+	fprintf(stderr, "         -d [INT]      The maximun number of seed's locations for first round's DP. [Def=Auto]\n\n");
+	fprintf(stderr, "                         LSAT will set seed-len and seed-inv for every read based on their read-length.\n");
+	fprintf(stderr, "                         Note: All of these 4 parameters(l,v,p,d) above should always be \"Auto\"\n");
+	fprintf(stderr, "                               or set with specific value simultaneously.\n\n");
     
-    fprintf(stderr, "         -o [STR]      The output file (SAM format). [Def=\"prefix_out.sam\"]\n");
+    fprintf(stderr, "         -o [STR]      The output file (SAM format). [Def=\"prefix_out.sam\"]\n\n");
 
     fprintf(stderr, "         -N            Do NOT excute seeding program, when seeds' alignment result existed already.\n");
-    fprintf(stderr, "         -S            Seed information file has already existed.\n");
+    fprintf(stderr, "         -I            Seed information file has already existed.\n");
     fprintf(stderr, "         -A [STR]      The seeds' alignment result. When '-N' is used. [Def=\"seed_prefix.out.0\"]\n");
     fprintf(stderr, "\n");
     return 1;
@@ -986,7 +997,7 @@ void line_sort_endpos(line_node **line, int *line_end,
                 }
                 t = line_end[i], line_end[i] = line_end[j], line_end[j] = t;
                 end = tri_n[j] > tri_n[i] ? tri_n[j] : tri_n[i];
-                for (k = 0; k < end+L_EXTRA; ++k) {
+                for (k = 0; k < end; ++k) {
                     tr = t_node[i][k], t_node[i][k] = t_node[j][k], t_node[j][k] = tr;   
                 }
                 t = tri_n[i], tri_n[i] = tri_n[j], tri_n[j] = t;
@@ -1063,6 +1074,7 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
 //                   2. Secondary is allowed to be multi, 
 //            		 3. Secondary is allowed to equal the Best
 // new
+// Best and all secondary whose score exceed best/2
 void line_filter(line_node **line, int *line_end, int li, int len, trig_node **tri_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg)
 {
     int i, ii, j, k, l, m_ii;
@@ -1115,7 +1127,7 @@ void line_filter(line_node **line, int *line_end, int li, int len, trig_node **t
 		if (f_merge) {
 			head = 0;
 			for (j = 0; j < m_bn[i]; ++j) {
-				if (m_b[i][j].y == b_score || m_b[i][j].y == s_score) {
+				if (m_b[i][j].y > b_score/2) {
 					if (head) {
 						L_MF(line, line_end, m_b[i][j].x) = L_MERGB;
 						L_MH(line, line_end, m_b[i][j].x) = m_head;
@@ -1251,7 +1263,7 @@ void line_filter1(line_node **line, int *line_end, int li, int len)
 		if (f_merge) {
 			int head = 0;
 			for (j = 0; j < m_n[i]; ++j) {
-				if (m_b[i][j].y == b_score || m_b[i][j].y == s_score) {
+				if (m_b[i][j].y > b_score/2) {
 					if (head) {
 						L_MF(line, line_end, m_b[i][j].x) = L_MERGB;
 						L_MH(line, line_end, m_b[i][j].x) = m_head;
@@ -1436,6 +1448,7 @@ int line_set_bound(line_node **line, int *line_end,
     //line_inter_bound(line, line_end, li, len, t_node, tri_n, f_node, a_msg);
     return 0;
 }
+
 int line_set_bound1(line_node **line, int *line_end, 
                    int li, int *o_len, int left, int right) 
 {
@@ -1721,6 +1734,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
     }
     // tree-pruning
     node_score *ns = node_init_score(max_multi); //size of node_score
+    //node_score *ns = node_init_score(80); //size of node_score
     line_node fa_node;
     for (i = end; i >=start; --i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
@@ -2227,17 +2241,11 @@ int frag_line_BCC(aln_msg *a_msg,
                     frag_dp_update(*f_node, a_msg, i, j, 0/*update start pos*/, APP, AP, MIN_FLAG);
             }
         }
-        //print
-        /*printf("min-update:\n");
-        for (i = 0; i < APP->seed_out; ++i) {
-            for (j = 0; j < a_msg[i].n_aln; ++j)
-                //if ((*f_node)[i][j].dp_flag == MIN_FLAG)
-                    fprintf(stdout, "node:(%d %d)\t%d\t%d %d %lld\tfrom:(%d %d)\tscore: %d\tM-flag:%c\tDP-flag:%d\tnode_n:%d\n", i, j, a_msg[i].read_id, a_msg[i].at[j].nsrand, a_msg[i].at[j].chr, (long long)a_msg[i].at[j].offset, (*f_node)[i][j].from.x, (*f_node)[i][j].from.y, (*f_node)[i][j].score, FRAG_CON_STR[(*f_node)[i][j].match_flag], (*f_node)[i][j].dp_flag, (*f_node)[i][j].node_n);
-        }*/
     }
     { // backtrack
         //prune tree to find multi-nodes/roads for backtrack
         node_score *ns = node_init_score(max_multi); //size of node_score
+        //node_score *ns = node_init_score(80); //size of node_score
         line_node fa_node;
         for (i = APP->seed_out-1; i >=0; --i) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
@@ -2938,10 +2946,10 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
 				//a_res = aln_init_res(1, APP->read_len);
                 bwt_aln_remain(a_reg, remain_res, bwt, bns, pac, read_seq, APP, AP);
                 aln_res_output(remain_res, 0, APP);
-                // free 
-                aln_res_free(a_res); aln_res_free(remain_res);
-                aln_free_reg(a_reg);
             }
+			// free 
+			aln_res_free(a_res); aln_res_free(remain_res);
+			aln_free_reg(a_reg);
             seed_out = 0;
             //if (read_n % 1000 == 0) 
 			fprintf(stderr, "%16d reads have been aligned.\n", read_n);
@@ -3063,30 +3071,41 @@ int lsat_aln(int argc, char *argv[])
     lsat_aln_para *AP = (lsat_aln_para*)calloc(1, sizeof(lsat_aln_para));
     init_aln_para(AP);
     int no_seed_aln=0, seed_info=0, aln_type=1, seed_program=0;
+	int i, seed_len=0, seed_inv=0, per_aln=0, min_thd=0;
     char seed_result_f[1024]="", aln_result_f[1024]="";
 
-    while ((c =getopt(argc, argv, "t:m:M:O:E:r:V:s:o:NSA:")) >= 0)
+    while ((c =getopt(argc, argv, "t:m:M:O:E:S:r:V:g:s:l:v:p:d:o:NIA:")) >= 0)
     {
         switch (c)
         {
-            case 't':
+			case 't':
                 aln_type = atoi(optarg);
-                if (aln_type < 0 || aln_type > 2)
+				if (aln_type < 0 || aln_type > 2)
                     return lsat_aln_usage();
                 AP->aln_type = aln_type;
                 break;
+
             case 'm': AP->match = atoi(optarg); break;
             case 'M': AP->mis = atoi(optarg); break;
             case 'O': AP->gapo = atoi(optarg); break;
             case 'E': AP->gape = atoi(optarg); break;
+
             case 'r': AP->res_mul_max = atoi(optarg); break;
-            case 'g': AP->split_len = atoi(optarg);
             case 'V': AP->SV_len_thd = atoi(optarg); break;
+            case 'g': AP->split_len = atoi(optarg);
+
             case 's': seed_program = atoi(optarg); break;
+			case 'l': seed_len = atoi(optarg); break;
+			case 'v': seed_inv = atoi(optarg); break;
+			case 'p': per_aln = atoi(optarg); break;
+			case 'd': min_thd = atoi(optarg); break;
+
             case 'o': strcpy(aln_result_f, optarg); break;
+
             case 'N': no_seed_aln = 1; break;
-            case 'S': seed_info = 1; break;
+            case 'I': seed_info = 1; break;
             case 'A': strcpy(seed_result_f, optarg); break;	//seed alignment result break;
+
             default: return lsat_aln_usage();
         }
     }
@@ -3095,6 +3114,18 @@ int lsat_aln(int argc, char *argv[])
 
     ref = strdup(argv[optind]);
     read =strdup(argv[optind+1]);
+	if (seed_len != 0) {
+		if (seed_inv == 0 || per_aln == 0 || min_thd == 0) {
+			fprintf(stderr, "[lsat_aln] seed para error.\n");
+			return lsat_aln_usage();
+		}
+		lsat_read_leve_n = 1;
+
+		lsat_seed_len[0] = seed_len;
+		lsat_seed_inv[0] = seed_inv;
+		lsat_per_aln[0] = per_aln;
+		lsat_min_thd[0] = min_thd;
+	}
 
     lsat_aln_core(ref, read, seed_info, seed_program, no_seed_aln, seed_result_f, APP, AP);
 

@@ -16,7 +16,8 @@ indel_length=3
 
 map_out=$2.gem
 #$1.gem
-$GEM_DIR/gem-mapper -I $ref -i $2 -o $map_out -m $mismatch -e $edit_distance --max-big-indel-length $indel_length --fast-mapping 2> $mapout.log
+#echo "$GEM_DIR/gem-mapper -I $ref -i $2 -o $map_out -m $mismatch -e $edit_distance --max-big-indel-length $indel_length -d 300 -D 0 --fast-mapping 2> $map_out.log"
+$GEM_DIR/gem-mapper -I $ref -i $2 -o $map_out -m $mismatch -e $edit_distance --max-big-indel-length $indel_length -d 300 -D 0 --fast-mapping 2> $map_out.log
 if [[ $? -ne 0 ]];then
 	echo -e gem-mapper error.
 	exit 1

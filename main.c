@@ -28,6 +28,9 @@ static int usage(void)	//main usage
 
 int main(int argc, char *argv[])
 {
+	fprintf(stderr, "[main] CMD: ");
+	int i;
+	for (i = 0; i < argc; ++i) fprintf(stderr, " %s", argv[i]); fprintf(stderr, "\n");
 	if (argc < 2) return usage();
 	if (strcmp(argv[1], "index") == 0)      return lsat_index(argc-1, argv+1);
 	else if (strcmp(argv[1], "aln") == 0)   return lsat_aln(argc-1, argv+1);

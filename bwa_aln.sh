@@ -9,7 +9,7 @@ then
     exit 1
 fi
 
-#echo -e bwa $1 $2 > ${2}.sai
+#echo -e bwa $2 $2 > ${2}.sai
 $BWA_DIR/bwa aln -i 0 $1 $2 > ${2}.sai 2> ${2}.bwa.aln
 if [[ $? -ne 0 ]];then
 	echo -e bwa-aln error.

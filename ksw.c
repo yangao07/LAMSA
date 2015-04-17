@@ -29,7 +29,9 @@
 #include <assert.h>
 #include <emmintrin.h>
 #include "ksw.h"
+#ifndef _KSW_MAIN
 #include "frag_check.h"
+#endif
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -650,6 +652,8 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	return ksw_global2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, n_cigar_, cigar_);
 }
 
+#ifndef _KSW_MAIN
+
 /***********************************************
  * Gap allowed extension  with backtrack       *
  * combined 'ksw_extend' and 'ksw_global'      *
@@ -1157,6 +1161,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     if (Sn > 100) return 1; // gap exists
     else return 0; 
 }
+#endif
 /*******************************************
  * Main function (not compiled by default) *
  *******************************************/
@@ -1191,10 +1196,10 @@ unsigned char seq_nt4_table[256] = {
 int main(int argc, char *argv[])
 {
 	int c, /*sa = 1, sb = 3,*/ i, j, k;
-    int sa=1, sb=3;
+    int sa=1, sb=4;
 	int8_t mat[25];
 	//int gapo = 5, gape = 2;
-    int gapo = 5, gape=2;
+    int gapo = 6, gape=1;
 	gzFile fpt, fpq;
 	kseq_t *kst, *ksq;
     int score, te, qe;
@@ -1215,14 +1220,15 @@ int main(int argc, char *argv[])
 		while (kseq_read(kst) > 0) {
 			for (i = 0; i < (int)kst->seq.l; ++i) kst->seq.s[i] = seq_nt4_table[(int)kst->seq.s[i]];
 			
-            int qle, tle, m_cigar, n_cigar;
+            int qle, tle, gtle, gscore, max_off, m_cigar, n_cigar;
             cigar32_t *cigar;
-            int score = ksw_both_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, abs(ksq->seq.l-kst->seq.l)+3, 10, 10, &n_cigar, &cigar, &m_cigar);
-            printf("%d\n", score);
-            for (i = 0; i < n_cigar; ++i)
-                printf("%d%c", cigar[i] >> 4 , CIGAR_STR[cigar[i] & 0xf]);
-            printf("\n");
-            free(cigar);
+
+            int score = ksw_extend(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, 6, 1, 1,/*abs(ksq->seq.l-kst->seq.l)+3,*/ 5, 1, 2, &qle, &tle, &gtle, &gscore, &max_off);
+			printf("%d %d %d %d %d %d \n", score, qle, tle, gtle, gscore, max_off);
+            //for (i = 0; i < n_cigar; ++i)
+             //   printf("%d%c", cigar[i] >> 4 , CIGAR_STR[cigar[i] & 0xf]);
+            //printf("\n");
+            //free(cigar);
 		}
 	}
 	kseq_destroy(kst); gzclose(fpt);
