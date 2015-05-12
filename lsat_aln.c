@@ -2844,7 +2844,8 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             APP->seed_out = seed_out;
             //fnode_init(*f_node, s_msg->seed_max+2, AP->per_aln_m);
             
-            int per_max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
+            //int per_max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
+			int per_max_multi = AP->res_mul_max;
             aln_res *a_res = aln_init_res(1, APP->read_len); // line_n
             aln_reg *a_reg = aln_init_reg(APP->read_len);
             // main line process
@@ -2977,7 +2978,8 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             APP->seed_out = seed_out;
             //fnode_init(*f_node, s_msg->seed_max+2, AP->per_aln_m);
             
-            int per_max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
+            //int per_max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
+			int per_max_multi = AP->res_mul_max;
             aln_res *a_res = aln_init_res(1, APP->read_len);
 			aln_res *remain_res = aln_init_res(1, APP->read_len);
             aln_reg *a_reg = aln_init_reg(APP->read_len);

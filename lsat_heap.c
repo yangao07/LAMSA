@@ -6,7 +6,7 @@ line_node node_pop(node_score *ns, int *score)
 {
     if (ns->node_n < 1) 
         return (line_node){-1,0};
-    line_node node = ns->node[(ns->node_n)--];
+    line_node node = ns->node[--(ns->node_n)];
     *score = ns->score[ns->node_n];
     return node;
 }
