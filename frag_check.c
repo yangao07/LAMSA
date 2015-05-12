@@ -1373,7 +1373,7 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
         lsat_aln_per_para *APP, lsat_aln_para *AP,
         int line_n, uint32_t **hash_num, uint64_t ***hash_node)  //XXX seed_len -> seed_len+inv :OK
 {
-    // for debug
+    // for debug XXX
     strcpy(READ_NAME, APP->read_name);
     int i, j;
     int max_len = APP->read_len;

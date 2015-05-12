@@ -2,6 +2,15 @@
 #include <stdio.h>
 #include "lsat_aln.h"
 
+line_node node_pop(node_score *ns, int *score)
+{
+    if (ns->node_n < 1) 
+        return (line_node){-1,0};
+    line_node node = ns->node[(ns->node_n)--];
+    *score = ns->score[ns->node_n];
+    return node;
+}
+
 //max score
 void node_max_heap(node_score *ns, int i)
 {
@@ -83,6 +92,46 @@ line_node node_heap_extract_maxpos(node_score *ns)
     return max;
 }
 
+// min end-pos
+void node_minpos_heap(node_score *ns, int i)
+{
+    int l = 2*i+1; int r = 2*(i+1);
+    int min, tmp;
+    if (l < ns->node_n && ns->node[l].x < ns->node[i].x) 
+        min = l;
+    else min = i;
+    if (r < ns->node_n && ns->node[r].x < ns->node[min].x) 
+        min = r;
+    if (min != i)
+    {
+        tmp = ns->node[i].x, ns->node[i].x = ns->node[min].x, ns->node[min].x = tmp;
+        tmp = ns->node[i].y, ns->node[i].y = ns->node[min].y, ns->node[min].y = tmp;
+        tmp = ns->score[i], ns->score[i] = ns->score[min], ns->score[min] = tmp;
+        node_minpos_heap(ns, min);
+    }
+}
+
+void build_node_minpos_heap(node_score *ns)
+{
+    int i;
+    for (i = (ns->node_n-1)/2; i >= 0; --i)
+        node_minpos_heap(ns, i);
+}
+
+line_node node_heap_extract_minpos(node_score *ns)
+{
+    if (ns->node_n < 1)
+    {
+        //fprintf(stderr, "[heap_sort] MAX error.\n"); exit(-1);
+        return (line_node){-1,0};
+    }
+    line_node min = ns->node[0];
+    ns->node[0] = ns->node[--(ns->node_n)];
+    ns->score[0] = ns->score[ns->node_n];
+    node_minpos_heap(ns, 0);
+    return min;
+}
+
 /*void node_heap_update_max(node_score *ns, line_node node, int score)
 {
     if (ns->score[0] < score)
@@ -132,14 +181,16 @@ void build_node_min_heap(node_score *ns)
     return min;
 }*/
 
-void node_heap_update_min(node_score *ns, line_node node, int score)
+int node_heap_update_min(node_score *ns, line_node node, int score)
 {
     if (ns->score[0] < score)
     {
+        int ret = ns->node[0].x;
         ns->score[0] = score;
         ns->node[0] = node;
         node_min_heap(ns, 0);
-    }
+        return ret;
+    } else return -2;
 }
 
 #define max_heap(type_t)                \

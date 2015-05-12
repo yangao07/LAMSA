@@ -219,12 +219,12 @@ typedef struct {
 } trig_node;
 typedef struct {
     line_node *node;
-    int *pos;
     int *score;
 
     int max_n;
     int node_n;
-}node_score;
+} node_score;
+
 #define TREE_START 0
 #define TREE_BRANCH 1
 

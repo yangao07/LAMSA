@@ -21,34 +21,42 @@ int lsat_index_usage(void)
     fprintf(stderr, "Usage:   lsat index [option] <ref.fa>\n");
     fprintf(stderr, "                    bulid index for ref.fa\n\n");
     fprintf(stderr, "Option:  \n");
-    fprintf(stderr, "         -i [INT]     Index program, <bwa(1)> or <soap2-dp(2)>. [Def=1]\n");
+    fprintf(stderr, "         -i [INT]     Index program, <gem(0>, <bwa(1)> or <soap2-dp(2)>. [Def=0]\n");
+    fprintf(stderr, "\n");
     return 1;
 }
 
-int bwa_build(char *prefix)
+void gem_build(char *prefix)
+{
+    char cmd[1024];
+    sprintf(cmd, "./gem_index.sh %s", prefix);
+    fprintf(stderr, "[lsat_index] Executing gem-indexer ... ");
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, gem-indexer exit abnormally.\n"); exit(-1); }
+    fprintf(stderr, "done.\n");
+}
+
+void bwa_build(char *prefix)
 {
     char cmd[1024];
     sprintf(cmd, "./bwa_index.sh %s", prefix);
     fprintf(stderr, "[lsat_index] Executing bwa index ... ");
-    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, bwa index exit abnormally.\n"); exit(0); }
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, bwa index exit abnormally.\n"); exit(-1); }
     fprintf(stderr, "done.\n");
-    return 0;
 }
 
-int soap_bulid(char *prefix)
+void soap_bulid(char *prefix)
 {
     char cmd[1024];
     sprintf(cmd, "./soap2dp_index.sh %s", prefix);
     fprintf(stderr, "[lsat_index] Executing soap2-dp-builder ... ");
-    if (system(cmd) != 0 ) { fprintf(stderr, "\n[lsat_aln] Indexing undone, soap2-dp-builder exit abnormally.\n"); exit(0);}
+    if (system(cmd) != 0 ) { fprintf(stderr, "\n[lsat_aln] Indexing undone, soap2-dp-builder exit abnormally.\n"); exit(-1);}
     fprintf(stderr, " done.\n");
-    return 0;
 }
 
 int lsat_index(int argc, char *argv[])
 {
 	char *prefix=0;
-	int type=1, c;
+	int type=0, c;
 	//XXX clock_t t;  
 	
 	while ((c = getopt(argc, argv, "i:")) >= 0)
@@ -67,7 +75,8 @@ int lsat_index(int argc, char *argv[])
 	if (optind + 1 > argc) return lsat_index_usage();
 	prefix = strdup(argv[optind]);
 
-	if (type==1) bwa_build(prefix);
+    if (type==0) gem_build(prefix);
+    else if (type==1) bwa_build(prefix);
     else if(type==2) soap_bulid(prefix);
     else return lsat_index_usage();
 
