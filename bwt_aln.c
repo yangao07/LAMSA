@@ -210,8 +210,6 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
 
 int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t reg, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *re_res)
 {
-#ifdef __DEBUG__
-#endif
     int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
 	int max_hit = 100;

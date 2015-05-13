@@ -455,17 +455,18 @@ void push_reg(aln_reg *reg, reg_t r)
     reg->reg_n++;
 }
 
+// XXX dump remain-regions that are longger than L
 int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para *AP)
 {
     if (a_reg->reg_n == 0) return 0;
     aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP);
-    int i;
-    if (a_reg->reg[0].beg > 19) 
+    int i, reg_thd=300; // XXX
+    if (a_reg->reg[0].beg > AP->bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd)
 		push_reg(remain_reg, (reg_t){a_reg->reg[0].refid, a_reg->reg[0].is_rev, 
 				                     0, a_reg->reg[0].ref_beg, 
 				                     1, a_reg->reg[0].beg-1});
     for (i = 1; i < a_reg->reg_n; ++i) {
-        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > 19) {
+        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > AP->bwt_seed_len && a_reg->reg[i].beg-1-a_reg->reg[i-1].end <= reg_thd) {
 			if (a_reg->reg[i].refid == a_reg->reg[i-1].refid && a_reg->reg[i].is_rev == a_reg->reg[i-1].is_rev)
 				push_reg(remain_reg, (reg_t){a_reg->reg[i].refid, a_reg->reg[i].is_rev,
 						                     a_reg->reg[i-1].ref_end, a_reg->reg[i].ref_beg, 
@@ -474,7 +475,7 @@ int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para *AP)
 				push_reg(remain_reg, (reg_t){-1, -1, 0, 0, a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
 		}
     }
-	if (a_reg->read_len - a_reg->reg[i-1].end > 19) 
+	if (a_reg->read_len - a_reg->reg[i-1].end > AP->bwt_seed_len && a_reg->read_len-a_reg->reg[i-1].end <= reg_thd) 
 		push_reg(remain_reg, (reg_t){a_reg->reg[i-1].refid, a_reg->reg[i-1].is_rev,
 				                     a_reg->reg[i-1].ref_end, 0,
 				                     a_reg->reg[i-1].end+1, a_reg->read_len});
