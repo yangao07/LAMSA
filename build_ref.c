@@ -1,7 +1,7 @@
 /*
  * bulid_ref.c
  *
- * bulid index for reference sequence(soap2-dp)
+ * bulid index for reference sequence
  *
  */
 

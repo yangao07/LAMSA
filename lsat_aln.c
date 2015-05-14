@@ -507,7 +507,7 @@ void push_reg_res(aln_reg *reg, res_t res)
     reg->reg_n++;
 }
 
-void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para *APP) 
+/*void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para *APP) 
 {
     int i, j;
     for (i = 0; i < res->l_n; ++i) {
@@ -531,6 +531,38 @@ void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para *APP)
                 }
                 fprintf(stdout, "\n"); 
             }
+        }
+    }
+}*/
+
+//merg_msg: {1, 0} -> NOT merged or ONLY best
+//          {1, 1} -> merged, best
+//          {2, i} -> merged, alternative and best is `i`
+//          {0,-1} -> dumped
+void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para *APP)
+{
+    int i, j;
+    for (i = 0; i < res->l_n; ++i) {
+        if (res->la[i].merg_msg.x == 1) {
+            // primary res
+            j = 0;
+            fprintf(stdout, "%s\t%d\t%c\t%lld\t", APP->read_name, res->la[i].res[j].chr, "-++"[res->la[i].res[j].nsrand], (long long)res->la[i].res[j].offset); 
+            printcigar(stdout, res->la[i].res[j].cigar, res->la[i].res[j].cigar_len); 
+            fprintf(stdout, "\tAS:i:%d\tNM:i:%d", res->la[i].res[j].score, res->la[i].res[j].NM);
+            if (reg) push_reg_res(reg, res->la[i].res[j]);
+            check_cigar(res->la[i].res[j].cigar, res->la[i].res[j].cigar_len, APP->read_name, APP->read_len); 
+            // alternative res
+            if (res->la[i].merg_msg.y == 1) {
+                for (j = 0; j < res->l_n; ++j) {
+                    int k = 0;
+                    if (res->la[j].merg_msg.y == i) {
+                        fprintf(stdout, "\tXA:Z:%d,%c%lld,", res->la[j].res[k].chr, "-+"[res->la[j].res[k].nsrand], (long long)res->la[j].res[k].offset); 
+                        printcigar(stdout, res->la[j].res[k].cigar, res->la[j].res[k].cigar_len); 
+                        fprintf(stdout, ",%d;", res->la[j].res[k].NM);
+                    }
+                }
+            }
+            fprintf(stdout, "\n"); 
         }
     }
 }
@@ -1327,21 +1359,7 @@ void line_filter1(line_node **line, int *line_end, int li, int len, int per_max_
                     } else if (ret != -1) { // ret is dumped
                         L_MF(line, line_end, ret) |= L_DUMP;
                     }
-                    /*
-					if (head) {
-						L_MF(line, line_end, m_b[i][j].x) = L_MERGB;
-						L_MH(line, line_end, m_b[i][j].x) = m_head;
-					} else {
-						L_MF(line, line_end, m_b[i][j].x) = L_MERGH;
-						m_head = m_b[i][j].x;
-						min_l = line[m_b[i][j].x][0].x;
-						max_r = line[m_b[i][j].x][line_end[m_b[i][j].x]-1].x;
-						head = 1;
-					}
-					min_l = MINOFTWO(min_l, line[m_b[i][j].x][0].x);
-					max_r = MAXOFTWO(max_r, line[m_b[i][j].x][line_end[m_b[i][j].x]-1].x);*/
-				} else 
-					L_MF(line, line_end, m_b[i][j].x) |= L_DUMP;
+                } else L_MF(line, line_end, m_b[i][j].x) |= L_DUMP;
 			} 	
             // 3. ouput_M_nodes, set head/body flags
             build_node_minpos_heap(ns);

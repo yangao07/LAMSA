@@ -1320,7 +1320,7 @@ void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, char *read_seq,
 // after filtering:
 //  0/-1/-2,x: dump OR is secondary
 //  1,s: keep and is best, secondary is [s], -1 for NULL
-void res_filter(aln_res *a_res)
+/*void res_filter(aln_res *a_res)
 {
     int i, l, m_i, m_ii;  // number of merged block 
     line_node *m_b; // merged line #, {x,y}, x:best, y:secondary, (-1 for NULL)
@@ -1364,6 +1364,69 @@ void res_filter(aln_res *a_res)
         } else a_res->la[m_b[i].x].merg_msg = (line_node){1,-1};
     }
     free(m_b); free(head);
+}*/
+
+//merg_msg: {1, 0} -> NOT merged or ONLY best
+//          {1, 1} -> merged, best
+//          {2, i} -> merged, alternative and best is `i`
+//          {0,-1} -> dumped
+void res_filter(aln_res *a_res)
+{
+    int i, j, l, m_i=-1, m_ii;
+    l = a_res->l_m; m_i = -1;
+    int *m_n = (int*)malloc(l * sizeof(int));
+    tri_node **m_b = (tri_node**)malloc(l * sizeof(tri_node*));
+    for (i = 0; i < l; ++i) m_b[i] = (tri_node*)malloc(l * sizeof(tri_node));
+    // get merge-info
+    for (i = 0; i < l; ++i) {
+        if (a_res->la[i].merg_msg.x & L_NMERG) // NOT merged
+            a_res->la[i].merg_msg = (line_node){1,0};
+        else if (a_res->la[i].merg_msg.x & L_MERGH) { // merged, head
+            ++m_i;
+            m_b[m_i][0].x = i; m_b[m_i][0].y = a_res->la[i].tol_score; m_b[m_i][0].z = a_res->la[i].tol_NM;
+            m_n[m_i] = 1;
+        } else { // merged, body
+            if (m_i < 0) { fprintf(stderr, "[result_filter] %s BUG(1).\n", READ_NAME); exit(-1); }
+            m_b[m_i][m_n[m_i]].x = i; m_b[m_i][m_n[m_i]].y = a_res->la[i].tol_score; m_b[m_i][m_n[m_i]].z = a_res->la[i].tol_NM;
+            m_n[m_i]++;
+        }
+    }
+    // get b_score and s_score
+    int b_score, b_NM, s_score, s_NM, b_i;
+    for (i = 0; i < m_i; ++i) {
+        b_score = s_score = b_NM = s_NM = 0;
+        b_i = -1;
+        for (j = 0; j < m_n[i]; ++j) {
+            if (m_b[i][j].y > b_score || (m_b[i][j].y == b_score && m_b[i][j].z < b_NM)) { // new best
+                s_score = b_score; s_NM = b_NM;
+                b_score = m_b[i][j].y; b_NM = m_b[i][j].z;
+                b_i = m_b[i][j].x;
+            } else if (m_b[i][j].y > s_score || (m_b[i][j].y == s_score && m_b[i][j].z < s_NM)) { // new secondary 
+                s_score = m_b[i][j].y; s_NM = m_b[i][j].z;
+            }
+        }
+        if (b_i < 0) { fprintf(stderr, "[result_filter] %s BUG(2).\n", READ_NAME); exit(-1); }
+        if (s_score > b_score / 2) { // keep best and alternative
+           for (j = 0; j < m_n[i]; ++j) {
+               if (m_b[i][j].y > b_score / 2) {
+                   if (m_b[i][j].x == b_i) // best
+                       a_res->la[b_i].merg_msg = (line_node){1,1};
+                   else // alternative
+                       a_res->la[m_b[i][j].x].merg_msg = (line_node){2, b_i};
+               }
+           }
+        } else { // only keep the best
+           for (j = 0; j < m_n[i]; ++j) {
+               if (m_b[i][j].x == b_i) // best
+                   a_res->la[b_i].merg_msg = (line_node){1,0};
+               else // alternative
+                   a_res->la[m_b[i][j].x].merg_msg = (line_node){0, -1};
+           }
+        }
+    }
+
+
+    for (i = 0; i < l; ++i) free(m_b[i]); free(m_b); free(m_n);
 }
 
 //read_seq: char or uint8_t?
@@ -1425,7 +1488,7 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
         if (((*f_msg)+j)->fa_msg[0].srand == 1) {
             //head 'S'
             if (((*f_msg)+j)->frag_left_bound > 0) {
-				cigar32_t s_cigar = ((((*f_msg)+j)->frag_left_bound * APP->seed_step - APP->seed_inv) << 4) | CSOFT_CLIP;
+                cigar32_t s_cigar = ((((*f_msg)+j)->frag_left_bound * APP->seed_step - APP->seed_inv) << 4) | CSOFT_CLIP;
                 res_n = la->cur_res_n;
                 _push_cigar_e1(&(la->res[res_n].cigar), &(la->res[res_n].cigar_len), &(la->res[res_n].c_m), 0, &(la->res[res_n].readend), s_cigar);
             }
