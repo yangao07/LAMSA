@@ -401,8 +401,7 @@ void aln_res_free(aln_res *res)
         free(res->la[i].res);
         free(res->la[i].trg);
     }
-    free(res->la);
-    free(res);
+    free(res->la); free(res);
 }
 
 aln_reg *aln_init_reg(int read_len)
@@ -545,24 +544,29 @@ void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para *APP)
     for (i = 0; i < res->l_n; ++i) {
         if (res->la[i].merg_msg.x == 1) {
             // primary res
-            j = 0;
-            fprintf(stdout, "%s\t%d\t%c\t%lld\t", APP->read_name, res->la[i].res[j].chr, "-++"[res->la[i].res[j].nsrand], (long long)res->la[i].res[j].offset); 
-            printcigar(stdout, res->la[i].res[j].cigar, res->la[i].res[j].cigar_len); 
-            fprintf(stdout, "\tAS:i:%d\tNM:i:%d", res->la[i].res[j].score, res->la[i].res[j].NM);
-            if (reg) push_reg_res(reg, res->la[i].res[j]);
-            check_cigar(res->la[i].res[j].cigar, res->la[i].res[j].cigar_len, APP->read_name, APP->read_len); 
-            // alternative res
-            if (res->la[i].merg_msg.y == 1) {
-                for (j = 0; j < res->l_n; ++j) {
-                    int k = 0;
-                    if (res->la[j].merg_msg.y == i) {
-                        fprintf(stdout, "\tXA:Z:%d,%c%lld,", res->la[j].res[k].chr, "-+"[res->la[j].res[k].nsrand], (long long)res->la[j].res[k].offset); 
-                        printcigar(stdout, res->la[j].res[k].cigar, res->la[j].res[k].cigar_len); 
-                        fprintf(stdout, ",%d;", res->la[j].res[k].NM);
-                    }
-                }
-            }
-            fprintf(stdout, "\n"); 
+			for (j = 0; j <= res->la[i].cur_res_n; ++j) {
+				if (res->la[i].res[j].dump) continue;
+				fprintf(stdout, "%s\t%d\t%c\t%lld\t", APP->read_name, res->la[i].res[j].chr, "-++"[res->la[i].res[j].nsrand], (long long)res->la[i].res[j].offset); 
+				printcigar(stdout, res->la[i].res[j].cigar, res->la[i].res[j].cigar_len); 
+				fprintf(stdout, "\tAS:i:%d\tNM:i:%d", res->la[i].res[j].score, res->la[i].res[j].NM);
+				if (reg) push_reg_res(reg, res->la[i].res[j]);
+				check_cigar(res->la[i].res[j].cigar, res->la[i].res[j].cigar_len, APP->read_name, APP->read_len); 
+				// alternative res
+				if (j == 0 && res->la[i].merg_msg.y == 1) {
+					int k,l;
+					for (l = 0; l < res->l_n; ++l) {
+						if (res->la[l].merg_msg.x == 2 && res->la[l].merg_msg.y == i) {
+							for (k = 0; k <= res->la[l].cur_res_n; ++k) {
+								if (res->la[l].res[j].dump) continue;
+								fprintf(stdout, "\tXA:Z:%d,%c%lld,", res->la[l].res[k].chr, "-+"[res->la[l].res[k].nsrand], (long long)res->la[l].res[k].offset); 
+								printcigar(stdout, res->la[l].res[k].cigar, res->la[l].res[k].cigar_len); 
+								fprintf(stdout, ",%d;", res->la[l].res[k].NM);
+							}
+						}
+					}
+				}
+				fprintf(stdout, "\n"); 
+			}
         }
     }
 }
@@ -913,6 +917,7 @@ int frag_dp_per_init(frag_dp_node **f_node, aln_msg *a_msg,
     }
     return 0;
 }
+
 int fnode_add_son(frag_dp_node **f_node,
                   line_node fa, line_node son)
 {
@@ -1618,12 +1623,11 @@ void node_add_score(int score, line_node node, node_score *ns)
     // XXX
     //if (score <= 2) return;
     int i;
-    if (ns->node_n <= ns->max_n-1)
-    {
+    if (ns->node_n <= ns->max_n-1) {
         ns->score[ns->node_n] = score;
         ns->node[(ns->node_n)++] = node;
     } else {
-        fprintf(stderr, "[lsat_aln] node_add_score ERROR.\n");
+        fprintf(stderr, "[lsat_aln] node_add_score ERROR. (%d %d)\n", ns->node_n, ns->max_n);
         exit(0);
     }
 }
@@ -1781,7 +1785,7 @@ void branch_track_new(frag_dp_node **f_node, int x, int y, node_score *ns)
 int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, 
                             lsat_aln_per_para *APP, lsat_aln_para *AP,
                             int left_b, int right_b, 
-                            line_node **line, int *line_end, int per_max_multi)
+                            line_node **line, int *line_end)
 {
     if (left_b+2 >= right_b) return 0;
 
@@ -1812,7 +1816,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         }
     }
     // tree-pruning
-    node_score *ns = node_init_score(per_max_multi); //size of node_score
+    node_score *ns = node_init_score(AP->per_aln_m); //size of node_score XXX
     //node_score *ns = node_init_score(80); //size of node_score
     line_node fa_node;
     for (i = end; i >=start; --i) {
@@ -1821,11 +1825,10 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
                 branch_track_new(f_node, i, j, ns); 
         }
     }
-    build_node_max_heap(ns);
     l_i = 0;
     int score;
     while (1) {
-        _right = node_heap_extract_max(ns, &score);
+        _right = node_pop(ns, &score);
         if (_right.x == START_NODE.x) break;
         node_i = f_node[_right.x][_right.y].node_n-1;
         line_end[l_i] = node_i+1;
@@ -1917,7 +1920,7 @@ int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg, frag_msg **f_msg,
                 line_node **_line, int *_line_end, int per_max_multi) 
 {
     int i, j;
-    int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, line, line_end, per_max_multi);//, 0, 0);
+    int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, line, line_end);//, 0, 0);
     line_set_bound1(line, line_end, 0,  &l, left, right, per_max_multi);
     ///l = line_remove(line, line_end, 0, l);
     return l;
@@ -2328,7 +2331,7 @@ int frag_line_BCC(aln_msg *a_msg,
         line_node fa_node;
         for (i = APP->seed_out-1; i >=0; --i) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
-                if ((*f_node)[i][j].in_de == 0) //leaf node
+                if ((*f_node)[i][j].dp_flag == MIN_FLAG && (*f_node)[i][j].in_de == 0) //leaf node
                     branch_track_new(*f_node, i, j, ns); 
             }
         }
@@ -2341,7 +2344,7 @@ int frag_line_BCC(aln_msg *a_msg,
         //multi-backtrack
         //extend for min-line AND set inter-trigger
         while (1) {
-            //MAX score
+            //MAX score //XXX
             max_node = node_pop(ns, &line_score);    //这里得到的path,就是希望保留的
                                                      //总共ns->node_n条path,即min-line
             if (max_node.x == -1) break;
@@ -2487,6 +2490,10 @@ int frag_line_BCC(aln_msg *a_msg,
         node_free_score(ns);
         return min_l+new_l;
     }
+}
+
+int frag_line_remain(aln_reg *re_reg)
+{
 }
 
 //_dp
@@ -3011,6 +3018,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node, _line, _line_end);
                 frag_check(a_msg, &f_msg, a_res, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
                 aln_res_output(a_res, a_reg, APP);
+				/*
                 // trigger-line
                 for (i=0; i<line_n; ++i) {
                     if (a_res->la[i].merg_msg.x == 1) {
@@ -3023,10 +3031,10 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                             aln_res_output(tri_res, a_reg, APP); aln_res_free(tri_res);
                         }
                     }
-                }
-                //aln_res_free(a_res);
-                // bwt aln for remain gaps
-				//a_res = aln_init_res(1, APP->read_len);
+                }*/
+				// re-DP for remian regions with long-seed-reuslts
+				frag_line_remain(a_reg);
+                // bwt aln for remain regions 
                 bwt_aln_remain(a_reg, remain_res, bwt, bns, pac, read_seq, APP, AP);
                 aln_res_output(remain_res, 0, APP);
             }
@@ -3061,7 +3069,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
 int lsat_gem(const char *ref_prefix, const char *read_prefix, lsat_aln_per_para *APP)
 {
     char cmd[1024];
-    sprintf(cmd, "./gem_map.sh %s %s.seed -d %d", ref_prefix, read_prefix, APP->per_aln_n);
+    sprintf(cmd, "./gem_map.sh %s %s.seed -d %d", ref_prefix, read_prefix, lsat_per_aln[0]); // lsat_per_aln[0]: max number of loctions per seed
     fprintf(stderr, "[lsat_aln] Executing gem-mapper ... ");
     if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(0); }
     fprintf(stderr, "done.\n");

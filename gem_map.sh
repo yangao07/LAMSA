@@ -14,8 +14,8 @@ gem_ref=${1}.gem
 mismatch=0.04
 edit_distance=0.04
 indel_length=3
-#max_matches=200 #for l50
-max_matches=$4
+max_matches=200 #for l50
+#max_matches=$4
 min_strata=0
 
 map_out=${2}.gem

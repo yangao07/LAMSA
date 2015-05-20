@@ -45,6 +45,7 @@ typedef struct {
 } frag_msg;
 
 typedef struct {
+	uint8_t dump;
     uint64_t offset;	//1-based
     int chr;
     int nsrand;			//1:'+' 0:'-'
