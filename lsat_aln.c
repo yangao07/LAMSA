@@ -455,11 +455,11 @@ void push_reg(aln_reg *reg, reg_t r)
 }
 
 // XXX dump remain-regions that are longger than L
-int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para *AP)
+int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para *AP, int reg_thd)
 {
     if (a_reg->reg_n == 0) return 0;
     aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP);
-    int i, reg_thd=300; // XXX
+    int i; // XXX
     if (a_reg->reg[0].beg > AP->bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd)
 		push_reg(remain_reg, (reg_t){a_reg->reg[0].refid, a_reg->reg[0].is_rev, 
 				                     0, a_reg->reg[0].ref_beg, 
@@ -1787,7 +1787,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
                             int left_b, int right_b, 
                             line_node **line, int *line_end)
 {
-    if (left_b+2 >= right_b) return 0;
+    if (left_b+1 >= right_b) return 0; //XXX 
 
     line_node head = START_NODE; // unlimited
     int start, end;
@@ -2783,17 +2783,32 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, lsat_aln_per_para *APP, lsa
 {
     int l_n = 0;
     aln_reg *re_reg = aln_init_reg(APP->read_len);
-    if (get_remain_reg(a_reg, re_reg, AP) == 0) goto End;
+    if (get_remain_reg(a_reg, re_reg, AP, APP->read_len) == 0) goto End;
     int i, j, k;
-    int left, right, l;
+    int left_id, right_id, left, right, l;
     for (i = 0; i < re_reg->reg_n; ++i) {
         // get region boundary (left, right)
-        left = (re_reg->reg[i].beg +  APP->seed_inv - 1) / APP->seed_step -1; 
-        right = (re_reg->reg[i].end - 1) / APP->seed_step + 1;
-
-        // store line-info in _line
-        l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, _line, _line_end, per_max_multi);
-        // copy from _line to line
+        left_id = (re_reg->reg[i].beg +  APP->seed_inv - 1) / APP->seed_step+1; 
+        right_id = (re_reg->reg[i].end - 1) / APP->seed_step+1;
+		if (right_id > APP->seed_all) right_id -= 1;
+		left = right = -2;
+		for (j = 0; j < APP->seed_out; ++j) {
+			if (a_msg[j].read_id >= left_id) {
+				left = j-1;
+				break;
+			}
+		}
+		if (left == -2) continue;
+		for (j = APP->seed_out-1; j >= 0; --j) {
+			if (a_msg[j].read_id <= right_id) {
+				right = j+1;
+				break;
+			}
+		}
+		if (right == -2) continue;
+		// store line-info in _line
+		l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, _line, _line_end, per_max_multi);
+		// copy from _line to line
         for (j = 0; j < l; ++j) {
             line_end[l_n+j] = _line_end[j];
             for (k = 0; k < _line_end[j]+L_EXTRA; ++k) {
@@ -3063,7 +3078,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 if (line_n > 0) {
                     frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node);
                     frag_check(a_msg, &f_msg, re_res, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
-                    aln_res_output(a_res, a_reg, APP);
+                    aln_res_output(re_res, a_reg, APP);
                 }
                 // bwt aln for remain regions 
                 bwt_aln_remain(a_reg, remain_res, bwt, bns, pac, read_seq, APP, AP);

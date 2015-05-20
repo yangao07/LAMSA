@@ -317,7 +317,7 @@ typedef struct {
 int lsat_aln(int argc, char* argv[]);
 aln_reg *aln_init_reg(int read_len);
 void aln_free_reg(aln_reg *a_reg);
-int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lsat_aln_para *AP);
+int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lsat_aln_para *AP, int reg_thd);
 int line_pull_trg(line_node LR);
 
 #endif
