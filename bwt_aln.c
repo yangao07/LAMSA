@@ -293,15 +293,15 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t 
 
 void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP)
 {
-    re_res->l_n = 0;
-    int i;
     aln_reg *re_reg = aln_init_reg(APP->read_len); 
     if (get_remain_reg(a_reg, re_reg, AP) == 0) goto End;
 
+    int i;
+    re_res->l_n = 0;
     // extend the remain_reg or not?XXX
-    for (i = 0; i < re_reg->reg_n; ++i) {
+    for (i = 0; i < re_reg->reg_n; ++i)
         bwt_aln_core(bwt, bns, pac, read_seq, re_reg->reg[i], AP, APP, re_res);
-    }
+
 End:
     aln_free_reg(re_reg);
 }

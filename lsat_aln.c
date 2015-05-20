@@ -1913,11 +1913,11 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
     return l_i;
 }
 
-int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg, frag_msg **f_msg,
+int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
                 lsat_aln_per_para *APP, lsat_aln_para *AP, 
                 int left, int right, 
                 line_node **line, int *line_end, 
-                line_node **_line, int *_line_end, int per_max_multi) 
+                int per_max_multi) 
 {
     int i, j;
     int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, line, line_end);//, 0, 0);
@@ -2492,10 +2492,6 @@ int frag_line_BCC(aln_msg *a_msg,
     }
 }
 
-int frag_line_remain(aln_reg *re_reg)
-{
-}
-
 //_dp
     //all valid aln 
     //@para:
@@ -2659,8 +2655,7 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
                  lsat_aln_per_para *APP, lsat_aln_para *AP,
                  int *l_n, int *line_m,
                  line_node **line, int *line_end,
-                 frag_dp_node ***f_node,
-                 line_node **_line, int *_line_end)
+                 frag_dp_node ***f_node)
 {
     int line_n = *l_n;
     if (line_n == 0) return 0;
@@ -2782,6 +2777,38 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
     return 1;
 }
 
+int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, lsat_aln_per_para *APP, lsat_aln_para *AP, 
+                     line_node **line, int *line_end, frag_dp_node ***f_node, line_node **_line, int *_line_end,
+                     int line_n_max, int per_max_multi)
+{
+    int l_n = 0;
+    aln_reg *re_reg = aln_init_reg(APP->read_len);
+    if (get_remain_reg(a_reg, re_reg, AP) == 0) goto End;
+    int i, j, k;
+    int left, right, l;
+    for (i = 0; i < re_reg->reg_n; ++i) {
+        // get region boundary (left, right)
+        left = (re_reg->reg[i].beg +  APP->seed_inv - 1) / APP->seed_step -1; 
+        right = (re_reg->reg[i].end - 1) / APP->seed_step + 1;
+
+        // store line-info in _line
+        l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, _line, _line_end, per_max_multi);
+        // copy from _line to line
+        for (j = 0; j < l; ++j) {
+            line_end[l_n+j] = _line_end[j];
+            for (k = 0; k < _line_end[j]+L_EXTRA; ++k) {
+                line[l_n+j][k] = _line[j][k];
+            }
+        }
+        l_n += l;
+    }
+End:
+    aln_free_reg(re_reg);
+    return l_n;
+}
+
+
+
 void lsat_unmap(char *read_name)
 {
     fprintf(stdout, "%s\t*\t*\t*\t*\n", read_name);
@@ -2877,19 +2904,18 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             // main line process
             strcpy(READ_NAME, APP->read_name);
             line_n = frag_line_BCC(a_msg, APP, AP, line, line_end, f_node, _line, _line_end, line_n_max, per_max_multi);
-            if (line_n == 0) 
-                lsat_unmap(s_msg->read_name[read_n]);
+            if (line_n == 0) lsat_unmap(s_msg->read_name[read_n]);
             else {
-                frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node, _line, _line_end);
+                frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node);
                 frag_check(a_msg, &f_msg, a_res, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
                 aln_res_output(a_res, a_reg, APP);
                 // trigger-line
                 for (i=0; i<line_n; ++i) {
                     if (a_res->la[i].merg_msg.x == 1) {
                         for (j=0; j<a_res->la[i].trg_n; ++j) {
-                            tri_n = trg_dp_line(*f_node, a_msg, &f_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, _line, _line_end, per_max_multi);
+                            tri_n = trg_dp_line(*f_node, a_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, per_max_multi);
                             if (tri_n == 0) continue;
-                            frag_dp_path(a_msg, &f_msg, APP, AP, &tri_n, &line_m, line, line_end, f_node, _line, _line_end);
+                            frag_dp_path(a_msg, &f_msg, APP, AP, &tri_n, &line_m, line, line_end, f_node);
                             aln_res *tri_res = aln_init_res(1, APP->read_len);
                             frag_check(a_msg, &f_msg, tri_res, bns, pac, read_prefix, read_seq, APP, AP, tri_n, &hash_num, &hash_node);
                             aln_res_output(tri_res, a_reg, APP); aln_res_free(tri_res);
@@ -3007,15 +3033,15 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             //int per_max_multi = APP->seed_out > AP->res_mul_max ? AP->res_mul_max : APP->seed_out; // XXX
 			int per_max_multi = AP->res_mul_max;
             aln_res *a_res = aln_init_res(1, APP->read_len);
+			aln_res *re_res = aln_init_res(1, APP->read_len);
 			aln_res *remain_res = aln_init_res(1, APP->read_len);
             aln_reg *a_reg = aln_init_reg(APP->read_len);
             // main line process
             strcpy(READ_NAME, APP->read_name);
             line_n = frag_line_BCC(a_msg, APP, AP, line, line_end, f_node, _line, _line_end, line_n_max, per_max_multi);
-            if (line_n == 0) 
-                lsat_unmap(s_msg->read_name[read_n]);
+            if (line_n == 0) lsat_unmap(s_msg->read_name[read_n]);
             else {
-                frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node, _line, _line_end);
+                frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node);
                 frag_check(a_msg, &f_msg, a_res, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
                 aln_res_output(a_res, a_reg, APP);
 				/*
@@ -3033,13 +3059,18 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                     }
                 }*/
 				// re-DP for remian regions with long-seed-reuslts
-				frag_line_remain(a_reg);
+				line_n = frag_line_remain(a_reg, a_msg, APP, AP, line, line_end, f_node, _line, _line_end, line_n_max, per_max_multi);
+                if (line_n > 0) {
+                    frag_dp_path(a_msg, &f_msg, APP, AP, &line_n, &line_m, line, line_end, f_node);
+                    frag_check(a_msg, &f_msg, re_res, bns, pac, read_prefix, read_seq, APP, AP, line_n, &hash_num, &hash_node);
+                    aln_res_output(a_res, a_reg, APP);
+                }
                 // bwt aln for remain regions 
                 bwt_aln_remain(a_reg, remain_res, bwt, bns, pac, read_seq, APP, AP);
                 aln_res_output(remain_res, 0, APP);
             }
 			// free 
-			aln_res_free(a_res); aln_res_free(remain_res);
+			aln_res_free(a_res); aln_res_free(re_res); aln_res_free(remain_res);
 			aln_free_reg(a_reg);
             seed_out = 0;
             //if (read_n % 1000 == 0) 
