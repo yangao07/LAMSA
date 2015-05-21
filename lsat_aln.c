@@ -1107,6 +1107,7 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
     }
     s = (s2 > s1) ? s2 : s1;
     e = (e2 < e1) ? e2 : e1;
+	/*
     // new strategy: no mattter how big/small the overlap is, do merge.
     if (s <= e) {
         L_LB(line, line_end, hi) = s1+s2-s, L_RB(line, line_end, hi) = e1+e2-e;
@@ -1116,23 +1117,23 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
     } else {
         L_MF(line, line_end, a) = L_NMERG;
         return 0;
-    }
-    /*
+    }*/
+    
     rat1 = (e-s+1+0.0)/(e1-s1+0.0);
     rat2 = (e-s+1+0.0)/(e2-s2+0.0);
     if (rat1>=0.7 || rat2>=0.7) { //0.7? XXX
-        ///line[hi][line_end[hi]+1].x = s1+s2-s, line[hi][line_end[hi]+1].y = e1+e2-e;
+        //line[hi][line_end[hi]+1].x = s1+s2-s, line[hi][line_end[hi]+1].y = e1+e2-e;
         L_LB(line, line_end, hi) = s1+s2-s, L_RB(line, line_end, hi) = e1+e2-e;
         L_MF(line, line_end, hi) = L_MERGH;
-        ///line[a][line_end[a]+1].x = -2, line[a][line_end[a]+1].y = hi;
+        //line[a][line_end[a]+1].x = -2, line[a][line_end[a]+1].y = hi;
         L_MF(line, line_end, a) = L_MERGB, L_MH(line, line_end, a) = hi;
         return 1;
     }
     else {
-        ///line[a][line_end[a]+1].x = -1;
+       	//line[a][line_end[a]+1].x = -1;
         L_MF(line, line_end, a) = L_NMERG;
         return 0;
-    }*/
+    }
 }
 
 // select best/secondary merged-line, based on line-node number OR based on line-score? XXX
@@ -2698,8 +2699,8 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         pre_x = line[l][line_end[l]-1].x; pre_y = line[l][line_end[l]-1].y;
         //fprintf(stdout, "left: %d, right: %d\n", line[l][line_end[l]].x, line[l][line_end[l]+1].x);
 		//right bound
-        ///right_bound = ((line[l][line_end[l]].y == APP->seed_out) ? (APP->seed_all+1) : (a_msg[line[l][line_end[l]].y].read_id));
-        right_bound = ((E_RB(line, line_end, l) == APP->seed_out) ? (APP->seed_all+1) : a_msg[E_RB(line, line_end, l)].read_id);
+        //right_bound = ((E_RB(line, line_end, l) == APP->seed_out) ? (APP->seed_all+1) : a_msg[E_RB(line, line_end, l)].read_id);
+		right_bound = APP->seed_all+1;
         //MIS-MATCH
         //first end
 		frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+j, frag_num); //XXX set merged msg
@@ -2747,8 +2748,9 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
 		frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+j, frag_num);
         if ((*f_node)[cur_x][cur_y].trg_n)	//set trigger
             frag_trg_set((*f_node)[cur_x][cur_y], (*f_msg)+j, frag_num);
-        ///left_bound = ((line[l][line_end[l]].x == -1) ? 0 : (a_msg[line[l][line_end[l]].x].read_id));
-        left_bound = ((E_LB(line, line_end, l) == -1) ? 0 : a_msg[E_LB(line, line_end, l)].read_id);
+        //left_bound = ((E_LB(line, line_end, l) == -1) ? 0 : a_msg[E_LB(line, line_end, l)].read_id);
+		left_bound = 0;
+
 		//MIS-MATCH
         ((*f_msg)+j)->frag_left_bound = left_bound;
 #ifdef __DEBUG__
