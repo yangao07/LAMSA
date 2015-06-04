@@ -51,9 +51,9 @@
 //    0x4 Inter(1) or Not Inter(0)
 //  [end+2] -> (line-score, x)
 
+#define L_MERGB 0x0
 #define L_NMERG 0x1
 #define L_MERGH 0x2
-#define L_MERGB 0x0
 #define L_INTER 0x4
 #define L_DUMP  0x8
 
@@ -66,6 +66,7 @@
 #define L_MH(l,e,i) (l[i][e[i]+2].y) // line merge-head
 
 #define L_LS(l,e,i) (l[i][e[i]+3].x) // line score
+#define L_BS(l,e,i) (l[i][e[i]+3].y) // best score of merged-lines
 
 
 //  [end+2] -> (line-score, x)

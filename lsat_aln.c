@@ -147,20 +147,17 @@ int split_seed(const char *prefix, seed_msg *s_msg)
     void *new_p;
 
     if ((infp = gzopen(prefix, "r")) == NULL) {
-        fprintf(stderr, "[lsat_aln] Can't open read file %s\n", prefix);
-        exit(-1);
+        fprintf(stderr, "[lsat_aln] Can't open read file %s\n", prefix); exit(1);
     }
     seq = kseq_init(infp);
 
     strcpy(out_f, prefix); strcat(out_f, ".seed");
     if ((outfp = fopen(out_f, "w")) == NULL) {
-        fprintf(stderr, "[lsat_aln] Can't open seed file %s\n", out_f);
-        exit(-1);
+        fprintf(stderr, "[lsat_aln] Can't open seed file %s\n", out_f); exit(1);
     }
     strcpy(seed_info, prefix); strcat(seed_info, ".seed.info");
     if ((infofp = fopen(seed_info, "w")) == NULL) {
-        fprintf(stderr, "[lsat_aln] Can't open seed info file %s\n", seed_info);
-        exit(-1);
+        fprintf(stderr, "[lsat_aln] Can't open seed info file %s\n", seed_info); exit(1);
     }
 
     fprintf(stderr, "[lsat_aln] Spliting seed ... ");
@@ -181,52 +178,45 @@ int split_seed(const char *prefix, seed_msg *s_msg)
             if ((new_p = (int*)realloc(s_msg->seed_len, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_len);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_len[].\n");
-                exit(1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_len[].\n"); exit(1);
             }
             s_msg->seed_len = new_p;
             if ((new_p = (int*)realloc(s_msg->seed_inv , m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_inv);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_inv[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_inv[].\n"); exit(1);
             }
             s_msg->seed_inv = new_p;
 
             if ((new_p = (int*)realloc(s_msg->seed_all, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_all);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_all[].\n");
-                exit(1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_all[].\n"); exit(1);
             }
             s_msg->seed_all = new_p;
             if ((new_p = (int*)realloc(s_msg->last_len, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->last_len);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for last_len[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for last_len[].\n"); exit(1);
             }
             s_msg->last_len = new_p;
             if ((new_p = (int*)realloc(s_msg->read_len, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->read_len);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n"); exit(1);
             }
             s_msg->read_len = new_p;
             if ((new_p = (int*)realloc(s_msg->read_level, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->read_level);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_level[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_level[].\n"); exit(1);
             }
             s_msg->read_level = new_p;
 
             if ((new_p = (char**)realloc(s_msg->read_name, m_read * sizeof(char*))) == NULL)
             {
                 free(s_msg->read_name);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n"); exit(1);
             }
             s_msg->read_name = new_p;
             int i;
@@ -274,8 +264,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
     strcpy(seed_info, prefix); strcat(seed_info, ".seed.info");
     if ((infofp = fopen(seed_info, "r")) == NULL)
     {
-        fprintf(stderr, "[split seed] Can't open %s.\n", seed_info); 
-        exit(-1);
+        fprintf(stderr, "[split seed] Can't open %s.\n", seed_info); exit(1);
     }
     m_read = s_msg->read_m;
     fprintf(stderr, "[lsat_aln] Parsing seeds' information ... ");
@@ -284,8 +273,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
     {
         if (n != 7)
         {
-            fprintf(stderr, "\n[split seed] INFO file error.[2]\n");
-            exit(-1);
+            fprintf(stderr, "\n[split seed] INFO file error.[2]\n"); exit(1);
         }
         if (seed_all > s_msg->seed_max) s_msg->seed_max = seed_all;
         if (len > s_msg->read_max_len) s_msg->read_max_len = len;
@@ -295,51 +283,44 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
             if ((new_p = (int*)realloc(s_msg->seed_len , m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_len);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_len[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_len[].\n"); exit(1);
             }
             s_msg->seed_len =new_p;
             if ((new_p = (int*)realloc(s_msg->seed_inv , m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_inv);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_inv[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_inv[].\n"); exit(1);
             }
             s_msg->seed_inv =new_p;
             if ((new_p = (int*)realloc(s_msg->seed_all, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_all);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_all[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_all[].\n"); exit(1);
             }
             s_msg->seed_all =new_p;
             if ((new_p = (int*)realloc(s_msg->last_len, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->last_len);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for last_len[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for last_len[].\n"); exit(1);
             }
             s_msg->last_len = new_p;
             if ((new_p = (int*)realloc(s_msg->read_len, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->read_len);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for read_len[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for read_len[].\n"); exit(1);
             }
             s_msg->read_len = new_p;
             if ((new_p = (int*)realloc(s_msg->read_level, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->read_level);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for read_level[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for read_level[].\n"); exit(1);
             }
             s_msg->read_level = new_p;
             //read_name
             if ((new_p = (char**)realloc(s_msg->read_name, m_read * sizeof(char*))) == NULL)
             {
                 free(s_msg->read_name);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n");
-                exit(-1);
+                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n"); exit(1);
             }
             s_msg->read_name = new_p;
             int i;
@@ -357,8 +338,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
         s_msg->read_m = m_read;
         if (last_len != len - seed_all * seed_len - (seed_all-1)*seed_inv)
         {
-            fprintf(stderr, "\n[split seed] INFO file error.[3]\n");
-            exit(-1);
+            fprintf(stderr, "\n[split seed] INFO file error.[3]\n"); exit(1);
         }
     }
 
@@ -441,8 +421,7 @@ void push_reg(aln_reg *reg, reg_t r)
     if (reg->reg_n == reg->reg_m) {
         reg->reg_m <<= 1;
         if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
-            fprintf(stderr, "[push_reg] Not enough memory.\n");
-            exit(0);
+            fprintf(stderr, "[push_reg] Not enough memory.\n"); exit(0);
         }
     }
     reg->reg[reg->reg_n].beg = r.beg;
@@ -486,8 +465,7 @@ void push_reg_res(aln_reg *reg, res_t res)
     if (reg->reg_n == reg->reg_m) {
         reg->reg_m <<= 1;
         if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
-            fprintf(stderr, "[push_reg_res] Not enough memory.\n");
-            exit(0);
+            fprintf(stderr, "[push_reg_res] Not enough memory.\n"); exit(0);
         }
     }
 	reg->reg[reg->reg_n].refid = res.chr-1;
@@ -555,12 +533,14 @@ void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para *APP)
 				if (j == 0 && res->la[i].merg_msg.y == 1) {
 					int k,l;
 					for (l = 0; l < res->l_n; ++l) {
+						//fprintf(stdout, "\nmerg_msg: (%d,%d)\n", res->la[l].merg_msg.x, res->la[l].merg_msg.y);
 						if (res->la[l].merg_msg.x == 2 && res->la[l].merg_msg.y == i) {
 							for (k = 0; k <= res->la[l].cur_res_n; ++k) {
 								if (res->la[l].res[j].dump) continue;
 								fprintf(stdout, "\tXA:Z:%d,%c%lld,", res->la[l].res[k].chr, "-+"[res->la[l].res[k].nsrand], (long long)res->la[l].res[k].offset); 
 								printcigar(stdout, res->la[l].res[k].cigar, res->la[l].res[k].cigar_len); 
 								fprintf(stdout, ",%d;", res->la[l].res[k].NM);
+								if (reg) push_reg_res(reg, res->la[l].res[k]);
 							}
 						}
 					}
@@ -610,10 +590,8 @@ void aln_realc_msg(aln_msg *a_msg, int seed_max, int per_aln_M, int per_aln_m)
     for (i = 0; i < seed_max; ++i)
     {
         a_msg[i].at = (aln_t*)realloc(a_msg[i].at, per_aln_m * sizeof(aln_t));
-        if (a_msg[i].at == NULL)
-        {
-            fprintf(stderr, "\n[lsat_aln] Not enough memory.\n");
-            exit(0);
+        if (a_msg[i].at == NULL) {
+            fprintf(stderr, "\n[lsat_aln] Not enough memory.\n"); exit(0);
         }
         for (j = per_aln_M; j < per_aln_m; ++j)
         {
@@ -708,9 +686,7 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
     for (s = s_cigar; *s; ) {
         x = strtol(s, &t, 10);	
         if (x == 0) {
-            fprintf(stderr, "\n[lsat_aln] Cigar ERROR 1.\n");
-            fprintf(stderr, "%s\n",s);
-            exit(-1);
+            fprintf(stderr, "\n[lsat_aln] Cigar ERROR 1.\n"); fprintf(stderr, "%s\n",s); exit(1);
         }
         op = toupper(*t);
         switch (op)
@@ -720,7 +696,7 @@ void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
             case 'D':	op = CDEL;		bd += x;	break;
                         //case 'S':	op = CSOFT_CLIP;		bi += x;	break;
                         //case 'H':	op = CHARD_CLIP;		bi += x;	break;
-            default:	fprintf(stderr, "\n[lsat_aln] Cigar ERROR 2.\n"); exit(-1); break;
+            default:	fprintf(stderr, "\n[lsat_aln] Cigar ERROR 2.\n"); exit(1); break;
         }
         if (a_msg[seed_i].at[aln_i].cigar_len == a_msg[seed_i].at[aln_i].cmax)
         {
@@ -839,9 +815,10 @@ int get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, l
         else if (abs(a_msg[pre].read_id - a_msg[i].read_id) < 10) *flag = F_MISMATCH; // XXX long dis
         else *flag = F_LONG_MISMATCH;
     } else if (dis > mat_dis && dis < AP->SV_len_thd) *flag = F_DELETE;
-    //else if (dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*(seed_len+seed_inv)-seed_len))) *flag = F_INSERT; // nonoverlap
-    else if (dis < -mat_dis && dis >= -AP->SV_len_thd) *flag = F_INSERT; // overlap ins XXX
-    else { *flag = F_UNCONNECT; return 0; }
+    else if ((dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*(seed_len+seed_inv)-seed_len))) // nonoverlaped ins
+          || (dis < -AP->split_len && dis >= -AP->SV_len_thd)) { // overlaped ins XXX
+        *flag = F_INSERT; 
+    } else { *flag = F_UNCONNECT; return 0; }
     dis=abs(dis); dis += (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id - a_msg[i].read_id) < 0)? a_msg[i].at[j].cigar_len : a_msg[pre].at[pre_a].cigar_len);
     return dis; 
 }
@@ -1097,7 +1074,7 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
     float rat1, rat2;
 
     s2 = line[a][0].x, e2 = line[a][line_end[a]-1].x;
-    ///if (line[b][line_end[b]+1].x == -1) { // NO merged-line
+    //if (line[b][line_end[b]+1].x == -1) { // NO merged-line
     if (L_MF(line,line_end,b) & L_NMERG) {// Not merged
         hi = b;
         s1 = line[b][0].x, e1 = line[b][line_end[b]-1].x;
@@ -1119,21 +1096,31 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
         return 0;
     }*/
     
-    rat1 = (e-s+1+0.0)/(e1-s1+0.0);
-    rat2 = (e-s+1+0.0)/(e2-s2+0.0);
-    if (rat1>=0.7 || rat2>=0.7) { //0.7? XXX
+    rat1 = (e-s+1+0.0)/(e1-s1+1+0.0);
+    rat2 = (e-s+1+0.0)/(e2-s2+1+0.0);
+    //if ((rat1>=0.7 || rat2>=0.7)) { //0.7 XXX
+	if (rat1 < 0.7 && rat2 < 0.7) {
+			L_MF(line, line_end, a) = L_NMERG;
+			return 0;
+	} else if 
+		(L_LS(line, line_end, a) <= L_LS(line, line_end, b) / 2 || // merged and  dumped
+		 L_LS(line, line_end, a) <= L_BS(line, line_end, b) / 2 ) {
+
+        L_LB(line, line_end, hi) = s1, L_RB(line, line_end, hi) = e1;
+        L_MF(line, line_end, hi) = L_MERGH;
+        L_MF(line, line_end, a) = L_MERGB, L_MH(line, line_end, a) = hi;
+		L_MF(line, line_end, a) |= L_DUMP;
+		return 1;
+	} else { // merged
         //line[hi][line_end[hi]+1].x = s1+s2-s, line[hi][line_end[hi]+1].y = e1+e2-e;
         L_LB(line, line_end, hi) = s1+s2-s, L_RB(line, line_end, hi) = e1+e2-e;
         L_MF(line, line_end, hi) = L_MERGH;
         //line[a][line_end[a]+1].x = -2, line[a][line_end[a]+1].y = hi;
         L_MF(line, line_end, a) = L_MERGB, L_MH(line, line_end, a) = hi;
+		if (L_BS(line, line_end, b) > L_BS(line, line_end, a))
+			L_BS(line, line_end, a) =  L_BS(line, line_end, b);
         return 1;
-    }
-    else {
-       	//line[a][line_end[a]+1].x = -1;
-        L_MF(line, line_end, a) = L_NMERG;
-        return 0;
-    }
+    } 
 }
 
 // select best/secondary merged-line, based on line-node number OR based on line-score? XXX
@@ -1161,6 +1148,7 @@ void line_filter(line_node **line, int *line_end, int li, int len, trig_node **t
 	int m_head, f_merge, min_l, max_r, head;
     // check merged-lines
     for (i = li; i < li+len; ++i) {
+		if (L_MF(line, line_end, i) & L_DUMP) continue;
         if (L_MF(line, line_end, i) & L_NMERG) { // NOT merged
 			++m_i;
 			m_b[m_i][0].x = i, m_b[m_i][0].y = -2;
@@ -1170,7 +1158,7 @@ void line_filter(line_node **line, int *line_end, int li, int len, trig_node **t
             m_b[m_i][0].x = i, m_b[m_i][0].y = L_LS(line, line_end, i); // NO secondary
 			m_bn[m_i] = 1;
 		} else { // merged, body : inter-line candidate
-            if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(-1); }
+            if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(1); }
 			m_b[m_i][m_bn[m_i]].x = i, m_b[m_i][m_bn[m_i]].y = L_LS(line, line_end, i);
 			m_bn[m_i]++;
         }
@@ -1191,6 +1179,7 @@ void line_filter(line_node **line, int *line_end, int li, int len, trig_node **t
 			} else if (m_b[i][j].y > s_score)
 				s_score = m_b[i][j].y;
 		}
+		// half ? XXX
 		if (s_score > b_score/2) f_merge = 1; // get M largest scores
 		else f_merge = 0;                     // get the largest score
 
@@ -1302,16 +1291,26 @@ void line_filter(line_node **line, int *line_end, int li, int len, trig_node **t
         l = line[m_f[m_ii][0]][line_end[m_f[m_ii][0]]-1].x - line[m_f[m_ii][0]][0].x;
         L = line[m_f[m_ii+1][0]][line_end[m_f[m_ii+1][0]]-1].x - line[m_f[m_ii+1][0]][0].x;
         if (l < 2 && L >= 2) { // DUMP
-			for (i = 1; i < m_fn[m_ii]; ++i)
+			for (i = 1; i < m_fn[m_ii]; ++i) {
 				L_MF(line, line_end, m_f[m_ii][i]) = L_DUMP;
+                for (j = li; j < li+len; ++j) {
+                    if (!(L_MF(line, line_end, j) & L_NMERG) && !(L_MF(line, line_end, j) & L_MERGH) && !(L_MF(line, line_end, j) & L_DUMP) && (L_MH(line, line_end, j) == m_f[m_ii][i]))
+                        L_MF(line, line_end, j) = L_DUMP;
+                }
+            }
         }
         // right-boundary tri-line
         m_ii = m_i;
         l = line[m_f[m_ii][0]][line_end[m_f[m_ii][0]]-1].x - line[m_f[m_ii][0]][0].x;
         L = line[m_f[m_ii-1][0]][line_end[m_f[m_ii-1][0]]-1].x - line[m_f[m_ii-1][0]][0].x;
         if (l < 2 && L >= 2) { // DUMP
-			for (i = 1; i < m_fn[m_ii]; ++i)
-				L_MF(line, line_end, m_f[m_ii][i]) = L_DUMP;
+            for (i = 1; i < m_fn[m_ii]; ++i) {
+                L_MF(line, line_end, m_f[m_ii][i]) = L_DUMP;
+                for (j = li; j < li+len; ++j) {
+                    if (!(L_MF(line, line_end, j) & L_NMERG) && !(L_MF(line, line_end, j) & L_MERGH) && !(L_MF(line, line_end, j) & L_DUMP) && (L_MH(line, line_end, j) == m_f[m_ii][i]))
+                        L_MF(line, line_end, j) = L_DUMP;
+                }
+            }
         }
     }
 	for (i = 0; i < len; ++i) { free(m_b[i]); free(m_f[i]); }
@@ -1327,13 +1326,13 @@ void line_filter1(line_node **line, int *line_end, int li, int len, int per_max_
     int m_i = -1, d_i=0;
     int b_score, s_score;
     for (i = li; i < li+len; ++i) {
-        if (L_MF(line, line_end, i) & L_NMERG) continue; // NOT merged
+		if ((L_MF(line, line_end, i) & L_DUMP) || (L_MF(line, line_end, i) & L_NMERG)) continue; // dumped and  NOT merged
         else if (L_MF(line, line_end, i) & L_MERGH) {    // merged, head
             ++m_i;
             m_b[m_i][0].x = i, m_b[m_i][0].y = L_LS(line, line_end, i);
 			m_n[m_i] = 1;
         } else { // merged, body
-            if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(-1); }
+            if (m_i < 0) { fprintf(stderr, "[line_filter] %s BUG.\n", READ_NAME); exit(1); }
 			m_b[m_i][m_n[m_i]].x = i, m_b[m_i][m_n[m_i]].y = L_LS(line, line_end, i);
 			m_n[m_i]++;
         }
@@ -1517,7 +1516,7 @@ int line_set_bound(line_node **line, int *line_end,
             break;
         }
     }
-    if (i == li+len) {fprintf(stderr, "[line_set_bound] %s BUG 0.\n", READ_NAME); exit(-1);}
+    if (i == li+len) {fprintf(stderr, "[line_set_bound] %s BUG 0.\n", READ_NAME); exit(1);}
     // set right-b
     if (L_MF(line, line_end, i) & L_NMERG)
         s = line[i][0].x, e = line[i][line_end[i]-1].x;
@@ -1580,7 +1579,7 @@ int line_set_bound1(line_node **line, int *line_end,
             break;
         }
     }
-    if (i == li+len) {fprintf(stderr, "[line_set_bound] %s BUG 0.\n", READ_NAME); exit(-1);}
+    if (i == li+len) {fprintf(stderr, "[line_set_bound] %s BUG 0.\n", READ_NAME); exit(1);}
     // set right-b
     if (L_MF(line, line_end, i) & L_NMERG)
         s = line[i][0].x, e = line[i][line_end[i]-1].x;
@@ -1628,8 +1627,7 @@ void node_add_score(int score, line_node node, node_score *ns)
         ns->score[ns->node_n] = score;
         ns->node[(ns->node_n)++] = node;
     } else {
-        fprintf(stderr, "[lsat_aln] node_add_score ERROR. (%d %d)\n", ns->node_n, ns->max_n);
-        exit(0);
+        fprintf(stderr, "[lsat_aln] node_add_score ERROR. (%d %d)\n", ns->node_n, ns->max_n); exit(1);
     }
 }
 
@@ -1786,7 +1784,8 @@ void branch_track_new(frag_dp_node **f_node, int x, int y, node_score *ns)
 int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, 
                             lsat_aln_per_para *APP, lsat_aln_para *AP,
                             int left_b, int right_b, 
-                            line_node **line, int *line_end)
+                            line_node **line, int *line_end,
+							int line_n_max)
 {
     if (left_b+1 >= right_b) return 0; //XXX 
 
@@ -1817,7 +1816,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         }
     }
     // tree-pruning
-    node_score *ns = node_init_score(AP->per_aln_m); //size of node_score XXX
+    node_score *ns = node_init_score(line_n_max); //size of node_score XXX
     //node_score *ns = node_init_score(80); //size of node_score
     line_node fa_node;
     for (i = end; i >=start; --i) {
@@ -1834,17 +1833,18 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         node_i = f_node[_right.x][_right.y].node_n-1;
         line_end[l_i] = node_i+1;
         L_LS(line,line_end,l_i) = score;
+        L_BS(line,line_end,l_i) = score;
         while (_right.x != head.x) {
             if (node_i < 0) { 
-                fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 1.\n", APP->read_name); 
-                exit(0); }
+                fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 1.\n", APP->read_name); exit(1); 
+			}
             line[l_i][node_i--] = _right;
             f_node[_right.x][_right.y].dp_flag = MULTI_OUT;
             _right = f_node[_right.x][_right.y].from;
         }
         if (node_i >= 0) { 
-            fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 2.\n", APP->read_name); 
-            exit(0); }
+            fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 2.\n", APP->read_name); exit(1); 
+		}
         ++l_i;
     }
     node_free_score(ns);
@@ -1918,10 +1918,10 @@ int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
                 lsat_aln_per_para *APP, lsat_aln_para *AP, 
                 int left, int right, 
                 line_node **line, int *line_end, 
-                int per_max_multi) 
+                int line_n_max, int per_max_multi) 
 {
     int i, j;
-    int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, line, line_end);//, 0, 0);
+    int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, line, line_end, line_n_max);//, 0, 0);
     line_set_bound1(line, line_end, 0,  &l, left, right, per_max_multi);
     ///l = line_remove(line, line_end, 0, l);
     return l;
@@ -1997,13 +1997,12 @@ int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
     //while (_right.x != left.x)
     while (_right.x != head.x) {
         if (node_i < 0) { 
-            fprintf(stderr, "\n[frag mini dp] %s node_i BUG 1.\n", APP->read_name);
-            exit(0); 
+            fprintf(stderr, "\n[frag mini dp] %s node_i BUG 1.\n", APP->read_name); exit(1); 
         }
         line[node_i--] = _right;
         _right = f_node[_right.x][_right.y].from;
     }
-    if (node_i >= 0) { fprintf(stderr, "\n[frag mini dp] %s node_i BUG 2.\n", APP->read_name); exit(0); }
+    if (node_i >= 0) { fprintf(stderr, "\n[frag mini dp] %s node_i BUG 2.\n", APP->read_name); exit(1); }
     *de_score += (max_score-old_score);
     return max_n;
 }
@@ -2292,9 +2291,7 @@ int frag_line_BCC(aln_msg *a_msg,
                 frag_dp_init(*f_node, a_msg, i, START_NODE, APP, AP, MIN_FLAG);
                 min_exist = 1;
                 ++min_num;
-            }
-            else
-                frag_dp_init(*f_node, a_msg, i, START_NODE, APP, AP, MULTI_FLAG);
+            } else frag_dp_init(*f_node, a_msg, i, START_NODE, APP, AP, MULTI_FLAG);
         }
         //fraction XXX
         if (!min_exist || min_num * 3 < APP->seed_out)
@@ -2410,8 +2407,8 @@ int frag_line_BCC(aln_msg *a_msg,
                 tmp =line[l_i][k]; line[l_i][k] = line[l_i][node_i-k-1]; line[l_i][node_i-k-1] = tmp;
             }
             line_end[l_i] = node_i;
-            ///line[l_i][line_end[l_i]+2].x = line_score;
-            L_LS(line, line_end, l_i) = line_score;
+            //line[l_i][line_end[l_i]+2].x = line_score;
+            L_LS(line, line_end, l_i) = line_score; L_BS(line, line_end, l_i) = line_score;
             l_i++;
         }
         /* line: [0 ~ end-1] -> node; 
@@ -2684,7 +2681,7 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
             frag_init_msg((*f_msg)+i, (*f_msg)->frag_max); 
             frag_copy_msg(*f_msg, (*f_msg)+i);
         }
-        if ((*f_msg) == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enough memory.(line_m: %d)\n", line_n); exit(0); }
+        if ((*f_msg) == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enough memory.(line_m: %d)\n", line_n); exit(1); }
         (*line_m)= line_n;
         fprintf(stderr, "line-num: %d\t", line_n);
     }
@@ -2741,7 +2738,7 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
             } else if ((*f_node)[cur_x][cur_y].match_flag == F_MATCH)	//: MATCH
 			{
 				frag_set_msg(a_msg, pre_x, pre_y, FRAG_SEED, (*f_msg)+j, frag_num);
-			} else { fprintf(stderr, "\n[frag dp path] Error: Unknown flag, \"%d\"\n", (*f_node)[cur_x][cur_y].match_flag); exit(0);}
+			} else { fprintf(stderr, "\n[frag dp path] Error: Unknown flag, \"%d\"\n", (*f_node)[cur_x][cur_y].match_flag); exit(1);}
 		}
 		//last start
 		cur_x = line[l][0].x; cur_y = line[l][0].y;
@@ -2809,7 +2806,7 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, lsat_aln_per_para *APP, lsa
 		}
 		if (right == -2) continue;
 		// store line-info in _line
-		l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, _line, _line_end, per_max_multi);
+		l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, _line, _line_end, line_n_max, per_max_multi);
 		// copy from _line to line
         for (j = 0; j < l; ++j) {
             line_end[l_n+j] = _line_end[j];
@@ -2864,7 +2861,7 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             _line[i] = (line_node*)malloc((line_len_max+L_EXTRA) * sizeof(line_node));
         }
 
-        if (line == NULL || _line == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enougy memory.\n"); exit(0); }
+        if (line == NULL || _line == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enougy memory.\n"); exit(1); }
 
         //XXX 
         f_msg = (frag_msg*)malloc(sizeof(frag_msg));	
@@ -2878,12 +2875,10 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
         hash_node = (uint64_t**)calloc(hash_size, sizeof(uint64_t*));
 
     if ((samf = samopen(seed_result, "r")) == 0) {
-        fprintf(stderr, "\n[lsat_aln] Can't open seed result sam file %s.\n", seed_result);
-        exit(-1);
+        fprintf(stderr, "\n[lsat_aln] Can't open seed result sam file %s.\n", seed_result); exit(1);
     }
     if (samf->header == 0) {
-        fprintf(stderr, "\n[lsat_aln] Can't read the header of result sam file %s.\n", seed_result);
-        exit(-1);
+        fprintf(stderr, "\n[lsat_aln] Can't read the header of result sam file %s.\n", seed_result); exit(1);
     }
     int r;
     seed_id = seed_out = 0;
@@ -2907,7 +2902,7 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 setAmsg(a_msg, seed_out, i+1, seed_id - s_msg->seed_all[read_n-1], m_msg->sam[i]);
         }
         if (seed_id == s_msg->seed_all[read_n]) { // get a whole-read
-            if (kseq_read(read_seq_t) < 0) { fprintf(stderr, "\n[lsat_aln] Read file ERROR.\n"); exit(-1); }
+            if (kseq_read(read_seq_t) < 0) { fprintf(stderr, "\n[lsat_aln] Read file ERROR.\n"); exit(1); }
             // XXX no seed is 'setAmsg'ed
             read_seq = read_seq_t->seq.s;
 
@@ -2930,7 +2925,7 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 for (i=0; i<line_n; ++i) {
                     if (a_res->la[i].merg_msg.x == 1) {
                         for (j=0; j<a_res->la[i].trg_n; ++j) {
-                            tri_n = trg_dp_line(*f_node, a_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, per_max_multi);
+                            tri_n = trg_dp_line(*f_node, a_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, line_n_max, per_max_multi);
                             if (tri_n == 0) continue;
                             frag_dp_path(a_msg, &f_msg, APP, AP, &tri_n, &line_m, line, line_end, f_node);
                             aln_res *tri_res = aln_init_res(1, APP->read_len);
@@ -3001,7 +2996,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             _line[i] = (line_node*)malloc((line_len_max+L_EXTRA) * sizeof(line_node));
         }
 
-        if (line == NULL || _line == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enougy memory.\n"); exit(0); }
+        if (line == NULL || _line == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enougy memory.\n"); exit(1); }
 
         //XXX 
         f_msg = (frag_msg*)malloc(sizeof(frag_msg));	
@@ -3015,8 +3010,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
         hash_node = (uint64_t**)calloc(hash_size, sizeof(uint64_t*));
 
     if ((mapf = fopen(seed_result, "r")) == NULL) {
-        fprintf(stderr, "\n[lsat_aln] Can't open seed result 'map' file %s.\n", seed_result);
-        exit(-1);
+        fprintf(stderr, "\n[lsat_aln] Can't open seed result 'map' file %s.\n", seed_result); exit(1);
     }
 
     int r;
@@ -3040,7 +3034,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
                 set_aln_msg(a_msg, seed_out, i+1, seed_id - s_msg->seed_all[read_n-1], m_msg->map[i]);
         }
         if (seed_id == s_msg->seed_all[read_n]) { // get a whole-read
-            if (kseq_read(read_seq_t) < 0) { fprintf(stderr, "\n[lsat_aln] Read file ERROR.\n"); exit(-1); }
+            if (kseq_read(read_seq_t) < 0) { fprintf(stderr, "\n[lsat_aln] Read file ERROR.\n"); exit(1); }
             // XXX no seed is 'setAmsg'ed
             read_seq = read_seq_t->seq.s;
 
@@ -3119,7 +3113,7 @@ int lsat_gem(const char *ref_prefix, const char *read_prefix, lsat_aln_per_para 
     char cmd[1024];
     sprintf(cmd, "./gem_map.sh %s %s.seed -d %d", ref_prefix, read_prefix, lsat_per_aln[0]); // lsat_per_aln[0]: max number of loctions per seed
     fprintf(stderr, "[lsat_aln] Executing gem-mapper ... ");
-    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(0); }
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
     fprintf(stderr, "done.\n");
     return 0;
 }
@@ -3130,7 +3124,7 @@ int lsat_bwa(const char *ref_prefix, const char *read_prefix)
     char cmd[1024];
     sprintf(cmd, "./bwa_aln.sh %s %s.seed", ref_prefix, read_prefix);
     fprintf(stderr, "[lsat_aln] Executing bwa aln ... ");
-    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, bwa aln exit abnormally.\n"); exit(0); }
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, bwa aln exit abnormally.\n"); exit(1); }
     fprintf(stderr, "done.\n");
     return 0;
 }
@@ -3140,7 +3134,7 @@ int lsat_soap2dp(const char *ref_prefix, const char *read_prefix)
     char cmd[1024];
     sprintf(cmd, "./soap2dp_aln.sh %s %s", ref_prefix, read_prefix);
     fprintf(stderr, "[lsat_aln] Executing soap2dp aln ... ");
-    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, soap2dp aln exit abnormalloy.\n"); exit(0); }
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, soap2dp aln exit abnormalloy.\n"); exit(1); }
     fprintf(stderr, "done.\n");
     return 0;
 }

@@ -41,7 +41,7 @@ void build_node_max_heap(node_score *ns)
 line_node node_heap_extract_max(node_score *ns, int *score)
 {
     if (ns->node_n < 1) {
-        //fprintf(stderr, "[heap_sort] MAX error.\n"); exit(-1);
+        //fprintf(stderr, "[heap_sort] MAX error.\n"); exit(1);
         return (line_node){-1,0};
     }
     line_node max = ns->node[0];
@@ -82,7 +82,7 @@ line_node node_heap_extract_maxpos(node_score *ns)
 {
     if (ns->node_n < 1)
     {
-        //fprintf(stderr, "[heap_sort] MAX error.\n"); exit(-1);
+        //fprintf(stderr, "[heap_sort] MAX error.\n"); exit(1);
         return (line_node){-1,0};
     }
     line_node max = ns->node[0];
@@ -122,7 +122,7 @@ line_node node_heap_extract_minpos(node_score *ns)
 {
     if (ns->node_n < 1)
     {
-        //fprintf(stderr, "[heap_sort] MAX error.\n"); exit(-1);
+        //fprintf(stderr, "[heap_sort] MAX error.\n"); exit(1);
         return (line_node){-1,0};
     }
     line_node min = ns->node[0];
@@ -171,8 +171,7 @@ void build_node_min_heap(node_score *ns)
 {
     if (ns->node_n < 1)
     {
-        fprintf(stderr, "[heap_sort] MIN error.\n");
-        exit(-1);
+        fprintf(stderr, "[heap_sort] MIN error.\n"); exit(1);
     }
     line_node min = ns->node[0];
     ns->node[0] = ns->node[(ns->node_n)--];

@@ -31,7 +31,7 @@ void gem_build(char *prefix)
     char cmd[1024];
     sprintf(cmd, "./gem_index.sh %s", prefix);
     fprintf(stderr, "[lsat_index] Executing gem-indexer ... ");
-    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, gem-indexer exit abnormally.\n"); exit(-1); }
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, gem-indexer exit abnormally.\n"); exit(1); }
     fprintf(stderr, "done.\n");
 }
 
@@ -40,7 +40,7 @@ void bwa_build(char *prefix)
     char cmd[1024];
     sprintf(cmd, "./bwa_index.sh %s", prefix);
     fprintf(stderr, "[lsat_index] Executing bwa index ... ");
-    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, bwa index exit abnormally.\n"); exit(-1); }
+    if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_index] Indexing undone, bwa index exit abnormally.\n"); exit(1); }
     fprintf(stderr, "done.\n");
 }
 
@@ -49,7 +49,7 @@ void soap_bulid(char *prefix)
     char cmd[1024];
     sprintf(cmd, "./soap2dp_index.sh %s", prefix);
     fprintf(stderr, "[lsat_index] Executing soap2-dp-builder ... ");
-    if (system(cmd) != 0 ) { fprintf(stderr, "\n[lsat_aln] Indexing undone, soap2-dp-builder exit abnormally.\n"); exit(-1);}
+    if (system(cmd) != 0 ) { fprintf(stderr, "\n[lsat_aln] Indexing undone, soap2-dp-builder exit abnormally.\n"); exit(1);}
     fprintf(stderr, " done.\n");
 }
 

@@ -31,7 +31,7 @@ void _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _ciga
         if (i == *cigar_m) {
             (*cigar_m) <<= 1;
 			(*cigar) = (cigar32_t*)realloc(*cigar, (*cigar_m) * sizeof (cigar32_t));
-			if ((*cigar) == NULL)	{fprintf(stderr, "\n[frag_check] Memory is not enougy.\n");exit(-1);}
+			if ((*cigar) == NULL)	{fprintf(stderr, "\n[frag_check] Memory is not enougy.\n");exit(1);}
         }
         (*cigar)[i] = _cigar;
         ++(*cigar_n);
@@ -171,8 +171,7 @@ uint32_t fgetline(FILE *fp, char **line, int *len, int *m)
 				(*len) <<= 1;
 				(*line) = (char*)realloc(*line, (*len) * sizeof(char));
 				if (*line == NULL) {
-					fprintf(stderr, "[gem_parse] Error: not enough memory.\n");
-					exit(0);
+					fprintf(stderr, "[gem_parse] Error: not enough memory.\n"); exit(0);
 				}
 			}
 			(*line)[i++] = ch;
@@ -222,8 +221,7 @@ int main(int argc, char* argv[])
 				m_msg->map_m <<= 1;
 				m_msg->map = (map_t*)realloc(m_msg->map, m_msg->map_m * sizeof(map_t));
 				if (m_msg->map == NULL) {
-					fprintf(stderr, "[gem_map_read] Error: not enough memory.\n");
-					exit(0);
+					fprintf(stderr, "[gem_map_read] Error: not enough memory.\n"); exit(0);
 				}
 				for (i = m_msg->map_m>>1; i < m_msg->map_m; ++i) {
 					m_msg->map[i].cigar = (cigar_t*)malloc(sizeof(cigar_t));
@@ -294,8 +292,7 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 			m_msg->map_m <<= 1;
 			m_msg->map = (map_t*)realloc(m_msg->map, m_msg->map_m * sizeof(map_t));
 			if (m_msg->map == NULL) {
-				fprintf(stderr, "[gem_map_read] Error: not enough memory.\n");
-				exit(0);
+				fprintf(stderr, "[gem_map_read] Error: not enough memory.\n"); exit(0);
 			}
 			for (i = m_msg->map_m>>1; i < m_msg->map_m; ++i) {
 				m_msg->map[i].cigar = (cigar_t*)malloc(sizeof(cigar_t));

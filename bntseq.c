@@ -218,8 +218,7 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 		fp = fopen(ann_filename, "r");
         if (fp == NULL)
         {
-            fprintf(stderr, "\n[bntseq] Wrong index path.\n");
-            exit(-1);
+            fprintf(stderr, "\n[bntseq] Wrong index path.\n"); exit(1);
         }
 		fscanf(fp, "%lld%d", &xx, &bns->n_seqs);
 		bns->l_pac = xx;
@@ -250,8 +249,7 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 		l_pac = xx;
 		//xassert(l_pac == bns->l_pac && n_seqs == bns->n_seqs, "inconsistent .ann and .amb files.");
         if (l_pac != bns->l_pac || n_seqs != bns->n_seqs) {
-            fprintf(stderr, "\n[bntseq] inconsistent .ann and .amb files.\n");
-            exit(-1);
+            fprintf(stderr, "\n[bntseq] inconsistent .ann and .amb files.\n"); exit(1);
         }
 		bns->ambs = (bntamb1_t*)calloc(bns->n_holes, sizeof(bntamb1_t));
 		for (i = 0; i < bns->n_holes; ++i) {
@@ -420,10 +418,8 @@ void pac2fa_core(const bntseq_t *bns, const uint8_t *pac,
 	int64_t pac_coor;
 	int64_t i,k;
 	
-	if (start > bns->anns[seq_n-1].len)
-	{
-		fprintf(stderr, "\n[bntseq] Error: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_n-1].len);
-		exit(1);
+	if (start > bns->anns[seq_n-1].len) {
+		fprintf(stderr, "\n[bntseq] Error: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_n-1].len); exit(1);
 	}
 	pac_coor = bns->anns[seq_n-1].offset + start;
 	if (start + *len > bns->anns[seq_n-1].len)	//candidate seq is out of range.
@@ -435,8 +431,7 @@ void pac2fa_core(const bntseq_t *bns, const uint8_t *pac,
 	{
 		/*for (i = *len-1, k = pac_coor; i >= 0; i--, k++)
 			seq[i] = 3-(pac[k>>2] >> ((~k&3) << 1) & 0x3);*/
-		fprintf(stderr, "\n[pac2fa] Error.\n"); 
-		exit(0);
+		fprintf(stderr, "\n[pac2fa] Error.\n"); exit(1);
 	}
 	else
 	{

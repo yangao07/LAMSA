@@ -531,7 +531,7 @@ void _push_cigar(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t *_ci
 		if (i == *cigar_m) {
 			(*cigar_m) <<= 1;
 			(*cigar) = (cigar32_t*)realloc(*cigar, (*cigar_m) * sizeof (cigar32_t));
-			if ((*cigar) == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(-1);}
+			if ((*cigar) == NULL)	{fprintf(stderr, "[frag_check] Memory is not enougy.\n");exit(1);}
 		}	
 		(*cigar)[i] = _cigar[j];
 	}
@@ -1032,7 +1032,7 @@ int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target
 /***************************************
  * Extend both left and right boundary *
  ***************************************/
-
+// ksw_both_extend now is UNUSED.
 int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
                     const int8_t *mat, int gapo, int gape, int w, 
                     int lh0, int rh0, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
@@ -1107,9 +1107,8 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = lm_cigar;
         _push_cigar1(cigar_, n_cigar_, m_cigar_, (res==0?(((tlen-lte)<<4)|CDEL):(((qlen-lqe)<<4)|CINS)));
         return 0;
-    }
-   	else if (abs(qlen-tlen) < 100 && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
-		//  do global, disallow cigar like '3S4H50M'
+    } else if (abs(qlen-tlen) < 100 && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
+		//  sw-global, disallow cigar like '3S4H50M'
 		if (lcigar) free(lcigar);
 		w = abs(qlen-tlen)+3;
 		ksw_global(qlen, query, tlen, target, m, mat, gapo, gape, w, n_cigar_, cigar_);
@@ -1128,37 +1127,59 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = rm_cigar;
         free(lcigar); 
         return 0;
-    } 
-	else if (abs(qlen-tlen) < 100 && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
-		// do global
+    } else if (abs(qlen-tlen) < 100 && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
+		// sw-global
 		if (lcigar) free(lcigar); if (rcigar) free(rcigar);
 		w = abs(qlen-tlen)+3;
 		ksw_global(qlen, query, tlen, target, m, mat, gapo, gape, w, n_cigar_, cigar_);
 		*m_cigar_ = *n_cigar_;
 		return 0;
 	}
+    // right
+    _invert_cigar(&rcigar, rn_cigar);
+    
     //merge and construct result-cigar
-    int Sn = qlen - lqe - rqe; 
-    int Hn = tlen - lte - rte;
-	cigar32_t Scigar, Hcigar;
     cigar32_t *cigar = (cigar32_t*)malloc(10 * sizeof(cigar32_t));
     int cigar_n = 0, cigar_m = 10;
 
+    // left
     _push_cigar(&cigar, &cigar_n, &cigar_m, lcigar, ln_cigar);
 
-    Scigar = Sn << 4 | CSOFT_CLIP;
-    _push_cigar0(&cigar, &cigar_n, &cigar_m, Scigar);
+    // middle S/H
+    int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
 
-    Hcigar = Hn << 4 | CHARD_CLIP;
-    _push_cigar0(&cigar, &cigar_n, &cigar_m, Hcigar);
-
-    _invert_cigar(&rcigar, rn_cigar);
-    _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
+    if (abs(Sn - Hn) < 100) { // for small 'nS' and 'nH', change into indels
+        cigar32_t *g_cigar; int g_clen;
+        if (Sn > 0 && Hn > 0) {
+            ksw_global(Sn, query+lqe, Hn, target+lte, m, mat, gapo, gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);
+            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+            _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
+        } else if (Sn <= 0 && Hn <= 0) {
+            ksw_global(rqe+Sn, query+lqe, rte+Hn, target+lte, m, mat, gapo, gape, abs(rqe+Sn-rte-Hn)+3, &g_clen, &g_cigar);
+            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+        } else if (Sn > 0 && Hn <= 0) {
+            _push_cigar1(&cigar, &cigar_n, &cigar_m, (Sn <<4)|CINS);
+            ksw_global(rqe, query+lqe+Sn, rte+Hn, target+lte, m, mat, gapo, gape, abs(rqe-rte-Hn)+3, &g_clen, &g_cigar);
+            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+        } else {// Sn <=0 && Hn > 0
+            _push_cigar1(&cigar, &cigar_n, &cigar_m, (Hn <<4)|CDEL);
+            ksw_global(rqe+Sn, query+lqe, rte, target+lte+Hn, m, mat, gapo, gape, abs(rqe+Sn-rte)+3, &g_clen, &g_cigar);
+            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+        }
+    } else {
+        _push_cigar0(&cigar, &cigar_n, &cigar_m, (Sn << 4) | CSOFT_CLIP);
+        _push_cigar0(&cigar, &cigar_n, &cigar_m, Hn << 4 | CHARD_CLIP);
+        _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
+    }
 
     *cigar_ = cigar; *n_cigar_ = cigar_n; *m_cigar_ = cigar_m;
     if (lcigar) free(lcigar); 
-	if (rcigar) free(rcigar);
-    if (Sn > 100) return 1; // gap exists
+    if (rcigar) free(rcigar);
+    if (Sn >= 100) return 1; // gap exists
     else return 0; 
 }
 #endif

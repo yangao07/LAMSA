@@ -156,8 +156,7 @@ int init_hash_core(uint8_t *hash_seq, int hash_offset,
         for (i = 0; i < hash_len; ++i)
             fprintf(stderr, "%c", "ACGT"[hash_seq[i]]);
         fprintf(stderr, "\n%d %d", key_int, kmer_int);
-		fprintf(stderr, "\n2nd search wrong.\n");
-        exit(0);
+		fprintf(stderr, "\n2nd search wrong.\n"); exit(1);
     }
 	(*hash_pos)[((*hash_node)[key_int][node_i] & 0xffffffff) + (*hash_node_num)[key_int][node_i]] = hash_offset;
     //printf("hash_pos: %lld %d -> %d\n", ((*hash_node)[key_int][node_i] & 0xffffffff), (*hash_node_num)[key_int][node_i], hash_offset);
@@ -309,29 +308,33 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, in
 			else *con_flag = F_MISMATCH;
 	} else { // SV or F_UNCONNECT
 		if (dis > 0) *con_flag = F_DELETE;
-		else if (dis >= -(abs(b_i-a_i)-hash_len)) *con_flag = F_INSERT;
+		else if (dis >= -(abs(b_i-a_i)-hash_len)) *con_flag = F_INSERT; // unoverlaped-ins
+        else *con_flag = F_UNCONNECT;
+        // XXX
 		// overlapped
+        /*
 		else if (ref_offset > 0) { // INS region
 			if (b_i>a_i) {
 				// if (read_len-ref_len+b_i+b_offset >= b_i-(a_i+hash_len-1) && read_len-(a_i+hash_len-1+a_offset)>= b_i-(a_i+hash_len-1))
-				if (read_len-ref_len+b_offset >= -(a_i+hash_len-1) && read_len-a_offset>= b_i)
+                // 100 == AP->split_len
+				if (dis < -100 && read_len-ref_len+b_offset >= -(a_i+hash_len-1) && read_len-a_offset>= b_i)
 					*con_flag = F_INSERT;
 				else *con_flag = F_UNCONNECT;
-			} else if (read_len-ref_len+a_offset >= -(b_i+hash_len-1) && read_len-b_offset>= a_i)
+			} else if (dis <-100 && read_len-ref_len+a_offset >= -(b_i+hash_len-1) && read_len-b_offset>= a_i)
 				*con_flag = F_INSERT;
 			else *con_flag = F_UNCONNECT;
 		} else { // DEL/MISMATCH region
 			if (b_i> a_i) {
 				// if (b_i+b_offset >= b_i-(a_i-1) && reflen-(a_i-1+a_offset) >= b_i-(a_i-1))
-				if ((b_offset >= -(a_i-1)) && (ref_len-a_offset>=b_i))
+				if (dis < -100 && (b_offset >= -(a_i-1)) && (ref_len-a_offset>=b_i))
 					*con_flag = F_INSERT;
 				else *con_flag = F_UNCONNECT;
 			} else {
-				if ((a_offset >= -(b_i-1)) && (ref_len-b_offset>=a_i))
+				if (dis < -100 && (a_offset >= -(b_i-1)) && (ref_len-b_offset>=a_i))
 					*con_flag = F_INSERT; // overlap-allowed
 				else *con_flag = F_UNCONNECT;
 			}
-		}
+		}*/
 	}
 	return abs(dis);
 } 
@@ -754,7 +757,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 			j = h_node[tail.x][tail.y].from.y;
 			while (i != head.x)
 			{
-				if (node_i < 0) { fprintf(stderr, "[hash main line] bug: node_i < 0. %d %d\n", _head, _tail); exit(-1); }
+				if (node_i < 0) { fprintf(stderr, "[hash main line] bug: node_i < 0. %d %d\n", _head, _tail); exit(1); }
 				line[node_i].x = i;
 				line[node_i].y = j;
 				--node_i;
@@ -763,7 +766,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 				i = last_x;
 				j = last_y;
 			}
-			if (node_i >= 0) {fprintf(stderr, "[hash main line] bug: node_i >= 0.\n"); exit(-1);}
+			if (node_i >= 0) {fprintf(stderr, "[hash main line] bug: node_i >= 0.\n"); exit(1);}
 			return h_node[tail.x][tail.y].node_n;
 		}
 	}
@@ -779,8 +782,7 @@ int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right,
 	ilen = read_left - read_right + 1;
 	if ((dlen < 0) && (ilen < 0))
 	{
-		fprintf(stderr, "[make_indel_cigar] Error: dlen: %d, ilen: %d.\n", dlen, ilen);
-		exit(-1);
+		fprintf(stderr, "[make_indel_cigar] Error: dlen: %d, ilen: %d.\n", dlen, ilen); exit(1);
 	}
 	int len = ilen - dlen;
 	if (len > 0)
@@ -815,8 +817,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 	int *start_a = (int*)malloc((hash_seed_n + 2) * sizeof(int));	//2: for head and tail
 	int *len_a = (int*)malloc((hash_seed_n + 2) * sizeof(int));
 	if (start_a == NULL || len_a == NULL) {
-        fprintf(stderr, "[hash_split_map] Not enougy memory.(ref_len %d, read_len %d)\n", ref_len, read_len); 
-        exit(-1);
+        fprintf(stderr, "[hash_split_map] Not enougy memory.(ref_len %d, read_len %d)\n", ref_len, read_len); exit(1);
     }
 
 	(*split_clen) = 0;
@@ -850,7 +851,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 		h_node = (hash_dp_node **)malloc((hash_seed_n + 2) * sizeof(hash_dp_node*));
 		for (i = 0; i < hash_seed_n+2; ++i)
 			h_node[i] = (hash_dp_node*)malloc(len_a[i] * sizeof(hash_dp_node));
-		if (line == NULL || h_node == NULL) {fprintf(stderr, "[hash_split_map] Not enougy memory.\n"); exit(-1);} 
+		if (line == NULL || h_node == NULL) {fprintf(stderr, "[hash_split_map] Not enougy memory.\n"); exit(1);} 
 
 		m_len = hash_main_line(hash_pos, start_a, len_a, ref_len, read_len, ref_offset, hash_seed_n, hash_len, hash_step, h_node, line, _head, _tail);
 	}
@@ -928,30 +929,47 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					ksw_extend_core(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, bwasw_sc_mat, 5, 2, 5, 2, 3, 5, 100, 10, &lqe, &lte, &_cigar, &_clen, &_cm);
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					free(_cigar);
-					// right-extend
-					_q_len = r_readi - (l_readi + 1) + tail_in;
-					_t_len = _q_len + (ref_offset>0?hash_len:0);
-					uint8_t *re_qseq = (uint8_t*)malloc(_q_len * sizeof(uint8_t));
-					uint8_t *re_tseq = (uint8_t*)malloc(_t_len * sizeof(uint8_t));
-					if (r_readi+tail_in-_q_len < 0 || r_refi+tail_in-_t_len < -ref_offset-(ref_offset>0?hash_len:0)) {
-						fprintf(stderr, "%s\n", READ_NAME);
-						exit(0);
-					}
-					for (j = 0; j < _q_len; ++j) re_qseq[j] = read_seq[r_readi+tail_in-1-j];
-					for (j = 0; j < _t_len; ++j) re_tseq[j] = ref_seq[r_refi+tail_in-1-j];
-					ksw_extend_core(_q_len, re_qseq, _t_len, re_tseq, 5, bwasw_sc_mat, 5, 2, 5, 2, 3, 5, 100, 10, &rqe, &rte, &_cigar, &_clen, &_cm);
-					_invert_cigar(&_cigar, _clen);
-					free(re_qseq); free(re_tseq);
+                    // right-extend
+                    _q_len = r_readi - (l_readi + 1) + tail_in;
+                    _t_len = _q_len + (ref_offset>0?hash_len:0);
+                    uint8_t *re_qseq = (uint8_t*)malloc(_q_len * sizeof(uint8_t));
+                    uint8_t *re_tseq = (uint8_t*)malloc(_t_len * sizeof(uint8_t));
+                    if (r_readi+tail_in-_q_len < 0 || r_refi+tail_in-_t_len < -ref_offset-(ref_offset>0?hash_len:0)) {
+                        fprintf(stderr, "[hash_split_map] BUG. %s\n", READ_NAME); exit(1);
+                    }
+                    for (j = 0; j < _q_len; ++j) re_qseq[j] = read_seq[r_readi+tail_in-1-j];
+                    for (j = 0; j < _t_len; ++j) re_tseq[j] = ref_seq[r_refi+tail_in-1-j];
+                    ksw_extend_core(_q_len, re_qseq, _t_len, re_tseq, 5, bwasw_sc_mat, 5, 2, 5, 2, 3, 5, 100, 10, &rqe, &rte, &_cigar, &_clen, &_cm);
+                    _invert_cigar(&_cigar, _clen);
+                    free(re_qseq); free(re_tseq);
+ 				
 					// merge, add overlap-flag('S/H')
 					int Sn = _q_len + head_in - lqe - rqe, Hn = r_refi + head_in+tail_in - l_refi - 1 - lte - rte;
-					_push_cigar0(split_cigar, split_clen, split_m, (Sn<<4)|CSOFT_CLIP); _push_cigar0(split_cigar, split_clen, split_m, (Hn<<4)|CHARD_CLIP);
-					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
-					overlap = 0;
-					free(_cigar);
-				} else {// no blank & overlap, push SV cigar
-					_push_cigar1(split_cigar, split_clen, split_m, (head_in<<4)|CMATCH);
-					overlap = make_indel_cigar(l_refi, l_readi, r_refi, r_readi, &_clen, &g_cigar, split_len, &res);
-					_push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
+                    if (abs(Sn) < 100 && abs(Hn) < 100) { // for small 'nS' and 'nH', change into indels
+                        fprintf(stderr, "[hash_split_map] Overlaped-ins: %s\n", READ_NAME);
+                        if (Sn > 0 && Hn > 0) {
+                            cigar32_t *g_c; int g_clen;
+                            ksw_global(Sn, read_seq+l_readi+1-head_in+lqe, Hn, ref_seq+l_refi+1-head_in+lte, 5, bwasw_sc_mat, 5, 2, abs(Sn-Hn)+3, &g_clen, &g_c);
+                            _push_cigar(split_cigar, split_clen, split_m, g_c, g_clen);
+                            free(g_c);
+                        } else if (Sn - Hn > 0) {
+                            _push_cigar1(split_cigar, split_clen, split_m, ((Sn-Hn)<<4)|CINS);
+                            _push_cigar1(split_cigar, split_clen, split_m, (Hn<<4)|CMATCH); // -nM XXX
+                        } else { // Sn - Hn <= 0
+                            _push_cigar1(split_cigar, split_clen, split_m, ((Hn-Sn)<<4)|CDEL);
+                            _push_cigar1(split_cigar, split_clen, split_m, (Sn<<4)|CMATCH); // -nM XXX
+                        }
+                    } else {
+                        _push_cigar0(split_cigar, split_clen, split_m, (Sn<<4)|CSOFT_CLIP); 
+                        _push_cigar0(split_cigar, split_clen, split_m, (Hn<<4)|CHARD_CLIP);
+                    }
+                   _push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
+                    overlap = 0;
+                    free(_cigar);
+                } else {// no blank & overlap, push SV cigar
+                    _push_cigar1(split_cigar, split_clen, split_m, (head_in<<4)|CMATCH);
+                    overlap = make_indel_cigar(l_refi, l_readi, r_refi, r_readi, &_clen, &g_cigar, split_len, &res);
+                    _push_cigar(split_cigar, split_clen, split_m, g_cigar, _clen);
 					_push_cigar1(split_cigar, split_clen, split_m, (tail_in<<4)|CMATCH);
 				}
 				start_i = i+1;
@@ -1051,12 +1069,8 @@ int hash_right_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		if (((*cigar)[i] & 0xf) == CMATCH) readINcigar += ((*cigar)[i] >> 4), refINcigar += ((*cigar)[i] >> 4);
 		else if (((*cigar)[i] & 0xf) == CINS || ((*cigar)[i] & 0xf) == CSOFT_CLIP) readINcigar += ((*cigar)[i] >> 4);
 		else if (((*cigar)[i] & 0xf) == CDEL || ((*cigar)[i] & 0xf) == CHARD_CLIP) refINcigar += ((*cigar)[i] >> 4);
-		else 
-		{
-			fprintf(stderr, "[hash_right_bound_map] cigar error: ");
-			printcigar(stderr, *cigar, *cigar_len);
-			fprintf(stderr, "\n");
-			exit(-1);
+		else {
+			fprintf(stderr, "[hash_right_bound_map] cigar error: "); printcigar(stderr, *cigar, *cigar_len); fprintf(stderr, "\n"); exit(1);
 		}
 	}
 	if (readINcigar < read_len)     
@@ -1112,7 +1126,7 @@ int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		if ((hash_cigar[i] & 0xf) == CMATCH) readINcigar+=(hash_cigar[i] >> 4), refINcigar+=(hash_cigar[i] >> 4);
 		else if ((hash_cigar[i] & 0xf) == CINS || (hash_cigar[i] & 0xf) == CSOFT_CLIP) readINcigar += (hash_cigar[i] >> 4);
 		else if ((hash_cigar[i] & 0xf) == CDEL || (hash_cigar[i] & 0xf) == CHARD_CLIP) refINcigar += (hash_cigar[i] >> 4);
-		else fprintf(stderr, "[hash_left_bound_map] cigar error: "), printcigar(stderr, hash_cigar, hash_cigar_len), fprintf(stderr, "\n"), exit(-1);
+		else fprintf(stderr, "[hash_left_bound_map] cigar error: "), printcigar(stderr, hash_cigar, hash_cigar_len), fprintf(stderr, "\n"), exit(1);
 	}
 	if (readINcigar < read_len)     //'S' exists
 	{
