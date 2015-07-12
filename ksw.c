@@ -819,14 +819,15 @@ int ksw_extend_softP(int qlen, const uint8_t *query, int tlen, const uint8_t *ta
  * add 'cigar_gen' to ksw_extend *
  *********************************/
 int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                    int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
-                    int w, int end_bonus, int zdrop, int h0, 
+                    int m, const int8_t *mat, int w, int h0,
+                    lsat_aln_para AP,
                     int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
 	int8_t *qp; // query profile
-	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
+    int gapo = AP.gapo, gape = AP.gape, end_bonus = AP.end_bonus, zdrop = AP.zdrop;
+	int i, j, k, o_ins = gapo, o_del = gapo, e_ins = gape, e_del = gape, oe_del = gapo + gape, oe_ins = oe_del, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
 	assert(h0 > 0);
 	// allocate memory
 	qp = malloc(qlen * m);
@@ -1001,18 +1002,18 @@ int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
 }
 // XXX polish 'extend' 
 int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-		         int m, const int8_t *mat, int gapo, int gape, int w, int h0,
+		         int m, const int8_t *mat, int w, int h0, lsat_aln_para AP,
                  int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_,  int *m_cigar_)
 {
     *n_cigar_ = *m_cigar_ = 0;
-    ksw_extend_core(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, 5, 100, h0, _qle, _tle, cigar_, n_cigar_, m_cigar_);
+    ksw_extend_core(qlen, query, tlen, target, m, mat, w, h0, AP, _qle, _tle, cigar_, n_cigar_, m_cigar_);
     if (*_qle == qlen) return 0;      // query-to-end
     else if (*_tle == tlen) return 1; // target-to-end
     else return 2;              
 }
 
 int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-		         int m, const int8_t *mat, int gapo, int gape, int w, int h0,
+		         int m, const int8_t *mat, int w, int h0, lsat_aln_para AP,
                  int *_qre, int *_tre, cigar32_t **cigar_, int *n_cigar_,  int *m_cigar_)
 {
 	int i;
@@ -1021,7 +1022,7 @@ int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target
 	uint8_t *r_target = (uint8_t*)malloc(tlen * sizeof(uint8_t));
 	for (i = 0; i < qlen; ++i) r_query[qlen-1-i] = query[i];
 	for (i = 0; i < tlen; ++i) r_target[tlen-1-i] = target[i];
-    ksw_extend_core(qlen, r_query, tlen, r_target, m, mat, gapo, gape, gapo, gape, w, 5, 100, h0, _qre, _tre, cigar_, n_cigar_, m_cigar_);
+    ksw_extend_core(qlen, r_query, tlen, r_target, m, mat, w, h0, AP, _qre, _tre, cigar_, n_cigar_, m_cigar_);
 	free(r_query); free(r_target);
 
     if (*_qre == qlen) return 0;      // query-to-end
@@ -1034,8 +1035,8 @@ int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target
  ***************************************/
 // ksw_both_extend now is UNUSED.
 int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
-                    const int8_t *mat, int gapo, int gape, int w, 
-                    int lh0, int rh0, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
+                    const int8_t *mat, int w, int lh0, int rh0, lsat_aln_para AP,
+                    cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
     int i;
     //    fprintf(stderr, "target: ");
@@ -1050,7 +1051,7 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     cigar32_t *lcigar=0;
     int ln_cigar, lm_cigar;
     //left boundary extension
-    ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
+    ksw_extend_c(qlen, query, tlen, target, m, mat, w, lh0, AP, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
     //printf("left: \n\tqe: %d\tte: %d\n\t", lqe, lte); _printcigar(stdout, lcigar, ln_cigar); printf("\n");
 
     //right boundary extension
@@ -1060,7 +1061,7 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     int rqe, rte, rn_cigar, rm_cigar;
     for (i = 0; i < qlen; ++i) r_query[i] = query[qlen-i-1];
     for (i = 0; i < tlen; ++i) r_target[i] = target[tlen-i-1];
-    ksw_extend_c(qlen, r_query, tlen, r_target, m, mat, gapo, gape, w, rh0, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
+    ksw_extend_c(qlen, r_query, tlen, r_target, m, mat, w, rh0, AP, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
     //printf("right: \n\tqe: %d\tte: %d\n\t", rqe, rte); _printcigar(stdout, rcigar, rn_cigar); printf("\n");
     _invert_cigar(&rcigar, rn_cigar);
     free(r_query), free(r_target);
@@ -1092,15 +1093,16 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 }
 
 int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
-                    const int8_t *mat, int gapo, int gape, int w, 
-                    int lh0, int rh0, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
+                    const int8_t *mat, int w, int lh0, int rh0, lsat_aln_para AP,
+                    cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
     int i, res;
     if (*n_cigar_) *n_cigar_ = 0;
+    int gapo = AP.gapo, gape = AP.gape;
     //left boundary extension
     int lqe, lte, ln_cigar, lm_cigar;
     cigar32_t *lcigar=0;
-    res = ksw_extend_c(qlen, query, tlen, target, m, mat, gapo, gape, w, lh0, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
+    res = ksw_extend_c(qlen, query, tlen, target, m, mat, w, lh0, AP, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
     if (res < 2) { // to-end extension
         *cigar_ = lcigar;
         *n_cigar_ = ln_cigar;
@@ -1118,7 +1120,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     //right boundary extension
     int rqe, rte, rn_cigar, rm_cigar;
     cigar32_t *rcigar=0;
-	res = ksw_extend_r(qlen, query, tlen, target, m, mat, gapo, gape, w, rh0, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
+	res = ksw_extend_r(qlen, query, tlen, target, m, mat, w, rh0, AP, &rqe, &rte, &rcigar, &rn_cigar, &rm_cigar);
     if (res < 2) { // to-end extension
         _push_cigar1(&rcigar, &rn_cigar, &rm_cigar, (res==0?(((tlen-rte)<<4)|CDEL):(((qlen-rqe)<<4)|CINS)));
         _invert_cigar(&rcigar, rn_cigar);

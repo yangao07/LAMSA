@@ -129,7 +129,7 @@ void bwt_set_bound(bwt_seed_t *seed_v, line_node *line, int node_n, int seed_len
 }
 
 void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *read_seq, int reg_beg, int reg_len,
-                 bwt_bound *left, bwt_bound *right, lsat_aln_para *AP, lsat_aln_per_para *APP, line_aln_res *la)
+                 bwt_bound *left, bwt_bound *right, lsat_aln_para AP, lsat_aln_per_para APP, line_aln_res *la)
 {
     la->cur_res_n = 0;
 	la->res[0].chr = ref_id+1; la->res[0].nsrand = 1-is_rev;
@@ -137,20 +137,20 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
     if (is_rev) for (i = 0; i < reg_len; ++i) query[reg_len-1-i] = com_nst_nt4_table[(int)read_seq[reg_beg-1+i]]; 
     else for (i = 0; i < reg_len; ++i) query[i] = nst_nt4_table[(int)read_seq[reg_beg-1+i]];
 
-    uint64_t ref_start = (left->ref_pos - (left->read_pos - 1) - AP->bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos - 1) - AP->bwt_seed_len);
-    int ref_len = (int)(right->ref_pos + reg_len - right->read_pos + AP->bwt_seed_len - ref_start + 1);
-    uint8_t *target = (uint8_t*)malloc(ref_len * sizeof(uint8_t)); int N_flag, N_len;
-    pac2fa_core(bns, pac, ref_id+1, ref_start-1, &ref_len, 1, &N_flag, &N_len, target);
+    uint64_t ref_start = (left->ref_pos - (left->read_pos - 1) - AP.bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos - 1) - AP.bwt_seed_len);
+    int ref_len = (int)(right->ref_pos + reg_len - right->read_pos + AP.bwt_seed_len - ref_start + 1);
+    uint8_t *target = (uint8_t*)malloc(ref_len * sizeof(uint8_t));
+    pac2fa_core(bns, pac, ref_id+1, ref_start-1, &ref_len, target);
 
     int _qle, _tle, qlen, tlen; uint8_t *_q=0, *_t=0;
     qlen = right->read_pos-left->read_pos+1, tlen = right->ref_pos-left->ref_pos+1;
     cigar32_t *mid_cigar; int mid_cigar_n;
     // push head 'S'
-	if (is_rev) _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), (APP->read_len-(reg_beg+reg_len-1))<<4 | CSOFT_CLIP);
+	if (is_rev) _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), (APP.read_len-(reg_beg+reg_len-1))<<4 | CSOFT_CLIP);
 	else _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_beg-1) << 4) | CSOFT_CLIP);
 
     // mid global-sw
-    ksw_global(qlen, query+left->read_pos-1, tlen, target+left->ref_pos-ref_start, 5, bwasw_sc_mat, 5, 2, abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
+    ksw_global(qlen, query+left->read_pos-1, tlen, target+left->ref_pos-ref_start, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
 
     cigar32_t *cigar=NULL; int cigar_n, cigar_m;
     if (left->read_pos > 1) { // left extend
@@ -162,7 +162,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
         _t = (uint8_t*)malloc(tlen * sizeof(uint8_t));
         for (i = 0; i < tlen; ++i) _t[i] = target[tlen-1-i];
         // ksw_extend
-        ksw_extend_core(qlen, _q, tlen, _t, 5, bwasw_sc_mat, 5, 2, 5, 2, abs(qlen-tlen)+3, 5, 100, AP->bwt_seed_len*bwasw_sc_mat[0], &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        ksw_extend_core(qlen, _q, tlen, _t, 5, bwasw_sc_mat, abs(qlen-tlen)+3, AP.bwt_seed_len*bwasw_sc_mat[0], AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
             left->read_pos -= _qle;
             left->ref_pos -= _tle;
@@ -182,7 +182,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
     if (right->read_pos < reg_len) { // right extend
         qlen = reg_len - right->read_pos;
         tlen = ref_start+ref_len-1-right->ref_pos;
-        ksw_extend_core(qlen, query+right->read_pos, tlen, target+ref_len-tlen, 5, bwasw_sc_mat, 5, 2, 5, 2, abs(qlen-tlen)+3, 5, 100, AP->bwt_seed_len*bwasw_sc_mat[0], &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        ksw_extend_core(qlen, query+right->read_pos, tlen, target+ref_len-tlen, 5, bwasw_sc_mat, abs(qlen-tlen)+3, AP.bwt_seed_len*bwasw_sc_mat[0], AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
             _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), cigar, cigar_n);
             right->read_pos += _qle;
@@ -194,23 +194,23 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, char *
 
     // push tail 'S'
 	if (is_rev)_push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_beg-1) << 4) | CSOFT_CLIP);
-	else _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), (APP->read_len-(reg_beg+reg_len-1))<<4 | CSOFT_CLIP);
+	else _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), (APP.read_len-(reg_beg+reg_len-1))<<4 | CSOFT_CLIP);
 
 	if (is_rev) {
-		char *reco_read_seq = (char*)malloc(APP->read_len * sizeof(char));
-		for (i=0; i < APP->read_len; ++i) reco_read_seq[i] = (read_seq[APP->read_len-1-i]=='A')?'T':((read_seq[APP->read_len-1-i]=='C')?'G':
-			                                                ((read_seq[APP->read_len-1-i]=='G')?'C':((read_seq[APP->read_len-1-i]=='T')?'A':'N')));
-		lsat_res_aux(la, bns, pac, reco_read_seq, APP->read_len, AP, APP);
+		char *reco_read_seq = (char*)malloc(APP.read_len * sizeof(char));
+		for (i=0; i < APP.read_len; ++i) reco_read_seq[i] = (read_seq[APP.read_len-1-i]=='A')?'T':((read_seq[APP.read_len-1-i]=='C')?'G':
+			                                                ((read_seq[APP.read_len-1-i]=='G')?'C':((read_seq[APP.read_len-1-i]=='T')?'A':'N')));
+		lsat_res_aux(la, bns, pac, reco_read_seq, APP.read_len, AP, APP);
 		free(reco_read_seq);
 	}
-	else lsat_res_aux(la, bns, pac, read_seq, APP->read_len, AP, APP);
+	else lsat_res_aux(la, bns, pac, read_seq, APP.read_len, AP, APP);
 
     free(query); free(target);
 }
 
-int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t reg, lsat_aln_para *AP, lsat_aln_per_para *APP, aln_res *re_res)
+int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t reg, lsat_aln_para AP, lsat_aln_per_para APP, aln_res *re_res)
 {
-    int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
+    int i, j, seed_len = AP.bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
 	int max_hit = 100;
     int reg_beg = reg.beg, reg_len = reg.end-reg_beg+1;
@@ -244,13 +244,13 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t 
                 //bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 				if (is_rev) {
 					//fprintf(stderr, "ref_beg: %d\nabs_pos: %d\nref_end: %d\n", reg.ref_beg, abs_pos, reg.ref_end);
-					if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos < AP->SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP->SV_len_thd))) {
+					if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos < AP.SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP.SV_len_thd))) {
 						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 						cnt++;
 						if (cnt == max_hit) break;
 					}
 				} else {
-					if ((reg.ref_beg==0 || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP->SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP->SV_len_thd))) {
+					if ((reg.ref_beg==0 || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP.SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP.SV_len_thd))) {
 						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 						cnt++;
 						if (cnt == max_hit) break;
@@ -291,9 +291,9 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, reg_t 
     return 0;
 }
 
-void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para *APP, lsat_aln_para *AP)
+void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para APP, lsat_aln_para AP)
 {
-    aln_reg *re_reg = aln_init_reg(APP->read_len); 
+    aln_reg *re_reg = aln_init_reg(APP.read_len); 
     if (get_remain_reg(a_reg, re_reg, AP, 300) == 0) goto End; //XXX
 
     int i;

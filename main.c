@@ -13,6 +13,8 @@
 #include "lsat_aln.h"
 #include "build_ref.h"
 
+#define VERSION "1.0.0"
+
 static int usage(void)	//main usage
 {
 	fprintf(stderr, "\n");
@@ -28,9 +30,13 @@ static int usage(void)	//main usage
 
 int main(int argc, char *argv[])
 {
-	fprintf(stderr, "[main] CMD: ");
+    extern char *lsat_pg;
+    char *pg = (char*)malloc(1024*sizeof(char));
 	int i;
-	for (i = 0; i < argc; ++i) fprintf(stderr, " %s", argv[i]); fprintf(stderr, "\n");
+    sprintf(pg, "@PG\tID:lsat\tPN:lsat\tVN:%s\tCL:%s", VERSION, argv[0]);
+	for (i = 1; i < argc; ++i) sprintf(pg+strlen(pg), " %s", argv[i]);
+    lsat_pg = pg;
+    
 	if (argc < 2) return usage();
 	if (strcmp(argv[1], "index") == 0)      return lsat_index(argc-1, argv+1);
 	else if (strcmp(argv[1], "aln") == 0)   return lsat_aln(argc-1, argv+1);
@@ -38,5 +44,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;
 	}
+
+    free(lsat_pg);
 	return 0;
 }

@@ -306,19 +306,20 @@ typedef struct {
     int split_pen;  // split score penalty
     int res_mul_max;// max number of read's aln-results
 
-    int hash_len, hash_key_len, hash_step;
+    int hash_len, hash_key_len, hash_step, hash_size;
     int bwt_seed_len;
 
     // SW para
     int gapo, gape; // gap open penalty, gap extension penalty
     int match, mis;     // score matrix, match and mismatch
+    int end_bonus, zdrop;
 } lsat_aln_para;        // for all reads
 //AP
 
 int lsat_aln(int argc, char* argv[]);
 aln_reg *aln_init_reg(int read_len);
 void aln_free_reg(aln_reg *a_reg);
-int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lsat_aln_para *AP, int reg_thd);
+int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lsat_aln_para AP, int reg_thd);
 int line_pull_trg(line_node LR);
 
 #endif

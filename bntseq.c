@@ -1,30 +1,26 @@
-/*
- * bntseq.c
- * Transform fa files to binary files.
- * Output: prefix.lsat.pac. 
- * Use '00'/'01'/'10'/'11' to represent 'A'/'G'/'C'/'T'.
- * For short 'N's(<= 10bp), replaced by 'G'(same as 'soap2-dp').
- * For long 'N's(> 10bp), just throw them away when mapping.
- * 0-base coordinate. 
- */
-
-/*
- * Created by Y Gao on 2013/9/16.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
+#include <unistd.h>
+#include <errno.h>
 #include "bntseq.h"
+#include "utils.h"
+
 #include "kseq.h"
+KSEQ_DECLARE(gzFile)
 
-KSEQ_INIT(gzFile, gzread)
+#include "khash.h"
+KHASH_MAP_INIT_STR(str, int)
 
-char nst_nt4_table[256] = {
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
+unsigned char nst_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4 /*'-'*/, 4, 4,
+	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 5 /*'-'*/, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
@@ -40,7 +36,7 @@ char nst_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
 
-char com_nst_nt4_table[256] = {
+unsigned char com_nst_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4 /*'-'*/, 4, 4,
@@ -71,27 +67,139 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 	int i;
 	{ // dump .ann
 		strcpy(str, prefix); strcat(str, ".lsat.ann");
-		fp = fopen(str, "w");
-		fprintf(fp, "%lld %d\n", (long long)bns->l_pac, bns->n_seqs);
+		fp = xopen(str, "w");
+		err_fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->seed);
 		for (i = 0; i != bns->n_seqs; ++i) {
 			bntann1_t *p = bns->anns + i;
-			fprintf(fp, "%d %s", p->gi, p->name);
-			if (p->anno[0]) fprintf(fp, " %s\n", p->anno);
-			else fprintf(fp, "\n");
-			fprintf(fp, "%lld %d %d %d\n", (long long)p->offset, p->len, p->ambs_offset, p->n_ambs);
+			err_fprintf(fp, "%d %s", p->gi, p->name);
+			if (p->anno[0]) err_fprintf(fp, " %s\n", p->anno);
+			else err_fprintf(fp, "\n");
+			err_fprintf(fp, "%lld %d %d\n", (long long)p->offset, p->len, p->n_ambs);
 		}
-		fclose(fp);
+		err_fflush(fp);
+		err_fclose(fp);
 	}
 	{ // dump .amb
 		strcpy(str, prefix); strcat(str, ".lsat.amb");
-		fp = fopen(str, "w");
-		fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->n_holes);
+		fp = xopen(str, "w");
+		err_fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->n_holes);
 		for (i = 0; i != bns->n_holes; ++i) {
 			bntamb1_t *p = bns->ambs + i;
-			fprintf(fp, "%lld %d %c\n", (long long)p->offset, p->len, p->amb);
+			err_fprintf(fp, "%lld %d %c\n", (long long)p->offset, p->len, p->amb);
 		}
+		err_fflush(fp);
+		err_fclose(fp);
+	}
+}
+
+bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, const char* pac_filename)
+{
+	char str[8192];
+	FILE *fp;
+	const char *fname;
+	bntseq_t *bns;
+	long long xx;
+	int i;
+	int scanres;
+	bns = (bntseq_t*)calloc(1, sizeof(bntseq_t));
+	{ // read .ann
+		fp = xopen(fname = ann_filename, "r");
+		scanres = fscanf(fp, "%lld%d%u", &xx, &bns->n_seqs, &bns->seed);
+		if (scanres != 3) goto badread;
+		bns->l_pac = xx;
+		bns->anns = (bntann1_t*)calloc(bns->n_seqs, sizeof(bntann1_t));
+		for (i = 0; i < bns->n_seqs; ++i) {
+			bntann1_t *p = bns->anns + i;
+			char *q = str;
+			int c;
+			// read gi and sequence name
+			scanres = fscanf(fp, "%u%s", &p->gi, str);
+			if (scanres != 2) goto badread;
+			p->name = strdup(str);
+			// read fasta comments 
+			while (q - str < sizeof(str) - 1 && (c = fgetc(fp)) != '\n' && c != EOF) *q++ = c;
+			while (c != '\n' && c != EOF) c = fgetc(fp);
+			if (c == EOF) {
+				scanres = EOF;
+				goto badread;
+			}
+			*q = 0;
+			if (q - str > 1 && strcmp(str, " (null)") != 0) p->anno = strdup(str + 1); // skip leading space
+			else p->anno = strdup("");
+			// read the rest
+			scanres = fscanf(fp, "%lld%d%d", &xx, &p->len, &p->n_ambs);
+			if (scanres != 3) goto badread;
+			p->offset = xx;
+		}
+		err_fclose(fp);
+	}
+	{ // read .amb
+		int64_t l_pac;
+		int32_t n_seqs;
+		fp = xopen(fname = amb_filename, "r");
+		scanres = fscanf(fp, "%lld%d%d", &xx, &n_seqs, &bns->n_holes);
+		if (scanres != 3) goto badread;
+		l_pac = xx;
+		xassert(l_pac == bns->l_pac && n_seqs == bns->n_seqs, "inconsistent .ann and .amb files.");
+		bns->ambs = bns->n_holes? (bntamb1_t*)calloc(bns->n_holes, sizeof(bntamb1_t)) : 0;
+		for (i = 0; i < bns->n_holes; ++i) {
+			bntamb1_t *p = bns->ambs + i;
+			scanres = fscanf(fp, "%lld%d%s", &xx, &p->len, str);
+			if (scanres != 3) goto badread;
+			p->offset = xx;
+			p->amb = str[0];
+		}
+		err_fclose(fp);
+	}
+	{ // open .pac
+		bns->fp_pac = xopen(pac_filename, "rb");
+	}
+	return bns;
+
+ badread:
+	if (EOF == scanres) {
+		err_fatal(__func__, "Error reading %s : %s\n", fname, ferror(fp) ? strerror(errno) : "Unexpected end of file");
+	}
+	err_fatal(__func__, "Parse error reading %s\n", fname);
+}
+
+bntseq_t *bns_restore(const char *prefix)
+{  
+	char ann_filename[1024], amb_filename[1024], pac_filename[1024], alt_filename[1024];
+	FILE *fp;
+	bntseq_t *bns;
+	strcat(strcpy(ann_filename, prefix), ".ann");
+	strcat(strcpy(amb_filename, prefix), ".amb");
+	strcat(strcpy(pac_filename, prefix), ".pac");
+	bns = bns_restore_core(ann_filename, amb_filename, pac_filename);
+	if (bns == 0) return 0;
+	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present
+		char str[1024];
+		khash_t(str) *h;
+		int c, i, absent;
+		khint_t k;
+		h = kh_init(str);
+		for (i = 0; i < bns->n_seqs; ++i) {
+			k = kh_put(str, h, bns->anns[i].name, &absent);
+			kh_val(h, k) = i;
+		}
+		i = 0;
+		while ((c = fgetc(fp)) != EOF) {
+			if (c == '\t' || c == '\n' || c == '\r') {
+				str[i] = 0;
+				if (str[0] != '@') {
+					k = kh_get(str, h, str);
+					if (k != kh_end(h))
+						bns->anns[kh_val(h, k)].is_alt = 1;
+				}
+				while (c != '\n' && c != EOF) c = fgetc(fp);
+				i = 0;
+			} else str[i++] = c; // FIXME: potential segfault here
+		}
+		kh_destroy(str, h);
 		fclose(fp);
 	}
+	return bns;
 }
 
 void bns_destroy(bntseq_t *bns)
@@ -99,9 +207,9 @@ void bns_destroy(bntseq_t *bns)
 	if (bns == 0) return;
 	else {
 		int i;
-		if (bns->fp_pac)	fclose(bns->fp_pac);
+		if (bns->fp_pac) err_fclose(bns->fp_pac);
 		free(bns->ambs);
-		for (i = 0; i != bns->n_seqs; ++i) {
+		for (i = 0; i < bns->n_seqs; ++i) {
 			free(bns->anns[i].name);
 			free(bns->anns[i].anno);
 		}
@@ -110,169 +218,129 @@ void bns_destroy(bntseq_t *bns)
 	}
 }
 
-void bns_fa2bnt(gzFile fp_fa, const char *prefix)
+#define _set_pac(pac, l, c) ((pac)[(l)>>2] |= (c)<<((~(l)&3)<<1))
+#define _get_pac(pac, l) ((pac)[(l)>>2]>>((~(l)&3)<<1)&3)
+
+static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_pac, int *m_seqs, int *m_holes, bntamb1_t **q)
 {
+	bntann1_t *p;
+	int i, lasts;
+	if (bns->n_seqs == *m_seqs) {
+		*m_seqs <<= 1;
+		bns->anns = (bntann1_t*)realloc(bns->anns, *m_seqs * sizeof(bntann1_t));
+	}
+	p = bns->anns + bns->n_seqs;
+	p->name = strdup((char*)seq->name.s);
+	p->anno = seq->comment.l > 0? strdup((char*)seq->comment.s) : strdup("(null)");
+	p->gi = 0; p->len = seq->seq.l;
+	p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
+	p->n_ambs = 0;
+	for (i = lasts = 0; i < seq->seq.l; ++i) {
+		int c = nst_nt4_table[(int)seq->seq.s[i]];
+		if (c >= 4) { // N
+			if (lasts == seq->seq.s[i]) { // contiguous N
+				++(*q)->len;
+			} else {
+				if (bns->n_holes == *m_holes) {
+					(*m_holes) <<= 1;
+					bns->ambs = (bntamb1_t*)realloc(bns->ambs, (*m_holes) * sizeof(bntamb1_t));
+				}
+				*q = bns->ambs + bns->n_holes;
+				(*q)->len = 1;
+				(*q)->offset = p->offset + i;
+				(*q)->amb = seq->seq.s[i];
+				++p->n_ambs;
+				++bns->n_holes;
+			}
+		}
+		lasts = seq->seq.s[i];
+		{ // fill buffer
+			if (c >= 4) c = lrand48()&3;
+			if (bns->l_pac == *m_pac) { // double the pac size
+				*m_pac <<= 1;
+				pac = realloc(pac, *m_pac/4);
+				memset(pac + bns->l_pac/4, 0, (*m_pac - bns->l_pac)/4);
+			}
+			_set_pac(pac, bns->l_pac, c);
+			++bns->l_pac;
+		}
+	}
+	++bns->n_seqs;
+	return pac;
+}
+
+int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
+{
+	extern void seq_reverse(int len, ubyte_t *seq, int is_comp); // in bwaseqio.c
 	kseq_t *seq;
 	char name[1024];
 	bntseq_t *bns;
+	uint8_t *pac = 0;
+	int32_t m_seqs, m_holes;
+	int64_t ret = -1, m_pac, l;
 	bntamb1_t *q;
-	int l_buf;
-	char buf[0x10000];
-	int32_t m_seqs, m_holes, l, i;
 	FILE *fp;
 
 	// initialization
 	seq = kseq_init(fp_fa);
 	bns = (bntseq_t*)calloc(1, sizeof(bntseq_t));
-	m_seqs = m_holes = 8;
+	bns->seed = 11; // fixed seed for random generator
+	srand48(bns->seed);
+	m_seqs = m_holes = 8; m_pac = 0x10000;
 	bns->anns = (bntann1_t*)calloc(m_seqs, sizeof(bntann1_t));
 	bns->ambs = (bntamb1_t*)calloc(m_holes, sizeof(bntamb1_t));
+	pac = calloc(m_pac/4, 1);
 	q = bns->ambs;
-	l_buf = 0;
-	strcpy(name, prefix); strcat(name, ".lsat.pac");
-	fp = fopen(name, "wb");
-	memset(buf, 0, 0x10000);
+	strcpy(name, prefix); strcat(name, ".pac");
+	fp = xopen(name, "wb");
 	// read sequences
-	while ((l = kseq_read(seq)) >= 0) 
-	{
-		bntann1_t *p;
-		int lasts;
-		if (bns->n_seqs == m_seqs) 
-		{
-			m_seqs <<= 1;
-			bns->anns = (bntann1_t*)realloc(bns->anns, m_seqs * sizeof(bntann1_t));
-		}
-		p = bns->anns + bns->n_seqs;
-		p->name = strdup((char*)seq->name.s);
-		p->anno = seq->comment.s? strdup((char*)seq->comment.s) : strdup("(null)");
-		p->gi = 0; p->len = l;
-		p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
-		p->n_ambs = 0;
-		p->ambs_offset = (bns->n_seqs == 0)? 0 : (p-1)->ambs_offset + (p-1)->n_ambs;
-		for (i = 0, lasts = 0; i < l; ++i) 
-		{
-			int c = nst_nt4_table[(int)seq->seq.s[i]];
-			if (c >= 4) 
-			{ // N
-				if (lasts == seq->seq.s[i])  // contiguous N
-					++q->len;
-				else 
-				{
-					if (bns->n_holes == m_holes) 
-					{
-						m_holes <<= 1;
-						bns->ambs = (bntamb1_t*)realloc(bns->ambs, m_holes * sizeof(bntamb1_t));
-					}
-					q = bns->ambs + bns->n_holes;
-					q->len = 1;
-					q->offset = p->offset + i;
-					q->amb = seq->seq.s[i];
-					++p->n_ambs;
-					++bns->n_holes;
-				}
-			}
-			lasts = seq->seq.s[i];
-			{ // fill buffer
-				if (c >= 4) c = 2;	//'G'
-				if (l_buf == 0x40000) 
-				{
-					fwrite(buf, 1, 0x10000, fp);
-					memset(buf, 0, 0x10000);
-					l_buf = 0;
-				}
-				buf[l_buf>>2] |= c << ((3 - (l_buf&3)) << 1);
-				++l_buf;
-			}
-		}
-		++bns->n_seqs;
-		bns->l_pac += seq->seq.l;
+	while (kseq_read(seq) >= 0) pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
+	if (!for_only) { // add the reverse complemented sequence
+		m_pac = (bns->l_pac * 2 + 3) / 4 * 4;
+		pac = realloc(pac, m_pac/4);
+		memset(pac + (bns->l_pac+3)/4, 0, (m_pac - (bns->l_pac+3)/4*4) / 4);
+		for (l = bns->l_pac - 1; l >= 0; --l, ++bns->l_pac)
+			_set_pac(pac, bns->l_pac, 3-_get_pac(pac, l));
 	}
+	ret = bns->l_pac;
 	{ // finalize .pac file
-		char ct;
-		fwrite(buf, 1, (l_buf>>2) + ((l_buf&3) == 0? 0 : 1), fp);
+		ubyte_t ct;
+		err_fwrite(pac, 1, (bns->l_pac>>2) + ((bns->l_pac&3) == 0? 0 : 1), fp);
 		// the following codes make the pac file size always (l_pac/4+1+1)
-		if (bns->l_pac % 4 == 0) 
-		{
+		if (bns->l_pac % 4 == 0) {
 			ct = 0;
-			fwrite(&ct, 1, 1, fp);
+			err_fwrite(&ct, 1, 1, fp);
 		}
 		ct = bns->l_pac % 4;
-		fwrite(&ct, 1, 1, fp);
+		err_fwrite(&ct, 1, 1, fp);
 		// close .pac file
-		fclose(fp);
+		err_fflush(fp);
+		err_fclose(fp);
 	}
 	bns_dump(bns, prefix);
 	bns_destroy(bns);
 	kseq_destroy(seq);
+	free(pac);
+	return ret;
 }
 
-bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, const char* pac_filename)
+int bwa_fa2pac(int argc, char *argv[])
 {
-	char str[1024];
-	FILE *fp;
-	bntseq_t *bns;
-	long long xx;
-	int i;
-	bns = (bntseq_t*)calloc(1, sizeof(bntseq_t));
-	{ // read .ann
-		fp = fopen(ann_filename, "r");
-        if (fp == NULL)
-        {
-            fprintf(stderr, "\n[bntseq] Wrong index path.\n"); exit(1);
-        }
-		fscanf(fp, "%lld%d", &xx, &bns->n_seqs);
-		bns->l_pac = xx;
-		bns->anns = (bntann1_t*)calloc(bns->n_seqs, sizeof(bntann1_t));
-		for (i = 0; i < bns->n_seqs; ++i) {
-			bntann1_t *p = bns->anns + i;
-			char *q = str;
-			int c;
-			// read gi and sequence name
-			fscanf(fp, "%u%s", &p->gi, str);
-			p->name = strdup(str);
-			// read fasta comments 
-			while ((c = fgetc(fp)) != '\n' && c != EOF) *q++ = c;
-			*q = 0;
-			if (q - str > 1) p->anno = strdup(str + 1); // skip leading space
-			else p->anno = strdup("");
-			// read the rest
-			fscanf(fp, "%lld%d%d%d", &xx, &p->len, &p->ambs_offset, &p->n_ambs);
-			p->offset = xx;
+	int c, for_only = 0;
+	gzFile fp;
+	while ((c = getopt(argc, argv, "f")) >= 0) {
+		switch (c) {
+			case 'f': for_only = 1; break;
 		}
-		fclose(fp);
 	}
-	{ // read .amb
-		int64_t l_pac;
-		int32_t n_seqs;
-		fp = fopen(amb_filename, "r");
-		fscanf(fp, "%lld%d%d", &xx, &n_seqs, &bns->n_holes);
-		l_pac = xx;
-		//xassert(l_pac == bns->l_pac && n_seqs == bns->n_seqs, "inconsistent .ann and .amb files.");
-        if (l_pac != bns->l_pac || n_seqs != bns->n_seqs) {
-            fprintf(stderr, "\n[bntseq] inconsistent .ann and .amb files.\n"); exit(1);
-        }
-		bns->ambs = (bntamb1_t*)calloc(bns->n_holes, sizeof(bntamb1_t));
-		for (i = 0; i < bns->n_holes; ++i) {
-			bntamb1_t *p = bns->ambs + i;
-			fscanf(fp, "%lld%d%s", &xx, &p->len, str);
-			p->offset = xx;
-			p->amb = str[0];
-		}
-		fclose(fp);
+	if (argc == optind) {
+		fprintf(stderr, "Usage: bwa fa2pac [-f] <in.fasta> [<out.prefix>]\n");
+		return 1;
 	}
-	{ // open .pac
-		bns->fp_pac = fopen(pac_filename, "rb");
-	}
-	return bns;
-}
-
-bntseq_t *bns_restore(const char *prefix)
-{
-	char ann_filename[1024], amb_filename[1024], pac_filename[1024];
-	strcat(strcpy(ann_filename, prefix), ".lsat.ann");
-	strcat(strcpy(amb_filename, prefix), ".lsat.amb");
-	strcat(strcpy(pac_filename, prefix), ".lsat.pac");
-	return bns_restore_core(ann_filename, amb_filename, pac_filename);
+	fp = xzopen(argv[optind], "r");
+	bns_fasta2bntseq(fp, (optind+1 < argc)? argv[optind+1] : argv[optind], for_only);
+	err_gzclose(fp);
+	return 0;
 }
 
 int bns_pos2rid(const bntseq_t *bns, int64_t pos_f)
@@ -289,6 +357,16 @@ int bns_pos2rid(const bntseq_t *bns, int64_t pos_f)
 		} else right = mid;
 	}
 	return mid;
+}
+
+int bns_intv2rid(const bntseq_t *bns, int64_t rb, int64_t re)
+{
+	int is_rev, rid_b, rid_e;
+	if (rb < bns->l_pac && re > bns->l_pac) return -2;
+	assert(rb <= re);
+	rid_b = bns_pos2rid(bns, bns_depos(bns, rb, &is_rev));
+	rid_e = rb < re? bns_pos2rid(bns, bns_depos(bns, re - 1, &is_rev)) : rid_b;
+	return rid_b == rid_e? rid_b : -1;
 }
 
 int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
@@ -314,172 +392,77 @@ int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
 	return nn;
 }
 
-//@func: check if 'N' exist in the ref seq
-//@para: b1 and b2 are the left most and right most boundary respectively
-int32_t n_recover(const bntseq_t *bns, const int32_t seq_n, const int64_t pac_coor, const int64_t len, uint8_t *seq, int *n_len)
+uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
 {
-	int i;
-	int32_t offset = bns->anns[seq_n-1].ambs_offset;
-
-	// binary search for most left and most right ambs
-	int left, mid, right, l_amb, r_amb;
-	left = 0; right = bns->anns[seq_n-1].n_ambs;
-	l_amb = r_amb = -1;
-	while (left < right)	//search for most left ambs
-	{
-		mid = (left + right) >> 1;
-		if (bns->ambs[mid+offset].offset+bns->ambs[mid+offset].len <= pac_coor)
-			left = mid + 1;
-		else if (bns->ambs[mid+offset].offset >= pac_coor + len)
-			right = mid;
-		else	//overlap
-		{
-			if (mid == 0 || bns->ambs[mid+offset-1].offset+bns->ambs[mid+offset-1].len <= pac_coor)	//most left
-			{
-				r_amb = l_amb = mid;
-				break;
-			}
-			else
-				right = mid;
+	uint8_t *seq = 0;
+	if (end < beg) end ^= beg, beg ^= end, end ^= beg; // if end is smaller, swap
+	if (end > l_pac<<1) end = l_pac<<1;
+	if (beg < 0) beg = 0;
+	if (beg >= l_pac || end <= l_pac) {
+		int64_t k, l = 0;
+		*len = end - beg;
+		seq = malloc(end - beg);
+		if (beg >= l_pac) { // reverse strand
+			int64_t beg_f = (l_pac<<1) - 1 - end;
+			int64_t end_f = (l_pac<<1) - 1 - beg;
+			for (k = end_f; k > beg_f; --k)
+				seq[l++] = 3 - _get_pac(pac, k);
+		} else { // forward strand
+			for (k = beg; k < end; ++k)
+				seq[l++] = _get_pac(pac, k);
 		}
-	}
-	if (l_amb == -1)	//no 'N'
-		return 0;
-	
-	left = l_amb + 1; right = bns->anns[seq_n-1].n_ambs;
-	*n_len = 0;
-	while (left < right)
-	{
-		mid = (left + right) >> 1;
-		if (bns->ambs[mid+offset].offset >= pac_coor + len)
-			right = mid;
-		else 
-		{
-			if (mid == right-1 || bns->ambs[mid+1+offset].offset >= pac_coor + len)	//right most
-			{
-				r_amb = mid;
-				break;
-			}
-			else
-				left = mid + 1;
-		}
-	}
-	//0-base 
-	//*b1 = pac_coor > bns->ambs[l_amb+offset].offset ? 0 : bns->ambs[l_amb+offset].offset - pac_coor;
-	//*b2 = pac_coor + len > (bns->ambs[r_amb+offset].offset + bns->ambs[r_amb+offset].len) ? 
-	//			bns->ambs[r_amb+offset].offset+bns->ambs[r_amb+offset].len - pac_coor : len;
-	for (i = l_amb; i <= r_amb; i++)
-	{
-		int64_t s, e, j;
-		s = pac_coor > bns->ambs[i+offset].offset ? pac_coor : bns->ambs[i+offset].offset;
-		e = pac_coor + len > (bns->ambs[i+offset].offset + bns->ambs[i+offset].len) ? 
-				bns->ambs[i+offset].offset + bns->ambs[i+offset].len : pac_coor+len;
-		//printf("s: %lld e: %lld\n", s, e);
-		/*if (srand == -1)	//rev
-		{
-			for (j = len-e; j < len-s; j++)
-				seq[j+pac_coor] <<= 2;	//1->4('C'->'N')
-		}
-		else*/
-		{
-			for (j = s; j < e; j++)
-				seq[j-pac_coor] <<= 1;	//recover to N, 2->4('G'->'N')
-			*n_len += (e-s);
-		}
-	}
-	return 1;
+	} else *len = 0; // if bridging the forward-reverse boundary, return nothing
+	return seq;
 }
 
-#define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
-//convert binary seq to 'ACGT' sequence
-void pac2fa(const bntseq_t *bns, const uint8_t *pac, 
-			const int32_t seq_n, 
-			const int64_t start/*0-base*/, 
-			int32_t *len, 
-			const int srand, 
-			int *N_FLAG, int *N_len, 
-			char *seq)
+uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid)
+{
+	int64_t far_beg, far_end, len;
+	int is_rev;
+	uint8_t *seq;
+
+	if (*end < *beg) *end ^= *beg, *beg ^= *end, *end ^= *beg; // if end is smaller, swap
+	assert(*beg <= mid && mid < *end);
+	*rid = bns_pos2rid(bns, bns_depos(bns, mid, &is_rev));
+	far_beg = bns->anns[*rid].offset;
+	far_end = far_beg + bns->anns[*rid].len;
+	if (is_rev) { // flip to the reverse strand
+		int64_t tmp = far_beg;
+		far_beg = (bns->l_pac<<1) - far_end;
+		far_end = (bns->l_pac<<1) - tmp;
+	}
+	*beg = *beg > far_beg? *beg : far_beg;
+	*end = *end < far_end? *end : far_end;
+	seq = bns_get_seq(bns->l_pac, pac, *beg, *end, &len);
+	if (seq == 0 || *end - *beg != len) {
+		fprintf(stderr, "[E::%s] begin=%ld, mid=%ld, end=%ld, len=%ld, seq=%p, rid=%d, far_beg=%ld, far_end=%ld\n",
+				__func__, (long)*beg, (long)mid, (long)*end, (long)len, seq, *rid, (long)far_beg, (long)far_end);
+	}
+	assert(seq && *end - *beg == len); // assertion failure should never happen
+	return seq;
+}
+
+void pac2fa_core(const bntseq_t *bns, const uint8_t *pac,
+                 const int32_t seq_id, const int64_t start/*0-base*/,
+                 int32_t *len, uint8_t *seq)
+{
+    int64_t pac_coor, i,k;
+    if (start > bns->anns[seq_id-1].len) {
+		fprintf(stderr, "\n[bntseq] Error: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_id-1].len); exit(1);
+    }
+    pac_coor = bns->anns[seq_id-1].offset+start;
+    if (start + *len > bns->anns[seq_id-1].len) *len = bns->anns[seq_id-1].len - start;
+    for (i = 0, k = pac_coor; i < *len; i++, k++)
+        seq[i] = _get_pac(pac, k);
+}
+
+void pac2fa(const bntseq_t *bns, const uint8_t *pac,
+            const int32_t seq_id, const int64_t start/*0-base*/,
+            int32_t *len, char *seq)
 {
     uint8_t *ref_seq = (uint8_t*)malloc(*len * sizeof(uint8_t));
-    pac2fa_core(bns, pac, seq_n, start/*0-base*/, len, srand, N_FLAG, N_len, ref_seq);
+    pac2fa_core(bns, pac, seq_id, start/*0-base*/, len, ref_seq);
     int i;
     for (i = 0; i < *len; ++i) seq[i] = "ACGTN"[ref_seq[i]];
     free(ref_seq);
 }
-
-void pac2fa_core(const bntseq_t *bns, const uint8_t *pac, 
-				const int32_t seq_n, 
-				const int64_t start/*0-base*/, 
-				int32_t *len, 
-				const int srand, 
-				int *N_FLAG, int *N_len, 
-				uint8_t *seq)
-{
-	int64_t pac_coor;
-	int64_t i,k;
-	
-	if (start > bns->anns[seq_n-1].len) {
-		fprintf(stderr, "\n[bntseq] Error: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_n-1].len); exit(1);
-	}
-	pac_coor = bns->anns[seq_n-1].offset + start;
-	if (start + *len > bns->anns[seq_n-1].len)	//candidate seq is out of range.
-	{
-		*len = bns->anns[seq_n-1].len - start;
-	}
-
-	if (srand == -1)	//rev
-	{
-		/*for (i = *len-1, k = pac_coor; i >= 0; i--, k++)
-			seq[i] = 3-(pac[k>>2] >> ((~k&3) << 1) & 0x3);*/
-		fprintf(stderr, "\n[pac2fa] Error.\n"); exit(1);
-	}
-	else
-	{
-		for (i = 0, k = pac_coor; i < *len; i++, k++)
-			seq[i] = (pac[k>>2] >> ((~k&3) << 1) & 0x3);
-	}
-
-	*N_FLAG = n_recover(bns, seq_n, pac_coor, *len, seq, N_len);	//0 : no 'N', or 2.
-}
-
-//int main(int argc, char *argv[])
-/*int fa2pac(int argc, char *argv[])
-{
-	gzFile fp;
-
-	if (argc < 2)
-	{
-		fprintf(stderr, "Usage: fa2pac <in.fa> [<out.prefix>]\n");
-		return 1;
-	}
-	fp = gzopen(argv[1], "r");
-	bns_fa2bnt(fp, (argc < 3)? argv[1] : argv[2]);
-	gzclose(fp);
-
-	//test for pac2fa
-	bntseq_t *bns;
-	bns = bns_restore(argv[1]);
-	uint8_t *pac, *seq;
-
-	pac = (uint8_t*)calloc(bns->l_pac/4 + 1, 1);
-	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
-
-	int32_t len = 260;
-	int flag=0,i;
-	seq = (uint8_t*)calloc(len, 1);
-	pac2fa_core(bns, pac, 1, 0, &len, 1, &flag, seq);
-
-	printf("len:  %d\nflag: %d\n", len, flag);
-	for (i = 0; i < len; i++)
-	{
-		printf("%c", n_char[seq[i]]);
-		if ((i+1) % 50 == 0)
-			printf("\n");
-	}
-	printf("\n");
-	free(pac);
-	free(seq);
-	bns_destroy(bns);
-
-	return 0;
-}*/

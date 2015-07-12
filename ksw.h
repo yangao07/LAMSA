@@ -110,20 +110,20 @@ extern "C" {
 
     // added
     int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                        int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
-                        int w, int end_bonus, int zdrop, int h0, 
+                        int m, const int8_t *mat, int w, int h0,
+                        lsat_aln_para AP,
                         int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
     int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                     int m, const int8_t *mat, int gapo, int gape, int w, int h0,
+                     int m, const int8_t *mat, int w, int h0, lsat_aln_para AP,
                      int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
     int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                     int m, const int8_t *mat, int gapo, int gape, int w, int h0,
+                     int m, const int8_t *mat, int w, int h0, lsat_aln_para AP,
                      int *_qre, int *_tre, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
     int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                        int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, 
+                        int m, const int8_t *mat, int w, int lh0, int rh0, lsat_aln_para AP,
                         cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
     int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                      int m, const int8_t *mat, int gapo, int gape, int w, int lh0, int rh0, 
+                      int m, const int8_t *mat, int w, int lh0, int rh0, lsat_aln_para AP,
                       cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
 
 #ifdef __cplusplus
