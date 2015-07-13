@@ -104,10 +104,12 @@ seed_msg *seed_init_msg(void)
     msg->seed_len = (int *)calloc(READ_MAX_NUM, sizeof(int));
     msg->seed_inv = (int *)calloc(READ_MAX_NUM, sizeof(int));
     msg->seed_all = (int *)calloc(READ_MAX_NUM, sizeof(int));
+    /*
     msg->read_name = (char **)malloc(READ_MAX_NUM * sizeof(char*));
     int i;
     for (i = 0; i < READ_MAX_NUM; ++i)
         msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
+        */
     msg->last_len = (int *)malloc(READ_MAX_NUM * sizeof(int));
     msg->read_len = (int *)malloc(READ_MAX_NUM * sizeof(int));
     msg->read_level = (int*)malloc(READ_MAX_NUM * sizeof(int));
@@ -120,8 +122,10 @@ seed_msg *seed_init_msg(void)
 void seed_free_msg(seed_msg *msg)
 {
     int i;
+    /*
     for (i = 0; i < msg->read_m; ++i) free(msg->read_name[i]);
     free(msg->read_name);
+    */ 
     free(msg->seed_len);
     free(msg->seed_inv);
     free(msg->seed_all);
@@ -215,6 +219,7 @@ int split_seed(const char *prefix, seed_msg *s_msg)
             }
             s_msg->read_level = new_p;
 
+            /*
             if ((new_p = (char**)realloc(s_msg->read_name, m_read * sizeof(char*))) == NULL)
             {
                 free(s_msg->read_name);
@@ -224,6 +229,7 @@ int split_seed(const char *prefix, seed_msg *s_msg)
             int i;
             for (i = m_read>>1; i < m_read; ++i)
                 s_msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
+                */
         }
         ++s_msg->read_all;
         s_msg->seed_len[s_msg->read_all] = seed_len;
@@ -232,7 +238,7 @@ int split_seed(const char *prefix, seed_msg *s_msg)
         s_msg->last_len[s_msg->read_all] = seq->seq.l - seed_all * seed_len - (seed_all-1) * seed_inv;
         s_msg->read_len[s_msg->read_all] = seq->seq.l;
         s_msg->read_level[s_msg->read_all] = read_level;
-        strcpy(s_msg->read_name[s_msg->read_all], seq->name.s);
+        //strcpy(s_msg->read_name[s_msg->read_all], seq->name.s);
         s_msg->read_m = m_read;
 
         for (i = 0; i < seed_all; ++i)
@@ -319,6 +325,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
             }
             s_msg->read_level = new_p;
             //read_name
+            /*
             if ((new_p = (char**)realloc(s_msg->read_name, m_read * sizeof(char*))) == NULL)
             {
                 free(s_msg->read_name);
@@ -328,6 +335,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
             int i;
             for (i = m_read>>1; i < m_read; ++i)
                 s_msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
+                */
         }
         ++s_msg->read_all;
         s_msg->seed_len[s_msg->read_all] = seed_len;
@@ -336,7 +344,7 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
         s_msg->last_len[s_msg->read_all] = last_len;
         s_msg->read_len[s_msg->read_all] = len;
         s_msg->read_level[s_msg->read_all] = read_level;
-        strcpy(s_msg->read_name[s_msg->read_all], read_name);
+        //strcpy(s_msg->read_name[s_msg->read_all], read_name);
         s_msg->read_m = m_read;
         if (last_len != len - seed_all * seed_len - (seed_all-1)*seed_inv)
         {
@@ -564,6 +572,11 @@ void aln_res_output(aln_res *res, aln_reg *reg, lsat_aln_per_para APP, kseq_t *r
     }
 }
 
+void lsat_unmap_output(kseq_t *read_seq_t)
+{
+    fprintf(stdout, "%s\t%d\t*\t*\t%d\t*\t*\t0\t0\t%s\t%s\n", read_seq_t->name.s, 4, 0, read_seq_t->seq.s, read_seq_t->qual.s);
+}
+
 sam_msg *sam_init_msg(void)
 {
     sam_msg *s = (sam_msg*)malloc(sizeof(sam_msg));
@@ -761,9 +774,9 @@ void set_aln_msg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, map_t m
     set_cigar(a_msg[read_x-1].at+aln_y-1, map.cigar);
 }
 
-void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n)
+void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n, char *read_name)
 {
-    strcpy(APP->read_name, s_msg->read_name[read_n]);
+    strcpy(APP->read_name, read_name);
     APP->read_len = s_msg->read_len[read_n];
 
     APP->seed_len = s_msg->seed_len[read_n];
@@ -2838,12 +2851,6 @@ End:
 }
 
 
-
-void lsat_unmap(char *read_name)
-{
-    fprintf(stdout, "%s\t*\t*\t*\t*\n", read_name);
-}
-
 int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lsat_aln_per_para *APP, lsat_aln_para AP)
 {
     int read_n/*1-based*/, seed_out, i, j;
@@ -2903,7 +2910,7 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
     readfp = gzopen(read_prefix, "r");
     read_seq_t = kseq_init(readfp);
     while (read_n <= s_msg->read_all) { // get seeds' aln-msg of every read
-        init_aln_per_para(APP, s_msg, read_n);
+        init_aln_per_para(APP, s_msg, read_n, read_seq_t->name.s);
         if ((r = sam_read1(samf->x.tamr, samf->header, m_msg, APP->per_aln_n)) < 0) break;
         if (APP->per_aln_n > AP.per_aln_m)
         {
@@ -2932,7 +2939,7 @@ int frag_sam_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             // main line process
             strcpy(READ_NAME, APP->read_name);
             line_n = frag_line_BCC(a_msg, *APP, AP, line, line_end, f_node, _line, _line_end, line_n_max, per_max_multi);
-            if (line_n == 0) lsat_unmap(s_msg->read_name[read_n]);
+            if (line_n == 0) lsat_unmap_output(read_seq_t);
             else {
                 frag_dp_path(a_msg, &f_msg, *APP, AP, &line_n, &line_m, line, line_end, f_node);
                 frag_check(a_msg, &f_msg, a_res, bns, pac, read_prefix, read_seq, *APP, AP, line_n, &hash_num, &hash_node);
@@ -3036,7 +3043,7 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
     readfp = gzopen(read_prefix, "r");
     read_seq_t = kseq_init(readfp);
     while (read_n <= s_msg->read_all) { // get seeds' aln-msg of every read
-        init_aln_per_para(APP, s_msg, read_n);
+        init_aln_per_para(APP, s_msg, read_n, read_seq_t->name.s);
         if ((r = gem_map_read(mapf, m_msg, APP->per_aln_n)) < 0) break;
         if (APP->per_aln_n > AP.per_aln_m) {
             aln_realc_msg(a_msg, s_msg->seed_max, AP.per_aln_m, APP->per_aln_n);
@@ -3066,26 +3073,12 @@ int frag_map_cluster(const char *read_prefix, char *seed_result, seed_msg *s_msg
             // main line process
             strcpy(READ_NAME, APP->read_name);
             line_n = frag_line_BCC(a_msg, *APP, AP, line, line_end, f_node, _line, _line_end, line_n_max, per_max_multi);
-            if (line_n == 0) lsat_unmap(s_msg->read_name[read_n]);
+            if (line_n == 0) lsat_unmap_output(read_seq_t);
             else {
                 frag_dp_path(a_msg, &f_msg, *APP, AP, &line_n, &line_m, line, line_end, f_node);
                 frag_check(a_msg, &f_msg, a_res, bns, pac, read_prefix, read_seq, *APP, AP, line_n, &hash_num, &hash_node);
                 aln_res_output(a_res, a_reg, *APP, read_seq_t, bns);
-				/*
-                // trigger-line
-                for (i=0; i<line_n; ++i) {
-                    if (a_res->la[i].merg_msg.x == 1) {
-                        for (j=0; j<a_res->la[i].trg_n; ++j) {
-                            tri_n = trg_dp_line(*f_node, a_msg, &f_msg, APP, AP, a_res->la[i].trg[j].x, a_res->la[i].trg[j].y, line, line_end, _line, _line_end, per_max_multi);
-                            if (tri_n == 0) continue;
-                            frag_dp_path(a_msg, &f_msg, APP, AP, &tri_n, &line_m, line, line_end, f_node, _line, _line_end);
-                            aln_res *tri_res = aln_init_res(1, APP->read_len);
-                            frag_check(a_msg, &f_msg, tri_res, bns, pac, read_prefix, read_seq, APP, AP, tri_n, &hash_num, &hash_node);
-                            aln_res_output(tri_res, a_reg, APP); aln_res_free(tri_res);
-                        }
-                    }
-                }*/
-				// re-DP for remian regions with long-seed-reuslts
+                // re-DP for remian regions with long-seed-reuslts
 				line_n = frag_line_remain(a_reg, a_msg, *APP, AP, line, line_end, f_node, _line, _line_end, line_n_max, per_max_multi);
                 if (line_n > 0) {
                     frag_dp_path(a_msg, &f_msg, *APP, AP, &line_n, &line_m, line, line_end, f_node);

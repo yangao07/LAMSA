@@ -119,7 +119,7 @@ typedef struct {
 
 typedef struct {	//全部read包含seed数目信息
     int read_all;		//获取的read总数目			
-	char **read_name;
+	//char **read_name;
     int *seed_all;	//存放每条read的seed数目    index from 1
     int *read_len;	//length of read
     int *read_level;//level of read length
@@ -299,6 +299,8 @@ typedef struct {
 
 typedef struct {
     int aln_type;
+
+    int n_thread;   // for mulit-threads
 
     int per_aln_m;  // max number of seeds' aln-results
     int SV_len_thd;
