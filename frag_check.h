@@ -96,10 +96,10 @@ void frag_free_msg(frag_msg *f_msg, int line_num);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i);//FLAG 0: start/1:end / 2:seed
 int frag_trg_set(frag_dp_node f_node, frag_msg *f_msg, int frag_i);
 int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg);
-void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, char *read_seq, int read_len, lsat_aln_para AP, lsat_aln_per_para APP);
+void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, int read_len, lsat_aln_para AP, lsat_aln_per_para APP);
 void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
-               bntseq_t *bns, uint8_t *pac, const char *read_prefix,
-               char *read_seq,
+               bntseq_t *bns, uint8_t *pac, 
+               uint8_t *read_bseq, uint8_t **read_rbseq,
                lsat_aln_per_para APP, lsat_aln_para AP,
                int line_n,
                uint32_t **hash_num, uint64_t ***hash_node);

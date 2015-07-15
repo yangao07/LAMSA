@@ -137,26 +137,33 @@ void md2cigar(char *md, map_t *map)
 	free(c);
 }
 
-map_msg *map_init_msg(void)
+map_msg *map_init_msg(int n)
 {
-	int i, max_n = 1;
-	map_msg *m_msg = (map_msg*)malloc(sizeof(map_msg));
-	m_msg->map_n = 0; m_msg->map_m = max_n; m_msg->map = (map_t*)malloc(max_n * sizeof(map_t));
-	for (i = 0; i < max_n; ++i) {
-		m_msg->map[i].cigar = (cigar_t*)malloc(sizeof(cigar_t));
-		m_msg->map[i].cigar->cigar_n = 0; m_msg->map[i].cigar->cigar_m = 10; m_msg->map[i].cigar->cigar = (cigar32_t*)malloc(10 * sizeof(cigar32_t));
-	}
-	return m_msg;
+	int i, j, max_n = 1;
+	map_msg *m_msg = (map_msg*)calloc(n, sizeof(map_msg));
+    for (j = 0; j < n; ++j) {
+        map_msg *p = m_msg+j;
+        p->map_n = 0; p->map_m = max_n; p->map = (map_t*)malloc(max_n * sizeof(map_t));
+        for (i = 0; i < max_n; ++i) {
+            p->map[i].cigar = (cigar_t*)malloc(sizeof(cigar_t));
+            p->map[i].cigar->cigar_n = 0; p->map[i].cigar->cigar_m = 10; p->map[i].cigar->cigar = (cigar32_t*)malloc(10 * sizeof(cigar32_t));
+        }
+    }
+    return m_msg;
 }
 
-void map_free_msg(map_msg *m_msg)
+void map_free_msg(map_msg *m_msg, int n)
 {
-    int i;
-    for (i = 0; i < m_msg->map_m; ++i) {
-        free(m_msg->map[i].cigar->cigar);
-        free(m_msg->map[i].cigar);
+    int i, j;
+    for (j = 0; j < n; ++j) {
+        map_msg *p = m_msg + j;
+        for (i = 0; i < m_msg->map_m; ++i) {
+            free(p->map[i].cigar->cigar);
+            free(p->map[i].cigar);
+        }
+        free(p->map);
     }
-    free(m_msg->map); free(m_msg);
+    free(m_msg);
 }
 
 uint32_t fgetline(FILE *fp, char **line, int *len, int *m)
@@ -193,7 +200,7 @@ int main(int argc, char* argv[])
     char file[100]; FILE *mapf;
     strcpy(file, argv[1]);
     mapf = fopen(file, "r");
-    map_msg *m_msg = map_init_msg(); int max_n = 100;
+    map_msg *m_msg = map_init_msg(1); int max_n = 100;
 
 	m_msg->map_n = 0;
 	int line_len = LINE_SIZE, aln_len = LINE_SIZE;
@@ -251,7 +258,7 @@ RET:
 	if (gem_line) free(gem_line);
 	if (aln_msg) free(aln_msg);
 
-	map_free_msg(m_msg);
+	map_free_msg(m_msg, 1);
 	fclose(mapf);
 	return 0;
 }

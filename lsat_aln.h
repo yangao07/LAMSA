@@ -4,9 +4,11 @@
 #include <stdint.h>
 #include "kstring.h"
 
+#define CHUNK_SIZE 10000000
+
 #define READ_MAX_NUM 1000
 //aln_para
-#define PER_ALN_N 100
+//#define PER_ALN_N 100
 #define SPLIT_ALN_LEN 100
 #define SPLIT_ALN_PEN 10
 #define SV_MAX_LEN 10000
@@ -116,9 +118,10 @@ typedef struct {
     int cigar_n;
 } cigar_t;
 
-
 typedef struct {	//全部read包含seed数目信息
+    int read_count;     //current read count
     int read_all;		//获取的read总数目			
+	int read_m; 
 	//char **read_name;
     int *seed_all;	//存放每条read的seed数目    index from 1
     int *read_len;	//length of read
@@ -126,7 +129,6 @@ typedef struct {	//全部read包含seed数目信息
 	int *last_len;	//last_len                  index from 1
     int seed_max;   //read中分割成的seed数目最大值	
     int read_max_len;    //max length of read
-	int read_m; 
     int *seed_len;
     int *seed_inv;
 } seed_msg;
@@ -245,8 +247,8 @@ typedef struct {
 	int aln_i;      //ALLOC
 
 	//tree generating and pruning
-	int in_de; // 入度      
-    int son_n; // 子节点数目
+	int in_de; // in-degree
+    int son_n; // number of son-nodes
     int son_max;            //ALLOC
     line_node *son;
     int max_score;          
@@ -264,7 +266,7 @@ typedef struct {
 
 typedef struct {
     // read msg
-    char read_name[1024];
+    char read_name[100];
     int read_len;
     int read_level; //level of read length
 

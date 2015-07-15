@@ -17,9 +17,8 @@ typedef struct {
     int map_m;
 } map_msg;
 
-
 int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n);
-map_msg *map_init_msg(void);
-void map_free_msg(map_msg *m_msg);
+map_msg *map_init_msg(int n);
+void map_free_msg(map_msg *m_msg, int n);
 
 #endif

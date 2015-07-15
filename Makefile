@@ -7,7 +7,7 @@ OBJS=		main.o build_ref.o bntseq.o lsat_heap.o lsat_aln.o frag_check.o split_map
 			bwt.o bwt_aln.o utils.o
 PROG=		lsat
 PROG1=      ~/bin/lsat
-LIB=		-lm -lz
+LIB=		-lm -lz -lpthread
 #MACRO=     -D __NEW__
 #MACRO=		-D __DEBUG__
 .SUFFIXES:.c .o

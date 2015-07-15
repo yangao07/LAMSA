@@ -1,6 +1,7 @@
 #ifndef BWT_ALN_H
 #define BWT_ALN_H
 #include "lsat_aln.h"
+#include "frag_check.h"
 #include "bwt.h"
 #include "bntseq.h"
 
@@ -24,6 +25,6 @@ typedef struct {
     uint64_t ref_pos;
 } bwt_bound;
 
-void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, char *read_seq, lsat_aln_per_para APP, lsat_aln_para AP);
+void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, lsat_aln_per_para APP, lsat_aln_para AP);
 
 #endif
