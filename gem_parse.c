@@ -157,7 +157,7 @@ void map_free_msg(map_msg *m_msg, int n)
     int i, j;
     for (j = 0; j < n; ++j) {
         map_msg *p = m_msg + j;
-        for (i = 0; i < m_msg->map_m; ++i) {
+        for (i = 0; i < p->map_m; ++i) {
             free(p->map[i].cigar->cigar);
             free(p->map[i].cigar);
         }

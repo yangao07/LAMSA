@@ -313,6 +313,8 @@ typedef struct {
     int hash_len, hash_key_len, hash_step, hash_size;
     int bwt_seed_len;
 
+    FILE *outp;
+
     // SW para
     int gapo, gape; // gap open penalty, gap extension penalty
     int match, mis;     // score matrix, match and mismatch
