@@ -65,8 +65,7 @@ int bwt_seed_con(bwt_seed_t seed1, int l1, bwt_seed_t seed2, int l2, int *con_fl
 
 void bwt_update_dp(bwt_seed_t **seed_v, int seed_n)
 {
-    int i, j, m, n, max_score=0, max_dis, con_flag;
-    line_node max_from;
+    int i, j, m, n, max_dis, con_flag;
     for (i = 1; i < seed_n; ++i) {
         for (j = 0; j <(*seed_v)[i].n; ++j) {
             for (m = i-1; m >= 0; --m) {

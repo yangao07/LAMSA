@@ -18,7 +18,7 @@ extern char READ_NAME[1024];
 	// 0 - 2^16
 	//return the pos of kmer that matches kmer_int, and EQUAL_FLAG means EXISTS(1) or NOT(0)
 	// XXX binary search and store OR store and sort ?
-int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kmer_int, int kmer_len, int *EQUAL_FLAG)
+int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kmer_int, int *EQUAL_FLAG)
 {
 	int left=0, right=(*hash_num)[key_int]-1, middle;
 	if(right == -1)		//已存在的k-mer数量为0
@@ -36,7 +36,7 @@ int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kme
 		else
         {
             *EQUAL_FLAG = 0;
-            if((((*hash_node)[key_int][0] >> 32) & 0xffff) > kmer_int)
+            if((int)(((*hash_node)[key_int][0] >> 32) & 0xffff) > kmer_int)
                 return 0;
             return 1;
         }
@@ -49,9 +49,9 @@ int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kme
 			*EQUAL_FLAG = 1;
 			return middle;
 		}
-		else if((((*hash_node)[key_int][middle] >> 32) & 0xffff) > kmer_int)		//大于
+		else if((int)(((*hash_node)[key_int][middle] >> 32) & 0xffff) > kmer_int)		//大于
 		{
-			if((middle == 0) || ((((*hash_node)[key_int][middle - 1] >> 32) & 0xffff) < kmer_int))	//第一个大于该k-mer的k-mer
+			if((middle == 0) || ((int)(((*hash_node)[key_int][middle - 1] >> 32) & 0xffff) < kmer_int))	//第一个大于该k-mer的k-mer
             {
                 *EQUAL_FLAG = 0;
 				return middle;
@@ -69,7 +69,7 @@ int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kme
 	//return value: if find the kmer that match key_int or not
 	//hit index XXX 
 	// multi-hit XXX
-int hash_hit(uint32_t *hash_num, uint64_t **hash_node, int *node_i, int key_int, int kmer_int, int kmer_len)
+int hash_hit(uint32_t *hash_num, uint64_t **hash_node, int *node_i, int key_int, int kmer_int)
 {
 	int left=0, right=hash_num[key_int]-1, middle;
 
@@ -114,7 +114,7 @@ int hash_hit(uint32_t *hash_num, uint64_t **hash_node, int *node_i, int key_int,
 			*node_i = middle;
 			return 1;
 		}
-		else if(((hash_node[key_int][middle] >> 32) & 0xffffffff) > kmer_int)		//大于
+		else if((int)((hash_node[key_int][middle] >> 32) & 0xffffffff) > kmer_int)		//大于
 			right = middle-1;//继续二分查找	
 		else		//小于
 			left = middle + 1;
@@ -141,7 +141,7 @@ int hash_calcu(int *key_int, int *kmer_int, uint8_t *seed, int hash_len, int key
 	//hash_node:  ----32----||--------16--------|---------16----------       
 	//             kmer_int    pos_start_index        pos_num
 int init_hash_core(uint8_t *hash_seq, int hash_offset, 
-				   int hash_len, int key_len, int hash_size, 
+				   int hash_len, int key_len, 
 				   uint32_t *hash_num, uint64_t ***hash_node, int ***hash_node_num,
                    int32_t **hash_pos)
 {
@@ -149,7 +149,7 @@ int init_hash_core(uint8_t *hash_seq, int hash_offset,
 	
 	hash_calcu(&key_int, &kmer_int, hash_seq, hash_len, key_len);
 	//node_i = hash_search(&hash_num, hash_node, key_int, kmer_int, hash_len-key_len, &EQUAL_FLAG);
-	if (hash_hit(hash_num, *hash_node, &node_i, key_int, kmer_int, hash_len-key_len) != 1)
+	if (hash_hit(hash_num, *hash_node, &node_i, key_int, kmer_int) != 1)
     {
         int i;
         fprintf(stderr, "hash seq:\t");
@@ -177,7 +177,7 @@ int hash_calcu_pos_start(int hash_size, uint64_t ***hash_node, uint32_t *hash_nu
     uint64_t tmp, pos_start=0;
 	for (i = 0; i < hash_size; ++i)
 	{
-		for (j = 0; j < hash_num[i]; ++j)
+		for (j = 0; j < (int)hash_num[i]; ++j)
 		{
 			//printf("pos_start: %d %d -> %d\n", i, (*hash_node)[i][j] >> 32, pos_start);
 			tmp = pos_start;
@@ -210,7 +210,7 @@ int init_hash_pos_num(uint8_t *hash_seq, int hash_len, int key_len, uint32_t **h
     {
         node_i = 0;
     }
-    else node_i = hash_search(hash_num, hash_node, key_int, kmer_int, hash_len-key_len, &EQUAL_FLAG);
+    else node_i = hash_search(hash_num, hash_node, key_int, kmer_int, &EQUAL_FLAG);
 
 	if (EQUAL_FLAG == 1)
     {
@@ -283,7 +283,7 @@ int init_hash(uint8_t *ref_seq, int ref_len, int hash_len,
 	for (i = 0; i <= ref_len-hash_len; ++i)
 	{
 		hash_seq = ref_seq+i;
-		init_hash_core(hash_seq, i, hash_len, key_len, hash_size, *hash_num, hash_node, hash_node_num, hash_pos);
+		init_hash_core(hash_seq, i, hash_len, key_len, *hash_num, hash_node, hash_node_num, hash_pos);
 	}
 	return 0;
 }
@@ -296,8 +296,8 @@ int init_hash(uint8_t *ref_seq, int ref_len, int hash_len,
 //
 //XXX for overlaped-DUP: ref_len = read_len+read_len-ref_len+2*hash_len
 //                       
-int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, int hash_step, 
-				  int *con_flag, int ref_len, int read_len, int ref_offset)
+int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, int hash_step, int *con_flag)
+                  //int ref_len, int read_len, int ref_offset)
 {
 	int dis;
 	if (a_i > b_i) dis = a_offset - b_offset;
@@ -344,8 +344,8 @@ int hash_dp_init(hash_dp_node **h_node,
 		int *hash_pos, int *start_a, int *len_a, 
 		int node_i, int read_i, 
 		line_node head, 
-		int hash_len, int hash_step, int dp_flag, 
-		int ref_len, int read_len, int ref_offset)
+		int hash_len, int hash_step, int dp_flag) 
+		//int ref_len, int read_len, int ref_offset)
 {
 	int i;
 	if (h_node[head.x][head.y].dp_flag == UNLIMITED_FLAG)
@@ -369,7 +369,7 @@ int hash_dp_init(hash_dp_node **h_node,
 		{
 			h_node[node_i][i].read_i = read_i;
 			h_node[node_i][i].offset = hash_pos[start_a[node_i]+i] - read_i;
-			hash_main_dis(h_node[head.x][head.y].read_i, h_node[head.x][head.y].offset, read_i, hash_pos[start_a[node_i]+i] - read_i, hash_len, hash_step, &con_flag, ref_len, read_len, ref_offset);
+			hash_main_dis(h_node[head.x][head.y].read_i, h_node[head.x][head.y].offset, read_i, hash_pos[start_a[node_i]+i] - read_i, hash_len, hash_step, &con_flag);//, ref_len, read_len, ref_offset);
 
 			if (con_flag == F_UNCONNECT) {
 				h_node[node_i][i].from = (line_node){-1,0};
@@ -428,8 +428,8 @@ NextCheck:;
 int hash_min_extend(hash_dp_node **h_node, int *len_a, 
 		int node_x, int node_y, 
 		int h_len, int min_len, int dp_flag, 
-		int hash_len, int hash_step,
-		int ref_len, int read_len, int ref_offset)
+		int hash_len, int hash_step)
+		//int ref_len, int read_len, int ref_offset)
 {
 	int i, j, con_flag;
 	int last_x = node_x, last_y = node_y;
@@ -446,7 +446,7 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
 				//counter++;
 				if (h_node[i][j].dp_flag < 0)
 					continue;
-				hash_main_dis(h_node[i][j].read_i, h_node[i][j].offset, h_node[last_x][last_y].read_i, h_node[last_x][last_y].offset, hash_len, hash_step, &con_flag, ref_len, read_len, ref_offset);
+				hash_main_dis(h_node[i][j].read_i, h_node[i][j].offset, h_node[last_x][last_y].read_i, h_node[last_x][last_y].offset, hash_len, hash_step, &con_flag);//, ref_len, read_len, ref_offset);
 				if (con_flag == F_MATCH)
 				{
 					h_node[i][j].dp_flag = dp_flag;
@@ -468,13 +468,13 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
 	//for (i = node_x+1; i < h_len-1; ++i)
 	while (i < h_len-1)
 	{
-		if (len_a[i] > min_len);
+		if (len_a[i] > min_len)
 		{
 			for (j = 0; j < len_a[i]; ++j)
 			{
 				if (h_node[i][j].dp_flag < 0)
 					continue;
-				hash_main_dis(h_node[last_x][last_y].read_i, h_node[last_x][last_y].offset, h_node[i][j].read_i, h_node[i][j].offset, hash_len, hash_step, &con_flag, ref_len, read_len, ref_offset);
+				hash_main_dis(h_node[last_x][last_y].read_i, h_node[last_x][last_y].offset, h_node[i][j].read_i, h_node[i][j].offset, hash_len, hash_step, &con_flag);//, ref_len, read_len, ref_offset);
 				if (con_flag == F_MATCH)
 				{
 					h_node[i][j].dp_flag = dp_flag;
@@ -497,8 +497,8 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
 
 //pruning XXX
 int hash_dp_update(hash_dp_node **h_node, int *len_a, 
-				   int node_x, int node_y, int start, int hash_len, int hash_step,
-				   int dp_flag, int ref_len, int read_len, int ref_offset)
+				   int node_x, int node_y, int start, int hash_len, int hash_step, int dp_flag)
+				   //int ref_len, int read_len, int ref_offset)
 {
 	int i, j, con_flag;
 	line_node max_from;
@@ -512,7 +512,7 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 			for (j = 0; j < len_a[i]; ++j) {
 				if (h_node[i][j].dp_flag == dp_flag)
 				{
-					hash_main_dis(h_node[i][j].read_i, h_node[i][j].offset, h_node[node_x][node_y].read_i, h_node[node_x][node_y].offset, hash_len, hash_step, &con_flag, ref_len, read_len, ref_offset);
+					hash_main_dis(h_node[i][j].read_i, h_node[i][j].offset, h_node[node_x][node_y].read_i, h_node[node_x][node_y].offset, hash_len, hash_step, &con_flag);//, ref_len, read_len, ref_offset);
 					if (con_flag == F_UNCONNECT)
 						continue;
 					if (h_node[i][j].score + 1 - ((con_flag<=F_SPLIT_MATCH)?0:HASH_SV_PEN) > max_score) {
@@ -556,8 +556,8 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 
 int hash_mini_dp_init(hash_dp_node **h_node, int *len_a, 
 					  int node_i, line_node head, 
-					  int hash_len, int hash_step, int mini_dp_flag, 
-					  int ref_len, int read_len, int ref_offset)
+					  int hash_len, int hash_step, int mini_dp_flag) 
+					  //int ref_len, int read_len, int ref_offset)
 {
 	int i;
 	if (h_node[head.x][head.y].dp_flag == UNLIMITED_FLAG)
@@ -576,7 +576,7 @@ int hash_mini_dp_init(hash_dp_node **h_node, int *len_a,
 		int con_flag;
 		for (i = 0; i < len_a[node_i]; ++i)
 		{
-			hash_main_dis(h_node[head.x][head.y].read_i, h_node[head.x][head.y].offset, h_node[node_i][i].read_i, h_node[node_i][i].offset, hash_len, hash_step, &con_flag, ref_len, read_len, ref_offset);
+			hash_main_dis(h_node[head.x][head.y].read_i, h_node[head.x][head.y].offset, h_node[node_i][i].read_i, h_node[node_i][i].offset, hash_len, hash_step, &con_flag);//, ref_len, read_len, ref_offset);
 			if (con_flag == F_UNCONNECT)
 			{
 				h_node[node_i][i].from = (line_node){-1,0};
@@ -600,16 +600,16 @@ int hash_mini_dp_init(hash_dp_node **h_node, int *len_a,
 
 //line: forward
 int mini_hash_main_line(hash_dp_node **h_node, 
-						int *hash_pos, int *start_a, int *len_a, 
+						int *len_a, 
 					    int hash_len, int hash_step, 
 						line_node head, line_node tail, 
-						line_node *line, 
-						int ref_len, int read_len, int ref_offset)
+						line_node *line) 
+						//int ref_len, int read_len, int ref_offset)
 {
 	int i, j, mini_dp_flag = MULTI_FLAG;
 	for (i = head.x+1; i < tail.x; ++i)
 		//only part of the dp-node members need to be re-inited
-		hash_mini_dp_init(h_node, len_a, i, head, hash_len, hash_step, mini_dp_flag, ref_len, read_len, ref_offset);
+		hash_mini_dp_init(h_node, len_a, i, head, hash_len, hash_step, mini_dp_flag);//, ref_len, read_len, ref_offset);
 
 	h_node[tail.x][tail.y].from = head;
 	h_node[tail.x][tail.y].score = 0;
@@ -621,10 +621,10 @@ int mini_hash_main_line(hash_dp_node **h_node,
 		for (j = 0; j < len_a[i]; ++j)
 		{
 			if (h_node[i][j].dp_flag == mini_dp_flag)
-				hash_dp_update(h_node, len_a, i, j, head.x+1, hash_len, hash_step, mini_dp_flag, ref_len, read_len, ref_offset);
+				hash_dp_update(h_node, len_a, i, j, head.x+1, hash_len, hash_step, mini_dp_flag);//, ref_len, read_len, ref_offset);
 		}
 	}
-	hash_dp_update(h_node, len_a, tail.x, tail.y, head.x+1, hash_len, hash_step, mini_dp_flag, ref_len, read_len, ref_offset);
+	hash_dp_update(h_node, len_a, tail.x, tail.y, head.x+1, hash_len, hash_step, mini_dp_flag);//, ref_len, read_len, ref_offset);
 
 	int node_i = h_node[tail.x][tail.y].node_n-1;
 	int last_x, last_y;
@@ -648,7 +648,7 @@ int mini_hash_main_line(hash_dp_node **h_node,
 //for _head and _tail both are set as 1, use the normal penalty
 //for only one of _head and _tail is set as 1, use the seed_len-limit penalty
 int hash_main_line(int *hash_pos, int *start_a, int *len_a, 
-			       int ref_len, int read_len, int ref_offset, int hash_seed_n, 
+			       int ref_len, int read_len, int hash_seed_n, 
 				   int hash_len, int hash_step, 
 				   hash_dp_node **h_node, line_node *line, 
 				   int _head, int _tail)
@@ -674,10 +674,10 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 		//seed init
 		for (i = 1; i <= hash_seed_n; ++i) {
 			if (len_a[i] == min_len) {
-				hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*read offset*/, head, hash_len, hash_step, MIN_FLAG, ref_len, read_len, ref_offset);
+				hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*read offset*/, head, hash_len, hash_step, MIN_FLAG);//, ref_len, read_len, ref_offset);
 				min_exist = 1;
 			}
-			else hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*read offset*/, head, hash_len, hash_step, MULTI_FLAG, ref_len, read_len, ref_offset);
+			else hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*hash_step/*read offset*/, head, hash_len, hash_step, MULTI_FLAG);//, ref_len, read_len, ref_offset);
 		}
 	}
 	//dp update and backtrack
@@ -692,23 +692,23 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 			}
 #endif
 #ifdef __NEW__
-			if (_head) hash_min_extend(h_node, len_a, head.x, head.y, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step, ref_len, read_len, ref_offset);
+			if (_head) hash_min_extend(h_node, len_a, head.x, head.y, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step);//, ref_len, read_len, ref_offset);
 			for (i = 1; i <= hash_seed_n; ++i) {
 				if (len_a[i] <= min_len && len_a[i] > 0) {
 					for (j = 0; j < len_a[i]; ++j) 
-						hash_min_extend(h_node, len_a, i, j, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step, ref_len, read_len, ref_offset);
+						hash_min_extend(h_node, len_a, i, j, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step);//, ref_len, read_len, ref_offset);
 				}
 			}
-			if (_tail) hash_min_extend(h_node, len_a, tail.x, tail.y, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step, ref_len, read_len, ref_offset);
+			if (_tail) hash_min_extend(h_node, len_a, tail.x, tail.y, hash_seed_n+2, min_len, MIN_FLAG, hash_len, hash_step);//, ref_len, read_len, ref_offset);
 #endif
 			//min update
 			for (i = 2; i <= hash_seed_n; ++i) {
 				for (j = 0; j < len_a[i]; ++j) {
 					if (h_node[i][j].dp_flag == MIN_FLAG)
-						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG, ref_len, read_len, ref_offset);
+						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG);//, ref_len, read_len, ref_offset);
 				}
 			}
-			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG, ref_len, read_len, ref_offset);
+			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MIN_FLAG);//, ref_len, read_len, ref_offset);
 			//backtrack and update for remaining blank
 			int mini_len;
 			line_node *_line = (line_node*)malloc(hash_seed_n * sizeof(line_node));;
@@ -720,7 +720,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 			{
 				if (h_node[right.x][right.y].match_flag != F_MATCH && left.x < right.x-1)// there is a seed left
 				{
-					mini_len = mini_hash_main_line(h_node, hash_pos, start_a, len_a, hash_len, hash_step, left, right, _line, ref_len, read_len, ref_offset);
+					mini_len = mini_hash_main_line(h_node, len_a, hash_len, hash_step, left, right, _line);//, ref_len, read_len, ref_offset);
 					//add mini-line to the main-line, _line is forward, but the line is reverse
 					for (i = mini_len-1; i >= 0; --i)
 						line[node_i++] = _line[i];
@@ -746,10 +746,10 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 			for (i = 2; i <= hash_seed_n; ++i) {
 				for (j = 0; j < len_a[i]; ++j) {
 					if (h_node[i][j].dp_flag == MULTI_FLAG)
-						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG, ref_len, read_len, ref_offset);
+						hash_dp_update(h_node, len_a, i, j, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG);//, ref_len, read_len, ref_offset);
 				}
 			}
-			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG, ref_len, read_len, ref_offset);
+			hash_dp_update(h_node, len_a, tail.x, tail.y, 1/*update start pos*/, hash_len, hash_step, MULTI_FLAG);//, ref_len, read_len, ref_offset);
 			node_i = h_node[tail.x][tail.y].node_n-1;
 
 			int last_x, last_y;
@@ -834,7 +834,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 				start_a[i/hash_step+1] = 0;
 				len_a[i/hash_step+1] = 0;
 			} else {
-				if (hash_hit(hash_num, hash_node, &node_i, q_key_int, q_kmer_int, hash_len-key_len) == 1)
+				if (hash_hit(hash_num, hash_node, &node_i, q_key_int, q_kmer_int) == 1)
 				{
 					start_a[i/hash_step + 1] = ((hash_node[q_key_int][node_i] & 0xffffffff));	//for hit seeds
                     // XXX hash_max_hits
@@ -854,10 +854,10 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 			h_node[i] = (hash_dp_node*)malloc(len_a[i] * sizeof(hash_dp_node));
 		if (line == NULL || h_node == NULL) {fprintf(stderr, "[hash_split_map] Not enougy memory.\n"); exit(1);} 
 
-		m_len = hash_main_line(hash_pos, start_a, len_a, ref_len, read_len, ref_offset, hash_seed_n, hash_len, hash_step, h_node, line, _head, _tail);
+		m_len = hash_main_line(hash_pos, start_a, len_a, ref_len, read_len, hash_seed_n, hash_len, hash_step, h_node, line, _head, _tail);
 	}
 
-	int _q_len, _t_len, _clen=0, _cm, _b_w, _score; 
+	int _q_len, _t_len, _clen=0, _cm, _b_w; 
 	cigar32_t *_cigar=0;
 	int tail_in=hash_len/2, head_in=(hash_len+1)/2; // tail_in = (L)/2, head_in = (L+1)/2
     if (m_len > 0) {

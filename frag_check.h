@@ -45,7 +45,6 @@ typedef struct {
 } frag_msg;
 
 typedef struct {
-	uint8_t dump;
     uint64_t offset;	//1-based
     int chr;
     int nsrand;			//1:'+' 0:'-'
@@ -60,13 +59,15 @@ typedef struct {
     //int m_m, m_n;   
     //char *XA;         // alternative alignment results XXX
 
-    int read_beg, read_end;
+    int reg_beg, reg_end; // set in push_reg_res()
 } res_t;
 
 typedef struct {
     line_node merg_msg;    // after filtering:
                            // 1,x: keep
                            // 0,x: dump
+    res_t *XA_res;
+    int XA_n, XA_m;        // per_max_multi
 
     int res_m, cur_res_n;
     res_t *res;

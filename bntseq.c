@@ -289,7 +289,7 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	m_seqs = m_holes = 8; m_pac = 0x10000;
 	bns->anns = (bntann1_t*)calloc(m_seqs, sizeof(bntann1_t));
 	bns->ambs = (bntamb1_t*)calloc(m_holes, sizeof(bntamb1_t));
-	pac = calloc(m_pac/4, 1);
+	pac = (uint8_t*)calloc(m_pac/4, 1);
 	q = bns->ambs;
 	strcpy(name, prefix); strcat(name, ".pac");
 	fp = xopen(name, "wb");
@@ -297,7 +297,7 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	while (kseq_read(seq) >= 0) pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
 	if (!for_only) { // add the reverse complemented sequence
 		m_pac = (bns->l_pac * 2 + 3) / 4 * 4;
-		pac = realloc(pac, m_pac/4);
+		pac = (uint8_t*)realloc(pac, m_pac/4);
 		memset(pac + (bns->l_pac+3)/4, 0, (m_pac - (bns->l_pac+3)/4*4) / 4);
 		for (l = bns->l_pac - 1; l >= 0; --l, ++bns->l_pac)
 			_set_pac(pac, bns->l_pac, 3-_get_pac(pac, l));
@@ -401,7 +401,7 @@ uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end
 	if (beg >= l_pac || end <= l_pac) {
 		int64_t k, l = 0;
 		*len = end - beg;
-		seq = malloc(end - beg);
+		seq = (uint8_t*)malloc(end - beg);
 		if (beg >= l_pac) { // reverse strand
 			int64_t beg_f = (l_pac<<1) - 1 - end;
 			int64_t end_f = (l_pac<<1) - 1 - beg;
@@ -447,7 +447,7 @@ void pac2fa_core(const bntseq_t *bns, const uint8_t *pac,
                  int32_t *len, uint8_t *seq)
 {
     int64_t pac_coor, i,k;
-    if (start > bns->anns[seq_id-1].len) {
+    if (start > bns->anns[seq_id-1].len || start < 0) {
 		fprintf(stderr, "\n[bntseq] Error: Coor is longger than sequence lenth.(%lld > %d)\n", (long long)start, bns->anns[seq_id-1].len); exit(1);
     }
     pac_coor = bns->anns[seq_id-1].offset+start;

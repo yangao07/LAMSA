@@ -43,9 +43,7 @@ void md2m(char *c, int *m, int *mm)
 {
     *m=0; *mm=0;
     if (*c == 0) return;
-    int i, c_i, _c_i;
-    long x;
-    char *s, *t;
+    int i; char *s;
 
     int len = strlen(c);
     for (i = 0; i < len; ++i) {
@@ -66,63 +64,21 @@ void md2m(char *c, int *m, int *mm)
 }
 
 //9A50G11>2-1
-/*void md2cigar(char *md, map_t *map)
-{
-    int md_len = strlen(md);
-    int i; char *c; int c_i, _c_i;
-    char indel_c[10], id, m_c[100]; int indel_n;
-    int m, mm;
-	map->cigar->cigar_n = 0;
-	if (md[0] != '>') { // start with M
-		c = strtok(md, ">");
-		c_i = (strlen(c)+1);
-		md2m(c, &m, &mm);
-		_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (m+mm) << 4 | CMATCH);
-		map->NM = mm;
-	}
-	else { // start with indel
-		c = strtok(md, ">");
-		c_i = (strlen(c) + 1); _c_i = c_i;
-		sscanf(c, "%[^+-]%[+-]%s", indel_c, &id, m_c);
-		c_i = _c_i;
-		indel_n = atoi(indel_c);
-		_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
-		md2m(m_c, &m, &mm);
-		_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (m+mm) << 4 | (CMATCH));
-		map->NM += (indel_n+mm);
-	}
-	while (c != NULL) {
-		if (c_i >= md_len) break;
-		c = strtok(md+c_i, ">");
-		if (c == NULL) break;
-		c_i += (strlen(c)+1);
-		_c_i = c_i;
-		sscanf(c, "%[^+-]%[+-]%s", indel_c, &id, m_c);
-		c_i = _c_i;
-		indel_n = atoi(indel_c);
-		_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
-		md2m(m_c, &m, &mm);
-		_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (m+mm) << 4 | (CMATCH));
-		map->NM += (indel_n+mm);
-	}
-}*/
-
 void md2cigar(char *md, map_t *map)
 {
     int md_len = strlen(md);
     int i=0; 
-	char *c = malloc((md_len+1) * sizeof(char)); int c_i;
-    char indel_c[10], id, m_c[100]; int indel_n;
+	char *c = (char*)malloc((md_len+1) * sizeof(char)); int c_i;
+    char id; int indel_n;
     int m, mm;
 	map->cigar->cigar_n = 0;
 	map->NM = 0;
 	while (i < md_len) {
 		if (md[i] == '>') { // indel
-			sscanf(md+i, ">%[^+-]%[+-]", indel_c, &id);
-			indel_n = atoi(indel_c);
+			sscanf(md+i, ">%d%[+-]", &indel_n, &id);
 			_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
 			map->NM += (indel_n+mm);
-			i += (strlen(indel_c)+2);
+			i += (indel_n/10+1+2);
 		} else {
 			c_i = i;
 			for (; md[i] && md[i]!='>'; ++i) {
@@ -272,7 +228,7 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 	char *gem_line = (char*)malloc(gem_line_m * sizeof(char));
 	char *aln_msg = (char*)malloc(aln_len * sizeof(char));
 	char name[100]; int msg_len;
-	char *t, *s; int t_i, _t_i;
+	char *t; int t_i, _t_i;
 	char chr[10], strand, md[200];
 	long long offset;
 	int i;
