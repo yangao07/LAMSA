@@ -959,7 +959,6 @@ int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
                   int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, 
                   int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
-    int res;
     int n_cigar, m_cigar; cigar32_t *cigar = 0;
     // qlen threshold
     if (qlen <= 5000) 
@@ -1096,7 +1095,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
                     const int8_t *mat, int w, int lh0, int rh0, lsat_aln_para AP,
                     cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
-    int i, res;
+    int res;
     if (*n_cigar_) *n_cigar_ = 0;
     int gapo = AP.gapo, gape = AP.gape;
     //left boundary extension
@@ -1150,7 +1149,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     // middle S/H
     int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
 
-    if (abs(Sn - Hn) < 100) { // for small 'nS' and 'nH', change into indels
+    if (abs(Sn) < 100 && abs(Hn) < 100 && abs(Sn - Hn) < 100) { // for small 'nS' and 'nH', change into indels
         cigar32_t *g_cigar; int g_clen;
         if (Sn > 0 && Hn > 0) {
             ksw_global(Sn, query+lqe, Hn, target+lte, m, mat, gapo, gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);

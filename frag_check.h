@@ -45,7 +45,6 @@ typedef struct {
 } frag_msg;
 
 typedef struct {
-	uint8_t dump;
     uint64_t offset;	//1-based
     int chr;
     int nsrand;			//1:'+' 0:'-'
@@ -60,7 +59,7 @@ typedef struct {
     //int m_m, m_n;   
     //char *XA;         // alternative alignment results XXX
 
-    int read_beg, read_end;
+    //int read_beg, read_end;
 } res_t;
 
 typedef struct {

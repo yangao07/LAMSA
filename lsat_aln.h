@@ -223,6 +223,7 @@ typedef struct {
 typedef struct {
     line_node *node;
     int *score;
+    int min_score_thd;
 
     int max_n;
     int node_n;
