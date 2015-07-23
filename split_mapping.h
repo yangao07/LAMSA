@@ -78,6 +78,7 @@ typedef struct {
 #define UNLIMITED_FLAG 3
 #define WHOLE_FLAG 4
 #define WHOLE_OUT 44
+#define TRACKED_FLAG 5
 
 #define HASH_FRAG_START 1
 #define HASH_FRAG_END 2

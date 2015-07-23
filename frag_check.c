@@ -815,7 +815,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 
 	//check SV-type
 	{
-		//int64_t pos = at1.offset+APP.seed_len-1+at1.len_dif;
+		int64_t pos = at1.offset+APP.seed_len-1+at1.len_dif;
 		int64_t exp = at1.offset + at1.len_dif + (a_msg[s2_i].read_id - a_msg[s1_i].read_id) * APP.seed_step;	
 		int64_t act = at2.offset;
 		int dis = act-exp;
@@ -878,58 +878,9 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                 _invert_cigar(&_cigar, _cigar_n);
                 
                 // merge, add overlap-flag('S/H')
-                int Sn = s_qlen - lqe - rqe, Hn = s_qlen + dis - lte - rte;
-                if (abs(Sn - Hn) < 100) { // for  small 'nS' and 'nH', change into indels
-                    cigar32_t *g_cigar; int g_clen;
-                    if (Sn > 0 && Hn > 0) {
-                        ksw_global(Sn, s_qseq+lqe, Hn, s_tseq+lte, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);
-                        _push_cigar(&s_cigar, &s_clen, &s_cm, g_cigar, g_clen);
-                        free(g_cigar);
-                        _push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
-                        free(_cigar);
-                    } else if (Sn <= 0 && Hn <= 0) {
-                        ksw_global(rqe+Sn, s_qseq+lqe, rte+Hn, s_tseq+lte, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);
-                        _push_cigar(&s_cigar, &s_clen, &s_cm, g_cigar, g_clen);
-                        free(g_cigar);
-                    } else if (Sn > 0 && Hn <= 0) {
-                        _push_cigar1(&s_cigar, &s_clen, &s_cm, (Sn<<4)|CINS);
-                        ksw_global(rqe, s_qseq+lqe+Sn, rte+Hn, s_tseq+lte, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(rqe-rte-Hn)+3, &g_clen, &g_cigar);
-                        _push_cigar(&s_cigar, &s_clen, &s_cm, g_cigar, g_clen);
-                        free(g_cigar);
-                    } else { // Sn <= 0 && Hn > 0
-                        _push_cigar1(&s_cigar, &s_clen, &s_cm, (Hn <<4)|CDEL);
-                        ksw_global(rqe+Sn, s_qseq+lqe, rte, s_tseq+lte+Hn, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(rqe+Sn-rte)+3, &g_clen, &g_cigar);
-                        _push_cigar(&s_cigar, &s_clen, &s_cm, g_cigar, g_clen);
-                        free(g_cigar);
-                    }
-                } else {
-                    _push_cigar0(&s_cigar, &s_clen, &s_cm, (Sn<<4)|CSOFT_CLIP); 
-                    _push_cigar0(&s_cigar, &s_clen, &s_cm, (Hn<<4)|CHARD_CLIP);
-                    _push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
-                    free(_cigar);
-                }
-
-                /*
-                if (abs(Sn) < 100 && abs(Hn) < 100) { // for small 'nS' and 'nH', change into indels
-                    fprintf(stderr, "[split_mapping] Small overlaped-ins: %s\n", READ_NAME);
-                    if (Sn > 0 && Hn > 0) {
-                        cigar32_t *g_cigar; int g_clen;
-                        ksw_global(Sn, s_qseq+lqe, Hn, s_tseq+lte, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);
-                        _push_cigar(&s_cigar, &s_clen, &s_cm, g_cigar, g_clen);
-                        free(g_cigar);
-                    } else if (Sn - Hn > 0) {
-                        _push_cigar1(&s_cigar, &s_clen, &s_cm, ((Sn-Hn)<<4)|CINS);
-                        _push_cigar1(&s_cigar, &s_clen, &s_cm, (Hn<<4)|CMATCH); // -nM XXX
-                    } else { // Sn - Hn <= 0
-                        _push_cigar1(&s_cigar, &s_clen, &s_cm, ((Hn-Sn)<<4)|CDEL);
-                        _push_cigar1(&s_cigar, &s_clen, &s_cm, (Sn<<4)|CMATCH); // -nM XXX
-                    }
-                } else {
-                    _push_cigar0(&s_cigar, &s_clen, &s_cm, (Sn<<4)|CSOFT_CLIP); _push_cigar0(&s_cigar, &s_clen, &s_cm, (Hn<<4)|CHARD_CLIP);
-                }
-                _push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
+                extern void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, const uint8_t *query, int qlen, int lqe, int rqe, cigar32_t *rcigar, int rn_cigar, const uint8_t *target, int tlen, int lte, int rte, lsat_aln_para AP, int m, const int8_t *mat);
+                sw_mid_fix(&s_cigar, &s_clen, &s_cm, s_tseq, s_qlen, lqe, rqe, _cigar, _cigar_n, s_tseq, s_qlen+dis, lte, rte, AP, 5, bwasw_sc_mat);
                 free(_cigar);
-                */
             } else {
                 // for DUP
                 s_tlen += 2*(hash_len-dis);
@@ -1287,11 +1238,8 @@ void lsat_res_split(line_aln_res *la, int read_len, lsat_aln_para AP)
     free(cigar);
 }
 
-void copy_res(line_aln_res *la, int from_i, int to_i)
+void copy_res(res_t *f, res_t *t)
 {
-    res_t *f = la->res+from_i;
-    res_t *t = la->res+to_i;
-    
     t->offset = f->offset;
     t->chr = f->chr;
     t->nsrand = f->nsrand;
@@ -1355,7 +1303,7 @@ void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_b
         r->mapq = 100; //XXX
 		if (r->score < 0) { // XXX
             for (i = m+1; i <= la->cur_res_n; ++i) {
-                copy_res(la, i, i-1);
+                copy_res(la->res+i, la->res+i-1);
             }
             m--;
             la->cur_res_n--;
@@ -1370,7 +1318,7 @@ void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_b
 }
 
 //merg_msg: {1, 0} -> NOT merged or ONLY best
-//          {1, 1} -> merged, best
+//          {1, n} -> merged, best, has n alternative res
 //          {2, i} -> merged, alternative and best is `i`
 //          {0,-1} -> dumped
 void res_filter(aln_res *a_res)
@@ -1449,23 +1397,10 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
 
     // realloc mem, if necessary
     if (line_n > a_res->l_m) {
-        if ((a_res->la = (line_aln_res*)realloc(a_res->la, line_n * sizeof(line_aln_res))) == NULL) {
-            fprintf(stderr, "[frag_check] Not enough memory.\n"); exit(0);
-        }
-        for (i = a_res->l_m; i < line_n; ++i) {
-            a_res->la[i].res_m = 10, a_res->la[i].cur_res_n = 0, a_res->la[i].split_flag = 0;
-            a_res->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
-            for (j = 0; j < 10; ++j) {
-                a_res->la[i].res[j].c_m = 100;
-                a_res->la[i].res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
-                a_res->la[i].res[j].cigar_len = 0;
-            }
-            a_res->la[i].tol_score = a_res->la[i].tol_NM = 0;
-            a_res->la[i].trg_m = 10, a_res->la[i].trg_n = 0;
-            a_res->la[i].trg = (line_node*)malloc(10 * sizeof(line_node));
-        }
-        a_res->l_m = line_n;
+        extern void aln_reloc_res(aln_res *a_res, int line_n, int XA_m);
+        aln_reloc_res(a_res, line_n, AP.res_mul_max);
     }
+         
     // initialization
     a_res->l_n = line_n;
     for (i = 0; i < line_n; ++i) {
@@ -1552,7 +1487,7 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
         }
     }
     // filter line-aln-res in merged-lines, get opt-res OR multi-sub-opt-res
-    res_filter(a_res);
+    //res_filter(a_res);
 
     free(bseq1); free(bseq2);
 }

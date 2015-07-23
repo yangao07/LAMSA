@@ -1091,6 +1091,39 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     return 1;
 }
 
+void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, const uint8_t *query, int qlen, int lqe, int rqe, cigar32_t *rcigar, int rn_cigar, const uint8_t *target, int tlen, int lte, int rte, lsat_aln_para AP, int m, const int8_t *mat)
+{
+    int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
+
+    if (abs(Sn) < AP.split_len && abs(Hn) < AP.split_len && abs(Sn - Hn) < AP.split_len) { // for small 'nS' and 'nH', change into indels
+        cigar32_t *g_cigar; int g_clen;
+        if (Sn > 0 && Hn > 0) {
+            ksw_global(Sn, query+lqe, Hn, target+lte, m, mat, AP.gapo, AP.gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);
+            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+            _push_cigar(cigar, cigar_n, cigar_m, rcigar, rn_cigar);
+        } else if (Sn <= 0 && Hn <= 0) {
+            ksw_global(rqe+Sn, query+lqe, rte+Hn, target+lte, m, mat, AP.gapo, AP.gape, abs(rqe+Sn-rte-Hn)+3, &g_clen, &g_cigar);
+            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+        } else if (Sn > 0 && Hn <= 0) {
+            _push_cigar1(cigar, cigar_n, cigar_m, (Sn <<4)|CINS);
+            ksw_global(rqe, query+lqe+Sn, rte+Hn, target+lte, m, mat, AP.gapo, AP.gape, abs(rqe-rte-Hn)+3, &g_clen, &g_cigar);
+            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+        } else {// Sn <=0 && Hn > 0
+            _push_cigar1(cigar, cigar_n, cigar_m, (Hn <<4)|CDEL);
+            ksw_global(rqe+Sn, query+lqe, rte, target+lte+Hn, m, mat, AP.gapo, AP.gape, abs(rqe+Sn-rte)+3, &g_clen, &g_cigar);
+            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
+            free(g_cigar);
+        }
+    } else {
+        _push_cigar0(cigar, cigar_n, cigar_m, (Sn << 4) | CSOFT_CLIP);
+        _push_cigar0(cigar, cigar_n, cigar_m, Hn << 4 | CHARD_CLIP);
+        _push_cigar(cigar, cigar_n, cigar_m, rcigar, rn_cigar);
+    }
+}
+
 int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
                     const int8_t *mat, int w, int lh0, int rh0, lsat_aln_para AP,
                     cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
@@ -1108,7 +1141,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = lm_cigar;
         _push_cigar1(cigar_, n_cigar_, m_cigar_, (res==0?(((tlen-lte)<<4)|CDEL):(((qlen-lqe)<<4)|CINS)));
         return 0;
-    } else if (abs(qlen-tlen) < 100 && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
+    } else if (abs(qlen-tlen) < AP.split_len && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
 		//  sw-global, disallow cigar like '3S4H50M'
 		if (lcigar) free(lcigar);
 		w = abs(qlen-tlen)+3;
@@ -1128,7 +1161,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = rm_cigar;
         free(lcigar); 
         return 0;
-    } else if (abs(qlen-tlen) < 100 && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
+    } else if (abs(qlen-tlen) < AP.split_len && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
 		// sw-global
 		if (lcigar) free(lcigar); if (rcigar) free(rcigar);
 		w = abs(qlen-tlen)+3;
@@ -1147,40 +1180,13 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     _push_cigar(&cigar, &cigar_n, &cigar_m, lcigar, ln_cigar);
 
     // middle S/H
-    int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
-
-    if (abs(Sn) < 100 && abs(Hn) < 100 && abs(Sn - Hn) < 100) { // for small 'nS' and 'nH', change into indels
-        cigar32_t *g_cigar; int g_clen;
-        if (Sn > 0 && Hn > 0) {
-            ksw_global(Sn, query+lqe, Hn, target+lte, m, mat, gapo, gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);
-            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-            _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
-        } else if (Sn <= 0 && Hn <= 0) {
-            ksw_global(rqe+Sn, query+lqe, rte+Hn, target+lte, m, mat, gapo, gape, abs(rqe+Sn-rte-Hn)+3, &g_clen, &g_cigar);
-            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-        } else if (Sn > 0 && Hn <= 0) {
-            _push_cigar1(&cigar, &cigar_n, &cigar_m, (Sn <<4)|CINS);
-            ksw_global(rqe, query+lqe+Sn, rte+Hn, target+lte, m, mat, gapo, gape, abs(rqe-rte-Hn)+3, &g_clen, &g_cigar);
-            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-        } else {// Sn <=0 && Hn > 0
-            _push_cigar1(&cigar, &cigar_n, &cigar_m, (Hn <<4)|CDEL);
-            ksw_global(rqe+Sn, query+lqe, rte, target+lte+Hn, m, mat, gapo, gape, abs(rqe+Sn-rte)+3, &g_clen, &g_cigar);
-            _push_cigar(&cigar, &cigar_n, &cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-        }
-    } else {
-        _push_cigar0(&cigar, &cigar_n, &cigar_m, (Sn << 4) | CSOFT_CLIP);
-        _push_cigar0(&cigar, &cigar_n, &cigar_m, Hn << 4 | CHARD_CLIP);
-        _push_cigar(&cigar, &cigar_n, &cigar_m, rcigar, rn_cigar);
-    }
+    int Sn = qlen - lqe - rqe;//, Hn = tlen - lte - rte;
+    sw_mid_fix(&cigar, &cigar_n, &cigar_m, query, qlen, lqe, rqe, rcigar, rn_cigar, target, tlen, lte, rte, AP, m, mat);
 
     *cigar_ = cigar; *n_cigar_ = cigar_n; *m_cigar_ = cigar_m;
     if (lcigar) free(lcigar); 
     if (rcigar) free(rcigar);
-    if (Sn >= 100) return 1; // gap exists
+    if (Sn >= AP.split_len) return 1; // gap exists
     else return 0; 
 }
 #endif

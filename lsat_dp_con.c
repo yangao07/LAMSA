@@ -78,6 +78,15 @@ int heap_add_node(node_score *ns, line_node node, int score)
     }
 }
 
+float cover_rate(int s1, int e1, int s2, int e2)
+{
+    int s = (s2 > s1) ? s2 : s1;
+    int e = (e2 < e1) ? e2 : e1;
+    float rat1 = (e-s+1+0.0)/(e1-s1+1+0.0);
+    float rat2 = (e-s+1+0.0)/(e2-s2+1+0.0);
+    return rat1>rat2?rat1:rat2;
+}
+
 int line_merge(int a, int b, line_node **line, int *line_end) {
     int s1, e1, s2, e2, s, e, hi;
     float rat1, rat2;
@@ -780,13 +789,14 @@ int frag_dp_per_init(frag_dp_node **f_node, aln_msg *a_msg,
 }
 
 //TODO: save all (node,score)? OR just save the first `M` big (node,score)
-void node_add_score(int score, line_node node, node_score *ns)
+void node_add_score(int score, line_node node, node_score *ns, frag_dp_node **f_node)
 {
     // XXX
     if (score < ns->min_score_thd) return;
     if (ns->node_n <= ns->max_n-1) {
         ns->score[ns->node_n] = score;
         ns->node[(ns->node_n)++] = node;
+        f_node[node.x][node.y].dp_flag = TRACKED_FLAG;
     } else {
         fprintf(stderr, "[lsat_aln] node_add_score ERROR. (%d %d)\n", ns->node_n, ns->max_n); exit(1);
     }
@@ -841,7 +851,7 @@ void cut_branch(frag_dp_node **f_node, int x, int y, node_score *ns) {
         f_node[son.x][son.y].max_score -= (f_node[son.x][son.y].score - 1);
         max_node = f_node[son.x][son.y].max_node;
         f_node[max_node.x][max_node.y].node_n -= (f_node[son.x][son.y].node_n-1);
-        node_add_score(f_node[son.x][son.y].max_score, max_node , ns);
+        node_add_score(f_node[son.x][son.y].max_score, max_node , ns, f_node);
     }
     // refresh max_socre/node of (x,y), based on max_son, consider negative edge
     if (f_node[x][y].score > f_node[max_son.x][max_son.y].max_score) { // negative edge
@@ -850,7 +860,7 @@ void cut_branch(frag_dp_node **f_node, int x, int y, node_score *ns) {
         f_node[max_son.x][max_son.y].max_score -= (f_node[max_son.x][max_son.y].score - 1);
         max_node = f_node[max_son.x][max_son.y].max_node;
         f_node[max_node.x][max_node.y].node_n -= (f_node[max_son.x][max_son.y].node_n-1);
-        node_add_score(f_node[max_son.x][max_son.y].max_score, max_node, ns);
+        node_add_score(f_node[max_son.x][max_son.y].max_score, max_node, ns, f_node);
         f_node[x][y].son_n = 0;
         f_node[x][y].max_node = (line_node){x,y};
         f_node[x][y].max_score = f_node[x][y].score;
@@ -887,7 +897,7 @@ void branch_track_new(frag_dp_node **f_node, int x, int y, node_score *ns)
                 f_node[son.x][son.y].from = START_NODE;
                 f_node[son.x][son.y].max_score -= (f_node[son.x][son.y].score - 1);
                 f_node[max_node.x][max_node.y].node_n -= (f_node[son.x][son.y].node_n-1);
-                node_add_score(f_node[son.x][son.y].max_score, max_node, ns);
+                node_add_score(f_node[son.x][son.y].max_score, max_node, ns, f_node);
                 f_node[fa.x][fa.y].son_n = 0;
                 max_score = f_node[fa.x][fa.y].score;
                 max_node = fa;
@@ -904,7 +914,7 @@ void branch_track_new(frag_dp_node **f_node, int x, int y, node_score *ns)
         }
     }
     // TREE_START; 
-    node_add_score(max_score, max_node, ns);// add (max_node, max_score);
+    node_add_score(max_score, max_node, ns, f_node);// add (max_node, max_score);
     return;
 }
 
@@ -923,7 +933,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
 
     line_node head = START_NODE; // unlimited
     int start, end;
-    int i, j, mini_dp_flag = WHOLE_FLAG;// (whole DP)
+    int i, j, dp_flag = WHOLE_FLAG;// (whole DP)
     int l_i, node_i;
     line_node left, right;
     line_node _right;
@@ -936,15 +946,15 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
     //first dp int
     for (i = start; i <= end; ++i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
-            //if (f_node[i][j].dp_flag == mini_dp_flag || f_node[i][j].dp_flag == 0-mini_dp_flag)
-                frag_dp_per_init(f_node, a_msg, i, j, head, APP, AP, mini_dp_flag);
+            if (f_node[i][j].dp_flag != TRACKED_FLAG)
+                frag_dp_per_init(f_node, a_msg, i, j, head, APP, AP, dp_flag);
         }
     }
     //dp update
     for (i = start+1; i <= end; ++i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
-            if (f_node[i][j].dp_flag == mini_dp_flag)
-                frag_dp_update(f_node, a_msg, i, j, start, APP, AP, mini_dp_flag);
+            if (f_node[i][j].dp_flag == dp_flag)
+                frag_dp_update(f_node, a_msg, i, j, start, APP, AP, dp_flag);
         }
     }
     // tree-pruning
@@ -953,7 +963,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
     //node_score *ns = node_init_score(80); //size of node_score
     for (i = end; i >=start; --i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
-            if (f_node[i][j].dp_flag == mini_dp_flag && f_node[i][j].in_de == 0) //leaf node
+            if (f_node[i][j].dp_flag == dp_flag && f_node[i][j].in_de == 0) //leaf node
                 branch_track_new(f_node, i, j, ns); 
         }
     }
@@ -971,7 +981,6 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
                 fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 1.\n", APP.read_name); exit(1); 
 			}
             line[l_i][node_i--] = _right;
-            f_node[_right.x][_right.y].dp_flag = MULTI_OUT;
             _right = f_node[_right.x][_right.y].from;
         }
         if (node_i >= 0) { 
@@ -1372,7 +1381,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
                 mini_len = frag_mini_dp_line(*f_node, a_msg, APP, AP, max_node, (line_node){APP.seed_out, 0}, _line[0], &line_score, 1, 0);
                 for (k = mini_len-1; k >= 0; --k) {
                     line[l_i][node_i++] = _line[0][k];
-                    (*f_node)[_line[0][k].x][_line[0][k].y].dp_flag = MULTI_OUT; //不允许重复使用
+                    (*f_node)[_line[0][k].x][_line[0][k].y].dp_flag = TRACKED_FLAG; //不允许重复使用
                 }
                 line[l_i][node_i] = max_node;
                 //set inter-trigger
@@ -1399,7 +1408,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
                     mini_len = frag_mini_dp_line(*f_node, a_msg, APP, AP, left, right, _line[0], &line_score, 1, 1);
                     for (k = mini_len-1; k >= 0; --k) {
                         line[l_i][node_i++] = _line[0][k];
-                        (*f_node)[_line[0][k].x][_line[0][k].y].dp_flag = MULTI_OUT; //不允许重复使用
+                        (*f_node)[_line[0][k].x][_line[0][k].y].dp_flag = TRACKED_FLAG; //不允许重复使用
                     }
                     line[l_i][node_i] = left;	//twice write, for the last multi-dp-line	//XXX
                     //set inter-trigger

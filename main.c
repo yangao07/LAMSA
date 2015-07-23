@@ -28,9 +28,9 @@ static int usage(void)	//main usage
 	return 1;
 }
 
+char lsat_pg[1024];
 int main(int argc, char *argv[])
 {
-    extern char lsat_pg[1024];
 	int i;
     sprintf(lsat_pg, "@PG\tID:lsat\tPN:lsat\tVN:%s\tCL:%s", VERSION, argv[0]);
 	for (i = 1; i < argc; ++i) sprintf(lsat_pg+strlen(lsat_pg), " %s", argv[i]);

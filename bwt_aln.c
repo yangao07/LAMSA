@@ -262,23 +262,10 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
     line_node *line = (line_node*)malloc((reg_len-seed_len+1) * sizeof(line_node));
     int node_n; bwt_bound left_bound, right_bound;
 	// XXX use DP, Spanning-tree and Pruning
+    extern void aln_reloc_res(aln_res *a_res, int line_n, int XA_m);
     if ((node_n = bwt_cluster_seed(seed_v, reg_len-seed_len+1, &line)) > 0) {
-		if (re_res->l_n == re_res->l_m) {
-			re_res->l_m <<= 1;
-			if ((re_res->la = (line_aln_res*)realloc(re_res->la, re_res->l_m * sizeof(line_aln_res))) == NULL) { fprintf(stderr, "[bwt_aln_core] Not enough memory for aln_res.\n"); exit(0); }
-			for (i = (re_res->l_m)>>1; i < re_res->l_m; ++i) {
-				re_res->la[i].res_m = 10, re_res->la[i].cur_res_n = 0, re_res->la[i].split_flag = 0;
-				re_res->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
-				for (j = 0; j < 10; ++j) {
-					re_res->la[i].res[j].c_m = 100;
-					re_res->la[i].res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
-					re_res->la[i].res[j].cigar_len = 0;
-				}
-				re_res->la[i].tol_score = re_res->la[i].tol_NM = 0;
-				re_res->la[i].trg_m = 10, re_res->la[i].trg_n = 0;
-				re_res->la[i].trg = (line_node*)malloc(10 * sizeof(line_node));
-			}
-		}
+		if (re_res->l_n == re_res->l_m) aln_reloc_res(re_res, (re_res->l_n << 1), AP.res_mul_max);
+
 		bwt_set_bound(*seed_v, line, node_n, seed_len, reg_len, &left_bound, &right_bound);
 		bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
 		re_res->la[re_res->l_n].merg_msg = (line_node){1,-1};
