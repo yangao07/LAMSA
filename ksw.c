@@ -955,51 +955,6 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	return max; //max;
 }
 
-int ksw_extend_cc(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                  int m, const int8_t *mat, int gapo, int gape, int w, int h0, int soft_p, 
-                  int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
-{
-    int n_cigar, m_cigar; cigar32_t *cigar = 0;
-    // qlen threshold
-    if (qlen <= 5000) 
-    {
-        ksw_extend_softP(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, h0, soft_p, _qle, _tle, cigar_, n_cigar_, m_cigar_);
-        if (*_qle < qlen) return 1;
-        else return 0;
-    }
-
-    *m_cigar_ = 10;
-    int extend_qstep = 200, extend_tstep = 200; // XXX depend on seed_len??
-    int tmp_qle=*_qle=0, tmp_tle=*_tle=0, score=h0;
-    int r_qlen = qlen, r_tlen = tlen;
-
-    (*cigar_) = (cigar32_t*)malloc(10 * sizeof(cigar32_t));
-    *n_cigar_ = 0;
-    while (r_qlen > 0 && r_tlen > 0)
-    {
-        if (extend_qstep > r_qlen) extend_qstep = r_qlen;
-        if (extend_tstep > r_tlen) extend_tstep = r_tlen;
-        score = ksw_extend_softP(extend_qstep, query+*_qle, extend_tstep, target+*_tle, m ,mat, gapo, gape, gapo, gape, w, score, soft_p, &tmp_qle, &tmp_tle, &cigar, &n_cigar, &m_cigar);
-        if (score < 0) break;
-
-        _push_cigar(cigar_, n_cigar_, m_cigar_, cigar, n_cigar);
-        free(cigar);
-
-        *_qle += tmp_qle;
-        *_tle += tmp_tle;
-
-        int a_len = (gapo+gape) / mat[0];
-        if (tmp_qle < extend_qstep - a_len && tmp_tle < extend_tstep - a_len)
-            break;
-
-        r_qlen -= tmp_qle;
-        r_tlen -= tmp_tle;
-    }
-    // set trigger
-    if (*_qle < qlen) return 1;
-    else return 0;
-}
-// XXX polish 'extend' 
 int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		         int m, const int8_t *mat, int w, int h0, lsat_aln_para AP,
                  int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_,  int *m_cigar_)

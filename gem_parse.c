@@ -47,7 +47,7 @@ void md2m(char *c, int *m, int *mm)
 
     int len = strlen(c);
     for (i = 0; i < len; ++i) {
-        if (c[i] >= 'A' && c[i] <= 'T') //XXX
+        if (c[i] >= 'A' && c[i] <= 'T')
         {
             (*mm)++;
             c[i] = ' ';
@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
 	while (fgetline(mapf, &gem_line, &line_len) != EOF) {
 		if (line_len > aln_len)
 			aln_msg = (char*)realloc(aln_msg, line_len * sizeof(char));
-		sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg); //XXX
+		sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg);
 		if (strcmp(aln_msg, "-") == 0) {
 			fprintf(stdout, "-\n");
 			continue;
@@ -236,7 +236,7 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 	fgetline(mapf, &gem_line, &line_len, &gem_line_m);
 	if (line_len > aln_len)
 		aln_msg = (char*)realloc(aln_msg, line_len * sizeof(char));
-	sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg); //XXX
+	sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg);
 	if (strcmp(aln_msg, "-") == 0) {
 #ifdef __DEBUG__
 		fprintf(stdout, "-\n");

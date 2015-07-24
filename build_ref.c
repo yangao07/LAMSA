@@ -109,7 +109,6 @@ int lsat_index(int argc, char *argv[])
 {
 	char *prefix=0;
 	int type=0, c;
-	//XXX clock_t t;  
 	
 	while ((c = getopt(argc, argv, "i:")) >= 0)
 	{

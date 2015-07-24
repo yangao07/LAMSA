@@ -1,6 +1,7 @@
 #ifndef LSAT_ALN_H
 #define LSAT_ALN_H
 
+#include <stdlib.h>
 #include <stdint.h>
 #include "kstring.h"
 
@@ -213,6 +214,11 @@ typedef struct {
 } aln_reg;
 
 typedef struct {
+    int x, y;
+    int a, b;
+} qua_node;
+
+typedef struct {
     int x,y,z;
 } tri_node;
 
@@ -220,6 +226,7 @@ typedef struct {
     line_node n1, n2;
     uint8_t tri_flag; // 0x01->next, 0x10->per
 } trig_node;
+
 typedef struct {
     line_node *node;
     int *score;
@@ -312,7 +319,7 @@ typedef struct {
     int res_mul_max;// max number of read's aln-results
 
     int hash_len, hash_key_len, hash_step, hash_size;
-    int bwt_seed_len;
+    int bwt_seed_len, bwt_max_len;
 
     FILE *outp;
 

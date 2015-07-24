@@ -82,8 +82,8 @@ int lsat_seed_len[10] = {  50,   50,   50,   75,   75,   75,  100,  100, 100, 10
 //                         40 27-40 30-40 40-50 40-48 40-47 47-54 46-52  45-50 40  
 int lsat_seed_inv[10] = {   0,   25,   50,   25,   50,   75,   50,   75, 100, 150}; 
 #define PER_ALN_MAX 200
-int lsat_per_aln[10]  = { 200,  200,  200,  150,  150,  150,  100,  100, 100, 100}; //XXX
-int lsat_mis_len[10]  = {  30,   30,   30,   25,   25,   25,   20,   20,  20,  20};//XXX
+int lsat_per_aln[10]  = { 200,  200,  200,  150,  150,  150,  100,  100, 100, 100};
+int lsat_mis_len[10]  = {  30,   30,   30,   25,   25,   25,   20,   20,  20,  20};
 int lsat_min_thd[10]  = {   2,    2,    1,    1,    1,    1,    1,    1,   1,   1};
 
 // for debug
@@ -175,7 +175,7 @@ int split_seed(const char *prefix, seed_msg *s_msg)
         seed_all = (1+ (seq->seq.l - seed_len) / (seed_len + seed_inv));
         seed_seq[seed_len] = '\n';
         if (seed_all > s_msg->seed_max) s_msg->seed_max = seed_all;
-        if ((int)seq->seq.l > s_msg->read_max_len) s_msg->read_max_len = seq->seq.l; //XXX
+        if ((int)seq->seq.l > s_msg->read_max_len) s_msg->read_max_len = seq->seq.l;
         if (s_msg->read_all == m_read-1)
         {
             m_read <<= 1;
@@ -365,7 +365,7 @@ aln_res *aln_init_res(int l_m, int read_len, int n, int XA_max)
         p->la = (line_aln_res*)malloc(l_m * sizeof(line_aln_res));
         p->read_len = read_len;
         for (i = 0; i < l_m; ++i) {
-            p->la[i].res_m = 10, p->la[i].cur_res_n = 0, p->la[i].split_flag = 0;
+            p->la[i].res_m = 10, p->la[i].cur_res_n = 0;
             p->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
             for (j = 0; j < 10; ++j) {
                 p->la[i].res[j].c_m = 100;
@@ -373,17 +373,10 @@ aln_res *aln_init_res(int l_m, int read_len, int n, int XA_max)
                 p->la[i].res[j].cigar_len = 0;
             }
             p->la[i].tol_score = p->la[i].tol_NM = 0;
-            p->la[i].trg_m = 10, p->la[i].trg_n = 0;
-            p->la[i].trg = (line_node*)malloc(10 * sizeof(line_node));
             // XA_res
             p->la[i].XA_m = XA_max;
             p->la[i].XA_n = 0;
-            p->la[i].XA_res = (res_t*)malloc(XA_max * sizeof(res_t));
-            for (j = 0; j < XA_max; ++j) {
-                p->la[i].XA_res[j].c_m = 100;
-                p->la[i].XA_res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
-                p->la[i].XA_res[j].cigar_len = 0;
-            }
+            p->la[i].XA = (res_t**)malloc(XA_max * sizeof(res_t*));
         }
     }
     return a_res;
@@ -396,7 +389,7 @@ void aln_reloc_res(aln_res *a_res, int line_n, int XA_m)
         fprintf(stderr, "[aln_reloc_res] Not enough memory.\n"); exit(0);
     }
     for (i = a_res->l_m; i < line_n; ++i) {
-        a_res->la[i].res_m = 10, a_res->la[i].cur_res_n = 0, a_res->la[i].split_flag = 0;
+        a_res->la[i].res_m = 10, a_res->la[i].cur_res_n = 0;
         a_res->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
         for (j = 0; j < 10; ++j) {
             a_res->la[i].res[j].c_m = 100;
@@ -404,17 +397,10 @@ void aln_reloc_res(aln_res *a_res, int line_n, int XA_m)
             a_res->la[i].res[j].cigar_len = 0;
         }
         a_res->la[i].tol_score = a_res->la[i].tol_NM = 0;
-        a_res->la[i].trg_m = 10, a_res->la[i].trg_n = 0;
-        a_res->la[i].trg = (line_node*)malloc(10 * sizeof(line_node));
         //XA
         a_res->la[i].XA_m = XA_m;
         a_res->la[i].XA_n = 0;
-        a_res->la[i].XA_res = (res_t*)malloc(a_res->la[i].XA_m * sizeof(res_t));
-        for (j = 0; j < a_res->la[i].XA_m; ++j) {
-            a_res->la[i].XA_res[j].c_m = 100;
-            a_res->la[i].XA_res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
-            a_res->la[i].XA_res[j].cigar_len = 0;
-        }
+        a_res->la[i].XA = (res_t**)malloc(XA_m * sizeof(res_t*));
     }
     a_res->l_m = line_n;
 }
@@ -428,11 +414,7 @@ void aln_res_free(aln_res *res, int n)
             for (j = 0; j < p->la[i].res_m; ++j) {
                 free(p->la[i].res[j].cigar);
             }
-            for (j = 0; j < p->la[i].XA_m; ++j) {
-                free(p->la[i].XA_res[j].cigar);
-            }
-            free(p->la[i].res); free(p->la[i].XA_res);
-            free(p->la[i].trg);
+            free(p->la[i].res); free(p->la[i].XA);
         }
         free(p->la);
     }
@@ -453,16 +435,15 @@ void aln_free_reg(aln_reg *reg) { free(reg->reg); free(reg); }
 int reg_comp(const void *a, const void *b) { return (*(reg_t*)a).beg - (*(reg_t*)b).beg; }
 void aln_sort_reg(aln_reg *a_reg) { qsort(a_reg->reg, a_reg->reg_n, sizeof(reg_t), reg_comp); }
 
-void aln_merg_reg(aln_reg *a_reg) {
+void aln_merg_reg(aln_reg *a_reg, int thd) {
     //if (a_reg->reg_n == 0)return;
     int cur_i = 0, i;
     for (i = 1; i < a_reg->reg_n; ++i) {
-		// merge
-        if(a_reg->reg[i].beg - a_reg->reg[cur_i].end - 1 < 19) { //XXX
+		// merge when the distance between two regs is smaller than the 'thd'
+        if(a_reg->reg[i].beg - a_reg->reg[cur_i].end - 1 < thd) {
 		    if(a_reg->reg[i].end > a_reg->reg[cur_i].end) 
 				a_reg->reg[cur_i].end = a_reg->reg[i].end;
-		}
-        else {
+		} else {
             cur_i++;
             a_reg->reg[cur_i].beg = a_reg->reg[i].beg;
             a_reg->reg[cur_i].end = a_reg->reg[i].end;
@@ -488,15 +469,15 @@ void push_reg(aln_reg *reg, reg_t r)
     reg->reg_n++;
 }
 
-// XXX dump remain-regions that are longger than L
+// dump remain-regions that are longger than 'thd'
 int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para AP, int reg_thd)
 {
     if (a_reg->reg_n == 0) {
         push_reg(remain_reg, (reg_t){-1, -1, 0, 0, 1, a_reg->read_len});
         return 1;
     }
-    aln_sort_reg(a_reg); aln_merg_reg(a_reg);
-    int i; // XXX
+    aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP.bwt_seed_len);
+    int i; 
     if (a_reg->reg[0].beg > AP.bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd)
 		push_reg(remain_reg, (reg_t){a_reg->reg[0].refid, a_reg->reg[0].is_rev, 
 				                     0, a_reg->reg[0].ref_beg, 
@@ -549,28 +530,26 @@ void get_reg(aln_res *res, aln_reg *reg)
     int i, j;
     for (i = 0; i < res->l_n; ++i) {
         if (res->la[i].tol_score < 0) continue;
-        //if (res->la[i].merg_msg.x == 1) {
-        // primary res
         for (j = 0; j <= res->la[i].cur_res_n; ++j)
             push_reg_res(reg, res->la[i].res+j);
     }
 }
 
-int get_cover_res(aln_reg *reg, aln_res *res, int tri_i, int *cov_tri_i, tri_node *tri, int head[], int head_n)
+int get_cover_res(aln_reg *reg, aln_res *res, int qua_i, int *cov_qua_i, qua_node *qua, int head[], int head_n)
 {
     extern float cover_rate(int s1, int e1, int s2, int e2);
     int reg_i, i, j, res_i, l_i;
-    int _res_i = tri[tri_i].x, _l_i = tri[tri_i].y, _r_i; // new res
+    int _res_i = qua[qua_i].x, _l_i = qua[qua_i].y, _r_i; // new res
 
     for (_r_i = 0; _r_i <= (res+_res_i)->la[_l_i].cur_res_n; ++_r_i) {
         res_t *_r = (res+_res_i)->la[_l_i].res+_r_i;
         reg_i = 0;
         for (i = 0; i < head_n; ++i) { // existing ress and regs
-            res_i = tri[head[i]].x;
-            l_i = tri[head[i]].y;
+            res_i = qua[head[i]].x;
+            l_i = qua[head[i]].y;
             for (j = 0; j <= (res+res_i)->la[l_i].cur_res_n; ++j) {
                 if (cover_rate(reg->reg[reg_i].beg, reg->reg[reg_i].end, _r->reg_beg, _r->reg_end) > 0.5) {
-                    *cov_tri_i = head[i];
+                    *cov_qua_i = head[i];
                     return 1; // cover
                 }
                 reg_i++;
@@ -581,7 +560,12 @@ int get_cover_res(aln_reg *reg, aln_res *res, int tri_i, int *cov_tri_i, tri_nod
 }
 
 
-int res_comp(const void*a,const void*b) { return (*(tri_node*)b).z-(*(tri_node*)a).z; }
+int res_comp(const void*a,const void*b) 
+{ 
+    if ((*(qua_node*)b).a-(*(qua_node*)a).a)
+        return (*(qua_node*)b).a-(*(qua_node*)a).a; 
+    else return (*(qua_node*)b).b-(*(qua_node*)a).b; 
+}
 
 // rearrange the aln_res (merge and filter by the score and cover-region)
 void rearr_aln_res(aln_res *res, int n)
@@ -590,54 +574,55 @@ void rearr_aln_res(aln_res *res, int n)
     int a_i, i, j; aln_res *p;
 
     // sort by score;
-    tri_node *tri = (tri_node*)malloc(10 * sizeof(tri_node));
-    int tri_n = 0, tri_m = 10;
+    qua_node *qua = (qua_node*)malloc(10 * sizeof(qua_node));
+    int qua_n = 0, qua_m = 10;
     int head[1024], head_n=0;
     
     for (a_i = 0; a_i < n; ++a_i) {
         p = res+a_i;
         for (i = 0; i < p->l_n; ++i) {
             if (p->la[i].tol_score < 0) { p->la[i].merg_msg = (line_node){0, -1};  continue; }
-            if (tri_n == tri_m) {
-                tri = (tri_node*)realloc(tri, tri_m * 2 * sizeof(tri_node));
-                tri_m <<= 1;
+            if (qua_n == qua_m) {
+                qua = (qua_node*)realloc(qua, qua_m * 2 * sizeof(qua_node));
+                qua_m <<= 1;
             }
-            tri[tri_n++] = (tri_node){a_i, i, p->la[i].tol_score};
+            qua[qua_n++] = (qua_node){a_i, i, p->la[i].tol_score, p->la[i].line_score};
         }
     }
-    if (tri_n == 0) {free(tri); return;}
+    if (qua_n == 0) {free(qua); return;}
 
-    qsort(tri, tri_n, sizeof(tri_node), res_comp);
+    qsort(qua, qua_n, sizeof(qua_node), res_comp);
     aln_reg *reg = aln_init_reg(res->read_len);
-    // set the res with the biggest score: tri[0]
-    for (i = 0; i <= (res+tri[0].x)->la[tri[0].y].cur_res_n; ++i) push_reg_res(reg, (res+tri[0].x)->la[tri[0].y].res+i);
+    // set the res with the biggest score: qua[0]
+    for (i = 0; i <= (res+qua[0].x)->la[qua[0].y].cur_res_n; ++i) push_reg_res(reg, (res+qua[0].x)->la[qua[0].y].res+i);
     head[head_n++] = 0;
     // NOT merg
-    (res+tri[0].x)->la[tri[0].y].merg_msg = (line_node){1, 0}; // NOT merge and ONLY best
+    (res+qua[0].x)->la[qua[0].y].merg_msg = (line_node){1, 0}; // NOT merge and ONLY best
     
-    int cov_tri_i;
-    for (i = 1; i < tri_n; ++i) {
-        if (!get_cover_res(reg, res, i, &cov_tri_i, tri, head, head_n)) { // NOT cover
+    int cov_qua_i;
+    for (i = 1; i < qua_n; ++i) {
+        if (!get_cover_res(reg, res, i, &cov_qua_i, qua, head, head_n)) { // NOT cover
             // NOT merg
-            for (j = 0; j <= (res+tri[i].x)->la[tri[i].y].cur_res_n; ++j) push_reg_res(reg, (res+tri[i].x)->la[tri[i].y].res+j);
+            for (j = 0; j <= (res+qua[i].x)->la[qua[i].y].cur_res_n; ++j) push_reg_res(reg, (res+qua[i].x)->la[qua[i].y].res+j);
             head[head_n++] = i;
-            (res+tri[i].x)->la[tri[i].y].merg_msg = (line_node){1, 0}; // NOT merge and ONLY best
-        } else if (tri[i].z > tri[cov_tri_i].z/2 
-               && (res+tri[cov_tri_i].x)->la[tri[cov_tri_i].y].XA_n + (res+tri[i].x)->la[tri[i].y].cur_res_n 
-               < (res+tri[cov_tri_i].x)->la[tri[cov_tri_i].y].XA_m) {
+            (res+qua[i].x)->la[qua[i].y].merg_msg = (line_node){1, 0}; // NOT merge and ONLY best
+        } else if (qua[i].a > qua[cov_qua_i].a/2 
+               && (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].XA_n + (res+qua[i].x)->la[qua[i].y].cur_res_n 
+               < (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].XA_m) {
             // head_i.merg_flag = MERG_HEAD
-            for (j = 0; j <= (res+tri[i].x)->la[tri[i].y].cur_res_n; ++j) 
-                copy_res((res+tri[i].x)->la[tri[i].y].res+j, (res+tri[cov_tri_i].x)->la[tri[cov_tri_i].y].XA_res+(res+tri[cov_tri_i].x)->la[tri[cov_tri_i].y].XA_n);
-            (res+tri[cov_tri_i].x)->la[tri[cov_tri_i].y].XA_n++;
-            (res+tri[cov_tri_i].x)->la[tri[cov_tri_i].y].merg_msg.y = 1; // {1,1}, Merge, has alternative
+            for (j = 0; j <= (res+qua[i].x)->la[qua[i].y].cur_res_n; ++j) {
+                (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].XA[(res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].XA_n] = (res+qua[i].x)->la[qua[i].y].res+j;
+                (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].XA_n++;
+            }
+            (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].merg_msg.y = 1; // {1,1}, Merge, has alternative
             // i.merg_flag = MERG_BODY
-            (res+tri[i].x)->la[tri[i].y].merg_msg = (line_node){2, 0}; // Merge, body 
+            (res+qua[i].x)->la[qua[i].y].merg_msg = (line_node){2, 0}; // Merge, body 
         } else {
             // DUMP
-            (res+tri[i].x)->la[tri[i].y].merg_msg = (line_node){0, -1}; // DUMP
+            (res+qua[i].x)->la[qua[i].y].merg_msg = (line_node){0, -1}; // DUMP
         }
     }
-    free(tri); aln_free_reg(reg);
+    free(qua); aln_free_reg(reg);
 }
 
 aln_msg *aln_init_msg(int seed_max, int per_aln_m)
@@ -653,7 +638,7 @@ aln_msg *aln_init_msg(int seed_max, int per_aln_m)
         msg[i].at = (aln_t*)malloc(per_aln_m * sizeof(aln_t));  // per_aln_m
         for (j = 0; j < per_aln_m; ++j)
         {
-            msg[i].at[j].cigar = (cigar32_t*)malloc(7 * sizeof(cigar32_t));//XXX default value for 3-ed
+            msg[i].at[j].cigar = (cigar32_t*)malloc(7 * sizeof(cigar32_t));//default value for 3-ed
             msg[i].at[j].cigar_len = 0;
             msg[i].at[j].cmax = 7;
             msg[i].at[j].bmax = 0;
@@ -686,7 +671,7 @@ frag_dp_node ***fnode_alloc(int seed_m, int per_aln_m)
         (*f_node)[i] = (frag_dp_node*)malloc(per_aln_m * sizeof(frag_dp_node));
         for (j = 0; j < per_aln_m; ++j) {
             (*f_node)[i][j].seed_i = i, (*f_node)[i][j].aln_i = j;
-            (*f_node)[i][j].son_max = 100; // son_max XXX
+            (*f_node)[i][j].son_max = 100; // son_max 
             (*f_node)[i][j].son = (line_node*)calloc(100, sizeof(line_node));
         }
     }
@@ -773,7 +758,7 @@ void set_cigar(aln_t *at, cigar_t *cigar)
 void set_aln_msg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, map_t map)
 {   //read_x: (除去unmap和repeat的)read序号, aln_y: read对应的比对结果序号(从1开始)
     a_msg[read_x-1].read_id = read_id;			//from 1
-    a_msg[read_x-1].at[aln_y-1].chr = (map.chr[3] == 'X' ? 23 : (map.chr[3] == 'Y' ? 24 :atoi(map.chr+3))); //XXX
+    a_msg[read_x-1].at[aln_y-1].chr = (map.chr[3] == 'X' ? 23 : (map.chr[3] == 'Y' ? 24 :atoi(map.chr+3)));
     a_msg[read_x-1].at[aln_y-1].offset = map.offset;	//1-base
     a_msg[read_x-1].at[aln_y-1].nsrand = ((map.strand=='+')?1:-1);
     a_msg[read_x-1].at[aln_y-1].NM = map.NM;
@@ -794,10 +779,10 @@ void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n)
     APP->seed_all = s_msg->seed_all[read_n] - s_msg->seed_all[read_n-1];
 
     APP->per_aln_n = lsat_per_aln[APP->read_level]; // depend on seed_len
-    APP->min_thd = lsat_min_thd[APP->read_level]; // depend on seed_len XXX
+    APP->min_thd = lsat_min_thd[APP->read_level]; // depend on seed_len
     APP->frag_score_table = f_BCC_score_table;
 
-    APP->match_dis = APP->seed_step/25; // depend on seed_len, seed_inv, 4% indel allowed XXX
+    APP->match_dis = APP->seed_step/25; // depend on seed_len, seed_inv, 4% indel allowed
 }
 
 void init_aln_para(lsat_aln_para *AP)
@@ -819,6 +804,7 @@ void init_aln_para(lsat_aln_para *AP)
     AP->hash_size = (int)pow(NT_N, AP->hash_key_len);
     
     AP->bwt_seed_len = 19; //XXX
+    AP->bwt_max_len = 300;
 
     AP->outp = stdout;
 
@@ -967,6 +953,7 @@ lsat_seq_t *lsat_read_seq(kseq_t *read_seq_t, FILE *seed_mapfp, seed_msg *s_msg,
         ++(s_msg->read_count);
         lsat_aln_per_para *APP = (lsat_aln_per_para*)malloc(sizeof(lsat_aln_per_para));
         init_aln_per_para(APP, s_msg, s_msg->read_count);
+        strcpy(APP->read_name, p->name);
 
         int seed_all = APP->seed_all;
         map_msg *m_msg = map_init_msg(seed_all);
@@ -1018,7 +1005,6 @@ void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lsat_aln_para *AP)
 
     aux->f_msg = (frag_msg**)malloc(sizeof(frag_msg*));
     *(aux->f_msg) = (frag_msg*)malloc(sizeof(frag_msg));
-    // XXX &f_msg[0]
     frag_init_msg(*(aux->f_msg), s_msg->seed_max);
 
     aux->hash_num = (uint32_t*)calloc(pow(NT_N, AP->hash_key_len), sizeof(uint32_t));
@@ -1044,87 +1030,6 @@ void aux_dp_free(thread_aux_t *aux, seed_msg *s_msg, lsat_aln_para *AP)
 //          {1, n} -> merged, best, has n alternative res
 //          {2, i} -> merged, alternative and best is `i`
 //          {0,-1} -> dumped
-/*void aln_res_output(FILE *outp, aln_res *res, int res_n, char *name, uint8_t *seq, char *qual, bntseq_t *bns)
-{
-    int i, j, n, l, all=0;
-    kstring_t sam_str; memset(&sam_str, 0, sizeof(kstring_t));
-
-    int prim_flag = 0;
-    for (n = 0; n < res_n; ++n) {
-        aln_res *p = res+n;
-        for (i = 0; i < p->l_n; ++i) {
-            if (p->la[i].merg_msg.x != 1) continue;
-            // primary res
-            for (j = 0; j <= p->la[i].cur_res_n; ++j) {
-                all++;
-                //if (p->la[i].res[j].dump) continue;
-                // QNAME/FLAG/RNAME/POS/MAPQ //XXX FLAG: primary/secondary
-                ksprintf(&sam_str, "%s\t%d\t%s\t%lld\t%d\t", name, p->la[i].res[j].nsrand?0:16, bns->anns[p->la[i].res[j].chr-1].name, (long long)p->la[i].res[j].offset, p->la[i].res[j].mapq); 
-                // CIGAR
-                for (l = 0; l < p->la[i].res[j].cigar_len; ++l)
-                    ksprintf(&sam_str, "%d%c", p->la[i].res[j].cigar[l]>>4, CIGAR_STR[p->la[i].res[j].cigar[l]&0xf]);
-                // mate infomation
-                kputs("\t*\t0\t0", &sam_str);
-                if (prim_flag == 0) {
-                    // SEQ and QUAL // XXX for secondary res, do NOT print SEQ and QUAL
-                    int si;
-                    if (p->la[i].res[j].nsrand == 1) {                  
-                        kputc('\t', &sam_str);
-                        for (si = 0; si < res->read_len; ++si) kputc("ACGTN"[seq[si]], &sam_str);
-                        kputc('\t', &sam_str);
-                        if (qual) for (si = 0; si < res->read_len; ++si) kputc(qual[si], &sam_str);
-                        else kputc('*', &sam_str);
-                    } else { // reverse strand
-                        kputc('\t', &sam_str);
-                        for (si = res->read_len-1; si >= 0; --si) kputc("TGCAN"[seq[si]], &sam_str);
-                        kputc('\t', &sam_str);
-                        if (qual) for (si = res->read_len-1; si >=0; ++si) kputc(qual[si], &sam_str);   
-                        else kputc('*', &sam_str);
-                    }
-                    prim_flag = 1;
-                } else kputs("\t*\t*", &sam_str);
-                // optional_tags
-                ksprintf(&sam_str, "\tNM:i:%d\tAS:i:%d", p->la[i].res[j].NM, p->la[i].res[j].score);
-                check_cigar(p->la[i].res[j].cigar, p->la[i].res[j].cigar_len, name, res->read_len); 
-                // alternative res XA
-                if (j == 0 && p->la[i].merg_msg.y > 0) {
-                    int k, m;
-                    kstring_t XA_str; memset(&XA_str, 0, sizeof(kstring_t));
-                    for (l = 0; l < p->l_n; ++l) {
-                        if (p->la[l].merg_msg.x == 2 && p->la[l].merg_msg.y == i) {
-                            for (k = 0; k <= p->la[l].cur_res_n; ++k) {
-                                //if (p->la[l].res[k].dump) continue;
-                                ksprintf(&XA_str, "%d,%c%lld,", p->la[l].res[k].chr,"-+"[p->la[l].res[k].nsrand], (long long)p->la[l].res[k].offset); 
-                                for (m = 0; m < p->la[l].res[k].cigar_len; m++)
-                                    ksprintf(&XA_str, "%d%c", (int)(p->la[l].res[k].cigar[m]>>4), CIGAR_STR[(int)(p->la[l].res[k].cigar[m] & 0xf)]);
-                                check_cigar(p->la[l].res[k].cigar, p->la[l].res[k].cigar_len, name, res->read_len); 
-                                ksprintf(&XA_str, ",%d;", p->la[l].res[k].NM);
-                            }
-                        }
-                    }
-                    if (XA_str.l > 0) { 
-                        ksprintf(&sam_str, "\tXA:Z:%s", XA_str.s);
-                        free(XA_str.s); 
-                    }
-                }
-                kputc('\n', &sam_str);
-                fprintf(outp, "%s", sam_str.s);
-                sam_str.l = 0;
-            }
-        }
-    }
-    if (all == 0) { // unmap
-        ksprintf(&sam_str, "%s\t%d\t*\t*\t%d\t*\t*\t0\t0\t", name, 4, 0);
-        for (i = 0; i < res->read_len; ++i) kputc("ACGTN"[seq[i]], &sam_str);
-        kputc('\t', &sam_str);
-        if (qual) for (i = 0; i < res->read_len; ++i) kputc(qual[i], &sam_str);
-        else kputc('*', &sam_str);
-        kputc('\n', &sam_str);
-        fprintf(outp, "%s", sam_str.s);
-    }
-    free(sam_str.s);
-}*/
-
 void aln_res_output(FILE *outp, aln_res *res, int res_n, char *name, uint8_t *seq, char *qual, bntseq_t *bns)
 {
     int i, j, n, l, all=0;
@@ -1147,7 +1052,7 @@ void aln_res_output(FILE *outp, aln_res *res, int res_n, char *name, uint8_t *se
                 // mate infomation
                 kputs("\t*\t0\t0", &sam_str);
                 if (prim_flag == 0) {
-                    // SEQ and QUAL // XXX for secondary res, do NOT print SEQ and QUAL
+                    // SEQ and QUAL // for secondary res, do NOT print SEQ and QUAL
                     int si;
                     if (p->la[i].res[j].nsrand == 1) {                  
                         kputc('\t', &sam_str);
@@ -1172,7 +1077,7 @@ void aln_res_output(FILE *outp, aln_res *res, int res_n, char *name, uint8_t *se
                     int m;
                     kstring_t XA_str; memset(&XA_str, 0, sizeof(kstring_t));
                     for (l = 0; l < p->la[i].XA_n; ++l) {
-                        res_t *XA_res = p->la[i].XA_res+l;
+                        res_t *XA_res = p->la[i].XA[l];
                         ksprintf(&XA_str, "%s,%c%lld,", bns->anns[XA_res->chr-1].name,"-+"[XA_res->nsrand], (long long)XA_res->offset); 
                         for (m = 0; m < XA_res->cigar_len; m++)
                             ksprintf(&XA_str, "%d%c", (int)(XA_res->cigar[m]>>4), CIGAR_STR[(int)(XA_res->cigar[m] & 0xf)]);

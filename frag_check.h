@@ -26,9 +26,6 @@ typedef struct {
 	int seed_num;	//seed number of per frag
 	int *seed_i;
 	int *seed_aln_i;
-
-    uint8_t trg_n; // 00 01 10 11
-    line_node next_trg, pre_trg;
 } frag_aln_msg;
 
 typedef struct {
@@ -37,11 +34,9 @@ typedef struct {
 
 	int per_seed_max;
 	frag_aln_msg *fa_msg;
+    int line_score;
 	int frag_left_bound;  //read_id of previous line's last seed, if NO pre line, this will be 0
 	int frag_right_bound; //read_id of next line's first seed, if NO next line, this will be n_seed+1
-    line_node merg_msg;   //  0,b(0) -> Merged and Head, best line
-                          // -1,x -> Not
-                          // -2,i -> Merged, Head is i
 } frag_msg;
 
 typedef struct {
@@ -57,25 +52,21 @@ typedef struct {
     int NM;             // edit distance
     //cigar32_t *MD;    // mis-match postion string XXX
     //int m_m, m_n;   
-    //char *XA;         // alternative alignment results XXX
 
     int reg_beg, reg_end; // set in push_reg_res()
 } res_t;
 
 typedef struct {
+    int line_score;
     line_node merg_msg;    // after filtering:
                            // 1,x: keep
                            // 0,x: dump
-    res_t *XA_res;
+    res_t **XA;
     int XA_n, XA_m;        // per_max_multi
 
     int res_m, cur_res_n;
     res_t *res;
     int tol_score, tol_NM; // tol score of all res, including split penalty 
-    int split_flag;
-
-    int trg_m, trg_n;
-    line_node *trg;
 } line_aln_res;
 
 typedef struct {
@@ -95,7 +86,6 @@ void _invert_cigar(cigar32_t **cigar, int cigar_n);
 void frag_init_msg(frag_msg *f_msg, int frag_max);
 void frag_free_msg(frag_msg *f_msg, int line_num);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i);//FLAG 0: start/1:end / 2:seed
-int frag_trg_set(frag_dp_node f_node, frag_msg *f_msg, int frag_i);
 int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg);
 void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, int read_len, lsat_aln_para AP, lsat_aln_per_para APP);
 void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,

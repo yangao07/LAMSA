@@ -17,7 +17,7 @@ extern char READ_NAME[1024];
 	//hash_i: 0-2^(32-2*kmer_len)
 	// 0 - 2^16
 	//return the pos of kmer that matches kmer_int, and EQUAL_FLAG means EXISTS(1) or NOT(0)
-	// XXX binary search and store OR store and sort ?
+	// binary search and store
 int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kmer_int, int *EQUAL_FLAG)
 {
 	int left=0, right=(*hash_num)[key_int]-1, middle;
@@ -66,9 +66,7 @@ int hash_search(uint32_t **hash_num, uint64_t ***hash_node, int key_int, int kme
 	return ((*hash_num)[key_int]);	//不存在比该k-mer大的k-mer，返回最后一个k-mer的下一位，实际上，返回值就是已存在的k-mer数量
 }
 
-	//return value: if find the kmer that match key_int or not
-	//hit index XXX 
-	// multi-hit XXX
+//return value: if find the kmer that match key_int or not
 int hash_hit(uint32_t *hash_num, uint64_t **hash_node, int *node_i, int key_int, int kmer_int)
 {
 	int left=0, right=hash_num[key_int]-1, middle;
@@ -220,9 +218,7 @@ int init_hash_pos_num(uint8_t *hash_seq, int hash_len, int key_len, uint32_t **h
     }
     else
 	{
-		//printf("++\n");
 		++(*hash_num)[key_int];
-		//XXX
 		uint64_t *tempnode = (uint64_t *)calloc((*hash_num)[key_int], sizeof(uint64_t));
 		if(tempnode == NULL)
 		{
@@ -240,7 +236,6 @@ int init_hash_pos_num(uint8_t *hash_seq, int hash_len, int key_len, uint32_t **h
 		tempnode[node_i] = kmer_int;		//将新加入的k-mer存入新节点
 		tempnode[node_i] <<= 32;
 		++tempnode[node_i];
-		//tempnode[hash_i] += seed_i;
 		memcpy(tempnode+node_i+1, (*hash_node)[key_int]+node_i, ((*hash_num)[key_int]-1-node_i) * sizeof(uint64_t));	//将比新加入的k-mer大的k-mer复制至新申请的节点中
 
 		if(tempnode == NULL)
@@ -294,7 +289,7 @@ int init_hash(uint8_t *ref_seq, int ref_len, int hash_len,
 //a_offset: ref_i - read_i
 //ref_i = read_i+offset
 //
-//XXX for overlaped-DUP: ref_len = read_len+read_len-ref_len+2*hash_len
+//NOTE: for overlaped-DUP: ref_len = read_len+read_len-ref_len+2*hash_len
 //                       
 int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, int hash_step, int *con_flag,
                   int ref_len, int read_len, int ref_offset)
@@ -352,7 +347,6 @@ int hash_dp_init(hash_dp_node **h_node,
 			h_node[node_i][i].read_i = read_i;
 			h_node[node_i][i].offset = hash_pos[start_a[node_i]+i] - read_i;
 			h_node[node_i][i].from = head;
-			//h_node[node_i][i].score = 2 * hash_len;//XXX
 			h_node[node_i][i].score = 1;//HASH_INIT_SCORE(1, 0);
 			h_node[node_i][i].node_n = 1;
 			h_node[node_i][i].match_flag = F_MATCH;
@@ -376,8 +370,7 @@ int hash_dp_init(hash_dp_node **h_node,
 				h_node[node_i][i].dp_flag = 0 - dp_flag;
 			} else {
 				h_node[node_i][i].from = head;
-				//h_node[node_i][i].score = 2 * hash_len - (con_flag == F_MATCH?0: HASH_SV_PEN);//XXX
-				h_node[node_i][i].score = 2 - ((con_flag<=F_SPLIT_MATCH)?0:HASH_SV_PEN);//HASH_INIT_SCORE(2, ((con_flag==F_MATCH)?0:HASH_SV_PEN));
+				h_node[node_i][i].score = 2 - ((con_flag == F_MATCH)?0: HASH_SV_PEN);
 				h_node[node_i][i].node_n = 1;
 				h_node[node_i][i].match_flag = con_flag;
 				h_node[node_i][i].dp_flag = dp_flag;
@@ -512,8 +505,8 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 					hash_main_dis(h_node[i][j].read_i, h_node[i][j].offset, h_node[node_x][node_y].read_i, h_node[node_x][node_y].offset, hash_len, hash_step, &con_flag, ref_len, read_len, ref_offset);
 					if (con_flag == F_UNCONNECT)
 						continue;
-					if (h_node[i][j].score + 1 - ((con_flag<=F_SPLIT_MATCH)?0:HASH_SV_PEN) > max_score) {
-						max_score = h_node[i][j].score + 1 - ((con_flag<=F_SPLIT_MATCH)?0:HASH_SV_PEN);
+					if (h_node[i][j].score + 1 - ((con_flag==F_MATCH)?0:HASH_SV_PEN) > max_score) {
+						max_score = h_node[i][j].score + 1 - ((con_flag==F_MATCH)?0:HASH_SV_PEN);
 						max_from = (line_node){i, j};
 						max_flag = con_flag;
 					}
@@ -526,7 +519,7 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 			h_node[node_x][node_y].score = max_score;
 			h_node[node_x][node_y].from = max_from;
 			h_node[node_x][node_y].match_flag = max_flag;
-			if (max_flag <= F_SPLIT_MATCH)
+			if (max_flag == F_MATCH)
 				h_node[max_from.x][max_from.y].dp_flag = 0 - dp_flag;       //extend the mathc-node-line as long as possible, in forward direction
 			h_node[node_x][node_y].node_n += h_node[max_from.x][max_from.y].node_n;
 		}
@@ -562,7 +555,7 @@ int hash_mini_dp_init(hash_dp_node **h_node, int *len_a,
 		for (i = 0; i < len_a[node_i]; ++i)
 		{
 			h_node[node_i][i].from = head;
-			h_node[node_i][i].score = 1;	//XXX
+			h_node[node_i][i].score = 1;
 			h_node[node_i][i].node_n = 1;
 			h_node[node_i][i].match_flag = F_MATCH;
 			h_node[node_i][i].dp_flag = mini_dp_flag;
@@ -585,7 +578,7 @@ int hash_mini_dp_init(hash_dp_node **h_node, int *len_a,
 			else
 			{
 				h_node[node_i][i].from = head;
-				h_node[node_i][i].score = 2 - (con_flag <= F_SPLIT_MATCH?0 : HASH_SV_PEN);	//XXX
+				h_node[node_i][i].score = 2 - (con_flag == F_MATCH?0 : HASH_SV_PEN);	//XXX
 				h_node[node_i][i].node_n = 1;
 				h_node[node_i][i].match_flag = con_flag;
 				h_node[node_i][i].dp_flag = mini_dp_flag;
@@ -653,7 +646,6 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 	int i, j, node_i;
 	int min_len = HASH_MIN_LEN, min_exist=0;
 	line_node head={0,0}, tail={hash_seed_n+1, 0};
-	//int bound_flag = 0, bound_len = ref_len;	//XXX
 
 	//dp init
 	{
@@ -810,7 +802,6 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 	uint8_t *read_query;
 	int q_key_int, q_kmer_int, node_i;
 
-    //un-overlap XXX
     int hash_seed_n = (read_len-hash_len)/hash_step + 1;
 	int *start_a = (int*)malloc((hash_seed_n + 2) * sizeof(int));	//2: for head and tail
 	int *len_a = (int*)malloc((hash_seed_n + 2) * sizeof(int));
@@ -861,7 +852,6 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 		//fill blank with generated SV and SW, return the whole cigar
 		cigar32_t *g_cigar;
 		g_cigar = (cigar32_t*)malloc(sizeof(cigar32_t));
-		//XXX hash read len == 0 XXX
 		//1. fix the region between left bound and first line
 		int _refi = h_node[line[0].x][line[0].y].read_i + h_node[line[0].x][line[0].y].offset;
 		int _readi = h_node[line[0].x][line[0].y].read_i;
@@ -940,7 +930,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
  				
 					// merge, add overlap-flag('S/H')
 					int Sn = _q_len + head_in - lqe - rqe, Hn = r_refi + head_in+tail_in - l_refi - 1 - lte - rte;
-                    if (abs(Sn-Hn) < AP.split_len && abs(Sn) < AP.split_len && abs(Hn) < AP.split_len) { // for small 'nS' and 'nH', change into indels
+                    /*if (abs(Sn-Hn) < AP.split_len && abs(Sn) < AP.split_len && abs(Hn) < AP.split_len) { // for small 'nS' and 'nH', change into indels
                         fprintf(stderr, "[hash_split_map] Overlaped-ins: %s\n", READ_NAME);
                         if (Sn > 0 && Hn > 0) {
                             cigar32_t *g_c; int g_clen;
@@ -960,7 +950,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                             _push_cigar1(split_cigar, split_clen, split_m, ((Hn-Sn)<<4)|CDEL);
                             _push_cigar1(split_cigar, split_clen, split_m, (Sn<<4)|CMATCH); // -nM XXX
                         }
-                    } else {
+                    } else */{
                         _push_cigar0(split_cigar, split_clen, split_m, (Sn<<4)|CSOFT_CLIP); 
                         _push_cigar0(split_cigar, split_clen, split_m, (Hn<<4)|CHARD_CLIP);
                     }
@@ -982,7 +972,6 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 		_q_len = read_len - (_readi+1)+head_in;
 		_t_len = ref_len - (_refi+1)+head_in;
 		if (_tail) {
-			//XXX end node, hash_step
 			if (_readi + 1 < read_len && _refi + 1 < ref_len) { // blank exists
 				if (_q_len < AP.split_len && _t_len < AP.split_len) {
 					_b_w = abs(_t_len-_q_len)+3;
@@ -1020,7 +1009,6 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 	return res;
 }
 
-//XXX hash_node: use struct?
 //insertion length = read_len - ref_len
 // return: 0x00->normal/ 0x01->trigger/ 0x10->split result
 int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,

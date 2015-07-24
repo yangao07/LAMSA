@@ -36,18 +36,6 @@ typedef struct {
 }hash_line;
 
 typedef struct {
-	int32_t node_i;
-
-	hash_line line;
-	int32_t ref_blank;
-	int32_t read_blank;
-
-	int32_t mis_match;	//XXX
-
-	int32_t from_i;	//previous node_i
-} hash_DP_node;
-
-typedef struct {
 	line_node from;
 	//int32_t ref_i;
 	int32_t read_i;
@@ -67,7 +55,7 @@ typedef struct {
 //#define HASH_STEP 1
 //#define HASH_STEP 15 //for un-overlap
 #define HASH_STEP 10
-#define NT_N 4	//XXX for N
+#define NT_N 4	
 
 #define HASH_MIN_LEN 1
 
@@ -90,8 +78,6 @@ typedef struct {
 #define HASH_INIT_SCORE(node_N, CON_PEN) (node_N - CON_PEN)
 #define HASH_DP_SCORE(init_score, node_N, CON_PEN) (init_score+node_N-CON_PEN)
 
-//XXX
-//64-slen or 32-slen
 #define LAST_SHIFT(x, slen) ((x<<slen)>>slen)
 extern const int8_t sc_mat[25];
 extern const int8_t hash_nt4_table[5];
