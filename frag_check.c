@@ -899,7 +899,7 @@ void lsat_res_split(line_aln_res *la, int read_len, lsat_aln_para AP)
                 _push_cigar1(&(la->res[res_n].cigar), &(la->res[res_n].cigar_len), &(la->res[res_n].c_m), (cigar32_t)((len1 << 4) | CSOFT_CLIP));
             } else _push_cigar1(&(la->res[res_n].cigar), &(la->res[res_n].cigar_len), &(la->res[res_n].c_m), cigar[j]);
         } else if (op == CSOFT_CLIP) {
-            if (j > 0 && j < cigar_len-1 && (cigar[j+1] & 0xf) == CHARD_CLIP) {  // SnmH, mis-match split
+            if (j > 0 && j < cigar_len-1 && (cigar[j+1] & 0xf) == CHARD_CLIP) {  // nSmH, mis-match split
                 int Sn = cigar[j]>>4, Hn = cigar[j+1]>>4;
                 // tail S
                 len1 = readInCigar(la->res[res_n].cigar, la->res[res_n].cigar_len);
@@ -1022,7 +1022,7 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
     // initialization
     a_res->l_n = line_n;
     for (i = 0; i < line_n; ++i) {
-        a_res->la[i].line_score = f_msg[i]->line_score;
+        a_res->la[i].line_score = (*f_msg)[i].line_score;
         a_res->la[i].cur_res_n = 0;
         a_res->la[i].tol_score = 0; a_res->la[i].tol_NM = 0;
         for (j = 0; j < a_res->la[i].res_m; ++j) a_res->la[i].res[j].cigar_len = 0;

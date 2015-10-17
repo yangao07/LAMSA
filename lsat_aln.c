@@ -473,8 +473,10 @@ void push_reg(aln_reg *reg, reg_t r)
 int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para AP, int reg_thd)
 {
     if (a_reg->reg_n == 0) {
-        push_reg(remain_reg, (reg_t){-1, -1, 0, 0, 1, a_reg->read_len});
-        return 1;
+        if (AP.bwt_seed_len < a_reg->read_len && a_reg->read_len <= reg_thd) {
+            push_reg(remain_reg, (reg_t){-1, -1, 0, 0, 1, a_reg->read_len});
+            return 1;
+        } else return 0;
     }
     aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP.bwt_seed_len);
     int i; 
@@ -548,7 +550,7 @@ int get_cover_res(aln_reg *reg, aln_res *res, int qua_i, int *cov_qua_i, qua_nod
             res_i = qua[head[i]].x;
             l_i = qua[head[i]].y;
             for (j = 0; j <= (res+res_i)->la[l_i].cur_res_n; ++j) {
-                if (cover_rate(reg->reg[reg_i].beg, reg->reg[reg_i].end, _r->reg_beg, _r->reg_end) > 0.5) {
+                if (cover_rate(reg->reg[reg_i].beg, reg->reg[reg_i].end, _r->reg_beg, _r->reg_end) > 0.7) {
                     *cov_qua_i = head[i];
                     return 1; // cover
                 }

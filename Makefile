@@ -1,5 +1,5 @@
 CC=			gcc
-CFLAGS=		-g -Wall -O2 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function
+CFLAGS=		-g -Wall -O3 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function
 OBJS=		main.o build_ref.o bntseq.o lsat_heap.o lsat_aln.o lsat_dp_con.o frag_check.o split_mapping.o ksw.o \
 			gem_parse.o is.o bwtindex.o bwt_gen.o QSufSort.o\
 			./lsat_sam_parse/bam_aux.o ./lsat_sam_parse/bam.o ./lsat_sam_parse/bam_import.o \

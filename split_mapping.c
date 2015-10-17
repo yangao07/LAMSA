@@ -304,9 +304,9 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, in
 	} else { // SV or F_UNCONNECT
 		if (dis > 0) *con_flag = F_DELETE;
 		else if (dis >= -(abs(b_i-a_i)-hash_len)) *con_flag = F_INSERT; // unoverlaped-ins
-        //else *con_flag = F_UNCONNECT;
+        else *con_flag = F_UNCONNECT;
 		// overlapped
-		else if (ref_offset > 0) { // INS region
+		/*else if (ref_offset > 0) { // INS region
 			if (b_i>a_i) {
 				// if (read_len-ref_len+b_i+b_offset >= b_i-(a_i+hash_len-1) && read_len-(a_i+hash_len-1+a_offset)>= b_i-(a_i+hash_len-1))
 				if (read_len-ref_len+b_offset >= -(a_i+hash_len-1) && read_len-a_offset>= b_i)
@@ -326,7 +326,7 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, int hash_len, in
 					*con_flag = F_INSERT; // overlap-allowed
 				else *con_flag = F_UNCONNECT;
 			}
-		}
+		}*/
 	}
 	return abs(dis);
 } 

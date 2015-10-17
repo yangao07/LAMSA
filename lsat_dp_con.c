@@ -1200,7 +1200,7 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         ((*f_msg)+l)->frag_left_bound = left_bound;
         ((*f_msg)+l)->line_score = L_LS(line, line_end, l);
 #ifdef __DEBUG__
-        fprintf(stdout, "#%d: left %d, right %d\n", j+1, left_bound, right_bound);
+        fprintf(stdout, "#%d: left %d, right %d\n", l+1, left_bound, right_bound);
 #endif
 	}
     *l_n = l;
