@@ -42,13 +42,10 @@ int lsat_aln_usage(void)
     fprintf(stderr, "         -g [INT]      The minimum length of gap that causes a split-alignment. [Def=%d]\n\n", SPLIT_ALN_LEN);
 
     fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [Def=0]\n");
-	fprintf(stderr, "         -l [INT]      The seed length. [Def=Auto]\n");
-	fprintf(stderr, "         -v [INT]      The interval length of adjacent seeds. [Def=Auto]\n");
-	fprintf(stderr, "         -p [INT]      The maximun allowed number of a seed's locations. [Def=Auto]\n");
-	fprintf(stderr, "         -d [INT]      The maximun number of seed's locations for first round's DP. [Def=Auto]\n\n");
-	fprintf(stderr, "                         LSAT will set seed-len and seed-inv for every read based on their read-length.\n");
-	fprintf(stderr, "                         Note: All of these 4 parameters(l,v,p,d) above should always be \"Auto\"\n");
-	fprintf(stderr, "                               or set with specific value simultaneously.\n\n");
+	fprintf(stderr, "         -l [INT]      The seed length. [Def=50]\n");
+	fprintf(stderr, "         -v [INT]      The interval length of adjacent seeds. [Def=50]\n");
+	fprintf(stderr, "         -p [INT]      The maximun allowed number of a seed's locations. [Def=200]\n");
+	fprintf(stderr, "         -d [INT]      The maximun number of seed's locations for first round's DP. [Def=2]\n\n");
     
     fprintf(stderr, "         -o [STR]      The output file (SAM format). [Def=stdout]\n\n");
 
@@ -72,30 +69,8 @@ int f_BCC_score_table[10] = {
      -6,  //F_UNMATCH
 };
 
-int lsat_read_leve_n = 10;
-int lsat_read_len[9]  = {2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
-
-int lsat_seed_len[10] = {  50,   50,   50,   75,   75,   75,  100,  100, 100, 100};
-
-////                         40 31-46 30-40 40-50 40-48 40-47 47-54 46-52  45-50 40  
-//int lsat_seed_inv[10] = {   0,   15,   50,   25,   50,   75,   50,   75, 100, 150}; 
-//                         40 27-40 30-40 40-50 40-48 40-47 47-54 46-52  45-50 40  
-int lsat_seed_inv[10] = {   0,   25,   50,   25,   50,   75,   50,   75, 100, 150}; 
-#define PER_ALN_MAX 200
-int lsat_per_aln[10]  = { 200,  200,  200,  150,  150,  150,  100,  100, 100, 100};
-int lsat_mis_len[10]  = {  30,   30,   30,   25,   25,   25,   20,   20,  20,  20};
-int lsat_min_thd[10]  = {   2,    2,    1,    1,    1,    1,    1,    1,   1,   1};
-
 // for debug
 char READ_NAME[1024];
-
-int get_read_level(int read_len)
-{
-    int l;
-    for (l = 0; l < lsat_read_leve_n-1; ++l)
-        if (read_len <= lsat_read_len[l]) return l;
-    return l;
-}
 
 seed_msg *seed_init_msg(void)
 {
@@ -104,18 +79,15 @@ seed_msg *seed_init_msg(void)
     msg->read_all = 0;
     msg->read_m = READ_MAX_NUM;
 
-    msg->seed_len = (int *)calloc(READ_MAX_NUM, sizeof(int));
-    msg->seed_inv = (int *)calloc(READ_MAX_NUM, sizeof(int));
     msg->seed_all = (int *)calloc(READ_MAX_NUM, sizeof(int));
-    /*
-    msg->read_name = (char **)malloc(READ_MAX_NUM * sizeof(char*));
-    int i;
-    for (i = 0; i < READ_MAX_NUM; ++i)
-        msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
-        */
-    msg->last_len = (int *)malloc(READ_MAX_NUM * sizeof(int));
     msg->read_len = (int *)malloc(READ_MAX_NUM * sizeof(int));
-    msg->read_level = (int*)malloc(READ_MAX_NUM * sizeof(int));
+    /*
+       msg->read_name = (char **)malloc(READ_MAX_NUM * sizeof(char*));
+       int i;
+       for (i = 0; i < READ_MAX_NUM; ++i)
+        msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
+    */
+    msg->last_len = (int *)malloc(READ_MAX_NUM * sizeof(int));
     msg->seed_max = 0;
     msg->read_max_len = 0;
 
@@ -124,24 +96,13 @@ seed_msg *seed_init_msg(void)
 
 void seed_free_msg(seed_msg *msg)
 {
-    free(msg->seed_len);
-    free(msg->seed_inv);
     free(msg->seed_all);
-    free(msg->last_len);
     free(msg->read_len);
-    free(msg->read_level);
+    free(msg->last_len);
     free(msg);
 }
 
-int set_seed_argv(int *seed_len, int *seed_inv, int *read_level, int read_len)
-{
-    *read_level = get_read_level(read_len);
-    *seed_len = lsat_seed_len[*read_level];
-    *seed_inv = lsat_seed_inv[*read_level];
-    return 0;
-}
-
-int split_seed(const char *prefix, seed_msg *s_msg)
+int split_seed(const char *prefix, lsat_aln_para AP, seed_msg *s_msg)
 {
     gzFile infp;
     kseq_t *seq;
@@ -166,12 +127,10 @@ int split_seed(const char *prefix, seed_msg *s_msg)
 
     fprintf(stderr, "[lsat_aln] Spliting seed ... ");
 
-    int seed_len, seed_inv, read_level;
+    int seed_len=AP.seed_len, seed_inv=AP.seed_inv;
     m_read = s_msg->read_m;
     while (kseq_read(seq) >= 0)
     {
-        /* calculate seed-len and seed-interval based on read-length */
-        set_seed_argv(&seed_len, &seed_inv, &read_level, seq->seq.l);
         seed_all = (1+ (seq->seq.l - seed_len) / (seed_len + seed_inv));
         seed_seq[seed_len] = '\n';
         if (seed_all > s_msg->seed_max) s_msg->seed_max = seed_all;
@@ -179,19 +138,6 @@ int split_seed(const char *prefix, seed_msg *s_msg)
         if (s_msg->read_all == m_read-1)
         {
             m_read <<= 1;
-            if ((new_p = (int*)realloc(s_msg->seed_len, m_read * sizeof(int))) == NULL)
-            {
-                free(s_msg->seed_len);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_len[].\n"); exit(1);
-            }
-            s_msg->seed_len = (int*)new_p;
-            if ((new_p = (int*)realloc(s_msg->seed_inv , m_read * sizeof(int))) == NULL)
-            {
-                free(s_msg->seed_inv);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for seed_inv[].\n"); exit(1);
-            }
-            s_msg->seed_inv = (int*)new_p;
-
             if ((new_p = (int*)realloc(s_msg->seed_all, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_all);
@@ -210,33 +156,11 @@ int split_seed(const char *prefix, seed_msg *s_msg)
                 fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n"); exit(1);
             }
             s_msg->read_len = (int*)new_p;
-            if ((new_p = (int*)realloc(s_msg->read_level, m_read * sizeof(int))) == NULL)
-            {
-                free(s_msg->read_level);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_level[].\n"); exit(1);
-            }
-            s_msg->read_level = (int*)new_p;
-
-            /*
-            if ((new_p = (char**)realloc(s_msg->read_name, m_read * sizeof(char*))) == NULL)
-            {
-                free(s_msg->read_name);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n"); exit(1);
-            }
-            s_msg->read_name = new_p;
-            int i;
-            for (i = m_read>>1; i < m_read; ++i)
-                s_msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
-                */
         }
         ++s_msg->read_all;
-        s_msg->seed_len[s_msg->read_all] = seed_len;
-        s_msg->seed_inv[s_msg->read_all] = seed_inv;
         s_msg->seed_all[s_msg->read_all] = s_msg->seed_all[s_msg->read_all-1] + seed_all;
         s_msg->last_len[s_msg->read_all] = seq->seq.l - seed_all * seed_len - (seed_all-1) * seed_inv;
         s_msg->read_len[s_msg->read_all] = seq->seq.l;
-        s_msg->read_level[s_msg->read_all] = read_level;
-        //strcpy(s_msg->read_name[s_msg->read_all], seq->name.s);
         s_msg->read_m = m_read;
 
         for (i = 0; i < seed_all; ++i)
@@ -247,7 +171,7 @@ int split_seed(const char *prefix, seed_msg *s_msg)
             fputs(seed_head, outfp);
             fputs(seed_seq, outfp);
         }
-        fprintf(infofp, "%s %d %d %d %d %d %d\n", seq->name.s, seed_len, seed_inv, read_level, seed_all, s_msg->last_len[s_msg->read_all], (int)seq->seq.l);
+        fprintf(infofp, "%s %d %d %d\n", seq->name.s, seed_all, s_msg->last_len[s_msg->read_all], (int)seq->seq.l);
     }
 
     fprintf(stderr, "done.\n");
@@ -259,12 +183,13 @@ int split_seed(const char *prefix, seed_msg *s_msg)
     return 0;
 }
 
-int split_seed_info(const char *prefix, seed_msg *s_msg)
+int split_seed_info(const char *prefix, lsat_aln_para AP, seed_msg *s_msg)
 {
     char seed_info[1024];
     char read_name[1024];
     FILE *infofp;
-    int m_read, seed_all, last_len, len, n, seed_len, seed_inv, read_level;
+    int m_read, seed_all, last_len, len, n;
+    int seed_len=AP.seed_len, seed_inv=AP.seed_inv;
     void *new_p;
 
     strcpy(seed_info, prefix); strcat(seed_info, ".seed.info");
@@ -275,9 +200,9 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
     m_read = s_msg->read_m;
     fprintf(stderr, "[lsat_aln] Parsing seeds' information ... ");
     
-    while ((n = fscanf(infofp, "%s %d %d %d %d %d %d", read_name, &seed_len, &seed_inv, &read_level, &seed_all, &last_len, &len)) != EOF)
+    while ((n = fscanf(infofp, "%s %d %d %d", read_name, &seed_all, &last_len, &len)) != EOF)
     {
-        if (n != 7)
+        if (n != 4)
         {
             fprintf(stderr, "\n[split seed] INFO file error.[2]\n"); exit(1);
         }
@@ -286,18 +211,6 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
         if (s_msg->read_all == m_read-1)
         {
             m_read <<= 1;
-            if ((new_p = (int*)realloc(s_msg->seed_len , m_read * sizeof(int))) == NULL)
-            {
-                free(s_msg->seed_len);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_len[].\n"); exit(1);
-            }
-            s_msg->seed_len = (int*)new_p;
-            if ((new_p = (int*)realloc(s_msg->seed_inv , m_read * sizeof(int))) == NULL)
-            {
-                free(s_msg->seed_inv);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for seed_inv[].\n"); exit(1);
-            }
-            s_msg->seed_inv = (int*)new_p;
             if ((new_p = (int*)realloc(s_msg->seed_all, m_read * sizeof(int))) == NULL)
             {
                 free(s_msg->seed_all);
@@ -316,33 +229,11 @@ int split_seed_info(const char *prefix, seed_msg *s_msg)
                 fprintf(stderr, "\n[lsat aln] Can't allocate more memory for read_len[].\n"); exit(1);
             }
             s_msg->read_len = (int*)new_p;
-            if ((new_p = (int*)realloc(s_msg->read_level, m_read * sizeof(int))) == NULL)
-            {
-                free(s_msg->read_level);
-                fprintf(stderr, "\n[lsat aln] Can't allocate more memory for read_level[].\n"); exit(1);
-            }
-            s_msg->read_level = (int*)new_p;
-            //read_name
-            /*
-            if ((new_p = (char**)realloc(s_msg->read_name, m_read * sizeof(char*))) == NULL)
-            {
-                free(s_msg->read_name);
-                fprintf(stderr, "\n[lsat_aln] Can't allocate more memory for read_len[].\n"); exit(1);
-            }
-            s_msg->read_name = new_p;
-            int i;
-            for (i = m_read>>1; i < m_read; ++i)
-                s_msg->read_name[i] = (char*)malloc(1024 * sizeof(char));
-                */
         }
         ++s_msg->read_all;
-        s_msg->seed_len[s_msg->read_all] = seed_len;
-        s_msg->seed_inv[s_msg->read_all] = seed_inv;
         s_msg->seed_all[s_msg->read_all] = s_msg->seed_all[s_msg->read_all-1] + seed_all;
         s_msg->last_len[s_msg->read_all] = last_len;
         s_msg->read_len[s_msg->read_all] = len;
-        s_msg->read_level[s_msg->read_all] = read_level;
-        //strcpy(s_msg->read_name[s_msg->read_all], read_name);
         s_msg->read_m = m_read;
         if (last_len != len - seed_all * seed_len - (seed_all-1)*seed_inv)
         {
@@ -771,20 +662,8 @@ void set_aln_msg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, map_t m
 void init_aln_per_para(lsat_aln_per_para *APP, seed_msg *s_msg, int read_n)
 {
     APP->read_len = s_msg->read_len[read_n];
-
-    APP->seed_len = s_msg->seed_len[read_n];
-    APP->seed_inv = s_msg->seed_inv[read_n];
-    APP->read_level = s_msg->read_level[read_n];
-    APP->seed_step = APP->seed_len + APP->seed_inv;
     APP->last_len = s_msg->last_len[read_n];
-
     APP->seed_all = s_msg->seed_all[read_n] - s_msg->seed_all[read_n-1];
-
-    APP->per_aln_n = lsat_per_aln[APP->read_level]; // depend on seed_len
-    APP->min_thd = lsat_min_thd[APP->read_level]; // depend on seed_len
-    APP->frag_score_table = f_BCC_score_table;
-
-    APP->match_dis = APP->seed_step/25; // depend on seed_len, seed_inv, 4% indel allowed
 }
 
 void init_aln_para(lsat_aln_para *AP)
@@ -793,6 +672,13 @@ void init_aln_para(lsat_aln_para *AP)
     AP->n_thread = 1;
 
     AP->per_aln_m = PER_ALN_MAX; 
+
+    AP->seed_len = SEED_LEN;
+    AP->seed_inv = SEED_INTERVAL;
+    AP->seed_step = SEED_LEN+SEED_INTERVAL;
+    AP->match_dis = AP->seed_step/25; // 4% indel allowed
+    AP->per_aln_m = SEED_PER_LOCI;
+    AP->first_loci_thd = SEED_FIRST_ROUND_LOCI;
 
     AP->SV_len_thd = SV_MAX_LEN;
     AP->split_len = SPLIT_ALN_LEN;
@@ -810,6 +696,7 @@ void init_aln_para(lsat_aln_para *AP)
 
     AP->outp = stdout;
 
+    AP->frag_score_table = f_BCC_score_table;
     AP->gapo = 5; AP->gape = 2;
     AP->match = 1; AP->mis = 3;
     AP->end_bonus = 5;
@@ -924,7 +811,7 @@ void bseq_reco(char *seq, int len)
 
 // => seqs(name, seq, (map_msg,APP) * seed_num), n_seqs
 // => seqs(aln_res) in thread
-lsat_seq_t *lsat_read_seq(kseq_t *read_seq_t, FILE *seed_mapfp, seed_msg *s_msg, uint64_t chunk_size, int *n_seqs)
+lsat_seq_t *lsat_read_seq(kseq_t *read_seq_t, FILE *seed_mapfp, lsat_aln_para AP, seed_msg *s_msg, uint64_t chunk_size, int *n_seqs)
 {
     int i;
     uint64_t tot_l = 0;
@@ -962,7 +849,7 @@ lsat_seq_t *lsat_read_seq(kseq_t *read_seq_t, FILE *seed_mapfp, seed_msg *s_msg,
 
         int map_n, seed_n = 0, seed_out = 0;
         while (seed_n < seed_all) {
-            if ((map_n = gem_map_read(seed_mapfp, m_msg+seed_n, APP->per_aln_n)) < 0) { fprintf(stderr, "[lsat_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
+            if ((map_n = gem_map_read(seed_mapfp, m_msg+seed_n, AP.per_aln_m)) < 0) { fprintf(stderr, "[lsat_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
             if (map_n > 0) seed_out++;
             seed_n++;
         }
@@ -988,12 +875,12 @@ void lsat_free_read_seq(lsat_seq_t *seqs, int n_seqs)
     free(seqs);
 }
 
-void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lsat_aln_para *AP)
+void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lsat_aln_para AP)
 {
-    aux->a_msg = aln_init_msg(s_msg->seed_max, AP->per_aln_m);  
-    aux->f_node = fnode_alloc(s_msg->seed_max+2, AP->per_aln_m);
+    aux->a_msg = aln_init_msg(s_msg->seed_max, AP.per_aln_m);  
+    aux->f_node = fnode_alloc(s_msg->seed_max+2, AP.per_aln_m);
 
-    int i, line_n_max = s_msg->seed_max * AP->per_aln_m, line_len_max = s_msg->seed_max;
+    int i, line_n_max = s_msg->seed_max * AP.per_aln_m, line_len_max = s_msg->seed_max;
     aux->line = (line_node**)malloc(line_n_max * sizeof(line_node*));
     aux->_line = (line_node**)malloc(line_n_max * sizeof(line_node*));
     aux->line_end = (int*)malloc(line_n_max * sizeof(int));
@@ -1009,8 +896,8 @@ void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lsat_aln_para *AP)
     *(aux->f_msg) = (frag_msg*)malloc(sizeof(frag_msg));
     frag_init_msg(*(aux->f_msg), s_msg->seed_max);
 
-    aux->hash_num = (uint32_t*)calloc(pow(NT_N, AP->hash_key_len), sizeof(uint32_t));
-    aux->hash_node = (uint64_t**)calloc(pow(NT_N, AP->hash_key_len), sizeof(uint64_t*));
+    aux->hash_num = (uint32_t*)calloc(pow(NT_N, AP.hash_key_len), sizeof(uint32_t));
+    aux->hash_node = (uint64_t**)calloc(pow(NT_N, AP.hash_key_len), sizeof(uint64_t*));
 }
 
 void aux_dp_free(thread_aux_t *aux, seed_msg *s_msg, lsat_aln_para *AP)
@@ -1135,14 +1022,14 @@ int lsat_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, b
     for (i = 0; i < AP->n_thread; ++i) {
         aux[i].tid = i; 
         aux[i].AP = AP; aux[i].bwt = bwt; aux[i].pac = pac; aux[i].bns = bns;
-        aux_dp_init(aux+i, s_msg, AP);
+        aux_dp_init(aux+i, s_msg, *AP);
     }
 
     // core loop
 #ifdef __DEBUG__
 #define CHUNK_SIZE 1
 #endif
-    while ((seqs = lsat_read_seq(read_seq_t, seed_mapfp, s_msg, AP->n_thread*CHUNK_SIZE, &n_seqs)) != 0) { // read a chunk of read and other input data
+    while ((seqs = lsat_read_seq(read_seq_t, seed_mapfp, *AP, s_msg, AP->n_thread*CHUNK_SIZE, &n_seqs)) != 0) { // read a chunk of read and other input data
         if (AP->n_thread <= 1) {// no multi-thread
             aux->n_seqs = n_seqs; aux->seqs = seqs;
             lsat_main_aln(aux);
@@ -1169,10 +1056,10 @@ int lsat_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, b
     return 0;
 }
 
-int lsat_gem(const char *ref_prefix, const char *read_prefix)
+int lsat_gem(const char *ref_prefix, const char *read_prefix, int per_loci)
 {
     char cmd[1024];
-    sprintf(cmd, "./gem_map.sh %s %s.seed -d %d", ref_prefix, read_prefix, lsat_per_aln[0]); // lsat_per_aln[0]: max number of loctions per seed
+    sprintf(cmd, "./gem_map.sh %s %s.seed -d %d", ref_prefix, read_prefix, per_loci); // lsat_per_aln[0]: max number of loctions per seed
     fprintf(stderr, "[lsat_aln] Executing gem-mapper ... ");
     if (system(cmd) != 0) { fprintf(stderr, "\n[lsat_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
     fprintf(stderr, "done.\n");
@@ -1214,8 +1101,8 @@ int lsat_aln_c(const char *ref_prefix, const char *read_prefix, int seed_info, i
 
     /* split-seeding */
     s_msg = seed_init_msg();
-    if (seed_info) split_seed_info(read_prefix, s_msg);
-    else split_seed(read_prefix, s_msg);
+    if (seed_info) split_seed_info(read_prefix, *AP, s_msg);
+    else split_seed(read_prefix, *AP, s_msg);
 
     if (!strcmp(seed_result, ""))
     {
@@ -1231,7 +1118,7 @@ int lsat_aln_c(const char *ref_prefix, const char *read_prefix, int seed_info, i
     //excute soap2-dp program
     if (!no_seed_aln) 
     {
-        if (seed_program == 0) lsat_gem(ref_prefix, read_prefix);
+        if (seed_program == 0) lsat_gem(ref_prefix, read_prefix, AP->per_aln_m);
         else if (seed_program == 1) lsat_bwa(ref_prefix, read_prefix);
         else if (seed_program == 2) lsat_soap2dp(ref_prefix, read_prefix);
         else { fprintf(stderr, "[lsat_aln] Unknown seeding program option.\n"); return lsat_aln_usage(); }
@@ -1274,7 +1161,6 @@ int lsat_aln(int argc, char *argv[])
     lsat_aln_para *AP = (lsat_aln_para*)calloc(1, sizeof(lsat_aln_para));
     init_aln_para(AP);
     int no_seed_aln=0, seed_info=0, aln_type=1, seed_program=0;
-	int seed_len=0, seed_inv=0, per_aln=0, min_thd=0;
     char seed_result_f[1024]="";
 
     while ((c =getopt(argc, argv, "t:T:m:M:O:E:S:r:V:g:s:l:v:p:d:o:NIA:")) >= 0)
@@ -1299,10 +1185,10 @@ int lsat_aln(int argc, char *argv[])
             case 'g': AP->split_len = atoi(optarg);
 
             case 's': seed_program = atoi(optarg); break;
-			case 'l': seed_len = atoi(optarg); break;
-			case 'v': seed_inv = atoi(optarg); break;
-			case 'p': per_aln = atoi(optarg); break;
-			case 'd': min_thd = atoi(optarg); break;
+			case 'l': AP->seed_len = atoi(optarg); break;
+			case 'v': AP->seed_inv = atoi(optarg); break;
+			case 'p': AP->per_aln_m = atoi(optarg); break;
+			case 'd': AP->first_loci_thd = atoi(optarg); break;
 
             case 'o': AP->outp = fopen(optarg, "w"); 
                       if (AP->outp == NULL) { fprintf(stderr, "[lsat_aln] Can not open output file: %s.\n", optarg); exit(1); }
@@ -1320,18 +1206,6 @@ int lsat_aln(int argc, char *argv[])
 
     ref = strdup(argv[optind]);
     read =strdup(argv[optind+1]);
-	if (seed_len != 0) {
-		if (seed_inv == 0 || per_aln == 0 || min_thd == 0) {
-			fprintf(stderr, "[lsat_aln] seed para error.\n");
-			return lsat_aln_usage();
-		}
-		lsat_read_leve_n = 1;
-
-		lsat_seed_len[0] = seed_len;
-		lsat_seed_inv[0] = seed_inv;
-		lsat_per_aln[0] = per_aln;
-		lsat_min_thd[0] = min_thd;
-	}
 
     lsat_aln_c(ref, read, seed_info, seed_program, no_seed_aln, seed_result_f, AP);
 
