@@ -232,28 +232,43 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
         } else if (l-k+1 <= 5 * max_hit){ 
 			// select specific seed-results, which are close to the existing result.
 			// keep 100 seed-results, at most.
-            int cnt=0;
+            int cnt=0, ref_hit;
 			for (m = k; m <=l; ++m) {
                 bwtint_t ref_pos = bwt_sa(bwt, m);
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
-				if (is_rev != reg.is_rev) continue;
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
-				if (ref_id != reg.refid) continue;
+
+                ref_hit = 0;
+                for (j = 0; j < reg.ref_beg_n; j++) {
+                    if (ref_id == reg.chr_beg[j]-1) {
+                        ref_hit = 1;
+                        break;
+                    }
+                }
+                if (ref_hit==0) {
+                    for (j = 0; j < reg.ref_end_n; j++) {
+                        if (ref_id == reg.chr_end[j]-1) {
+                            ref_hit = 1;
+                            break;
+                        }
+                    }
+                }
+                if (ref_hit == 0) continue;
                 uint64_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
                 //bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 				if (is_rev) {
 					//fprintf(stderr, "ref_beg: %d\nabs_pos: %d\nref_end: %d\n", reg.ref_beg, abs_pos, reg.ref_end);
-					if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos < AP.SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP.SV_len_thd))) {
+					//if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos < AP.SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP.SV_len_thd))) {
 						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 						cnt++;
 						if (cnt == max_hit) break;
-					}
+					//}
 				} else {
-					if ((reg.ref_beg==0 || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP.SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP.SV_len_thd))) {
+					//if ((reg.ref_beg==0 || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP.SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP.SV_len_thd))) {
 						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
 						cnt++;
 						if (cnt == max_hit) break;
-					}
+					//}
 				}
 			}
 		}

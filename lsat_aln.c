@@ -318,45 +318,79 @@ aln_reg *aln_init_reg(int read_len)
     reg->reg_n = 0; reg->reg_m = 1;
     reg->read_len = read_len;
     reg->reg = (reg_t*)malloc(sizeof(reg_t));
+    reg->reg->ref_beg_n = reg->reg->ref_end_n = 0; reg->reg->ref_m = 10;
+    reg->reg->chr_beg = (int*)malloc(10 * sizeof(int));
+    reg->reg->chr_end = (int*)malloc(10 * sizeof(int));
+    reg->reg->ref_beg = (uint64_t*)malloc(10 * sizeof(uint64_t));
+    reg->reg->ref_end = (uint64_t*)malloc(10 * sizeof(uint64_t));
     return reg;
 }
 
-void aln_free_reg(aln_reg *reg) { free(reg->reg); free(reg); }
+void aln_free_reg(aln_reg *reg) { free(reg->reg->chr_beg); free(reg->reg->chr_end); free(reg->reg->ref_beg); free(reg->reg->ref_end); free(reg->reg); free(reg); }
 
 int reg_comp(const void *a, const void *b) { return (*(reg_t*)a).beg - (*(reg_t*)b).beg; }
 void aln_sort_reg(aln_reg *a_reg) { qsort(a_reg->reg, a_reg->reg_n, sizeof(reg_t), reg_comp); }
 
 void aln_merg_reg(aln_reg *a_reg, int thd) {
     //if (a_reg->reg_n == 0)return;
-    int cur_i = 0, i;
+    int cur_i = 0, i, j, ref_i;
     for (i = 1; i < a_reg->reg_n; ++i) {
 		// merge when the distance between two regs is smaller than the 'thd'
         if(a_reg->reg[i].beg - a_reg->reg[cur_i].end - 1 < thd) {
 		    if(a_reg->reg[i].end > a_reg->reg[cur_i].end) 
 				a_reg->reg[cur_i].end = a_reg->reg[i].end;
+            // ref_beg, ref_end;
+            ref_i = a_reg->reg[cur_i].ref_beg_n;
+            for (j = 0; j < a_reg->reg[i].ref_beg_n; ++j) {
+                a_reg->reg[cur_i].ref_beg[ref_i+j] = a_reg->reg[i].ref_beg[j];
+                a_reg->reg[cur_i].chr_beg[ref_i+j] = a_reg->reg[i].chr_beg[j];
+            }
+            a_reg->reg[cur_i].ref_beg_n += j;
+            ref_i = a_reg->reg[cur_i].ref_end_n;
+            for (j = 0; j < a_reg->reg[i].ref_end_n; ++j) { 
+                a_reg->reg[cur_i].ref_end[ref_i+j] = a_reg->reg[i].ref_end[j];
+                a_reg->reg[cur_i].chr_end[ref_i+j] = a_reg->reg[i].chr_end[j];
+            }
+            a_reg->reg[cur_i].ref_end_n += j;
 		} else {
             cur_i++;
             a_reg->reg[cur_i].beg = a_reg->reg[i].beg;
             a_reg->reg[cur_i].end = a_reg->reg[i].end;
+            // ref_beg, ref_end
+            for (j = 0; j < a_reg->reg[i].ref_beg_n; ++j) { a_reg->reg[cur_i].ref_beg[j] = a_reg->reg[i].ref_beg[j]; a_reg->reg[cur_i].chr_beg[j] = a_reg->reg[i].chr_beg[j]; }
+            for (j = 0; j < a_reg->reg[i].ref_end_n; ++j) { a_reg->reg[cur_i].ref_end[j] = a_reg->reg[i].ref_end[j]; a_reg->reg[cur_i].chr_end[j] = a_reg->reg[i].chr_end[j]; }
+
+            a_reg->reg[cur_i].ref_beg_n = a_reg->reg[i].ref_beg_n;
+            a_reg->reg[cur_i].ref_end_n = a_reg->reg[i].ref_end_n;
         }
     }
     a_reg->reg_n = cur_i+1;
 }
 
-void push_reg(aln_reg *reg, reg_t r)
+void push_reg(aln_reg *reg, int chr_beg[], uint64_t ref_beg[], int ref_beg_n, int chr_end[], uint64_t ref_end[], int ref_end_n, int beg, int end)
 {
+    int i;
     if (reg->reg_n == reg->reg_m) {
         reg->reg_m <<= 1;
         if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
             fprintf(stderr, "[push_reg] Not enough memory.\n"); exit(0);
         }
+        // 
+        for (i = reg->reg_n; i < reg->reg_m; ++i) {
+            reg->reg[i].ref_m = 10;
+            reg->reg[i].ref_beg_n = reg->reg[i].ref_end_n = 0;
+            reg->reg[i].chr_beg = (int*)malloc(10 * sizeof(int));
+            reg->reg[i].chr_end = (int*)malloc(10 * sizeof(int));
+            reg->reg[i].ref_beg = (uint64_t*)malloc(10 * sizeof(uint64_t));
+            reg->reg[i].ref_beg = (uint64_t*)malloc(10 * sizeof(uint64_t));
+        }
     }
-    reg->reg[reg->reg_n].beg = r.beg;
-    reg->reg[reg->reg_n].end = r.end;
-	reg->reg[reg->reg_n].refid = r.refid;
-	reg->reg[reg->reg_n].is_rev = r.is_rev;
-	reg->reg[reg->reg_n].ref_beg = r.ref_beg;
-	reg->reg[reg->reg_n].ref_end = r.ref_end;
+    reg->reg[reg->reg_n].beg = beg;
+    reg->reg[reg->reg_n].end = end;
+    for (i = 0; i < ref_beg_n; ++i) { reg->reg[reg->reg_n].ref_beg[i] = ref_beg[i]; reg->reg[reg->reg_n].chr_beg[i] = chr_beg[i]; }
+    for (i = 0; i < ref_end_n; ++i) { reg->reg[reg->reg_n].ref_end[i] = ref_end[i]; reg->reg[reg->reg_n].chr_end[i] = chr_end[i]; }
+    reg->reg[reg->reg_n].ref_beg_n = ref_beg_n;
+    reg->reg[reg->reg_n].ref_end_n = ref_end_n;
     reg->reg_n++;
 }
 
@@ -365,30 +399,24 @@ int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para AP, int re
 {
     if (a_reg->reg_n == 0) {
         if (AP.bwt_seed_len < a_reg->read_len && a_reg->read_len <= reg_thd) {
-            push_reg(remain_reg, (reg_t){-1, -1, 0, 0, 1, a_reg->read_len});
+            push_reg(remain_reg, 0, 0, 0, 0, 0, 0, 1, a_reg->read_len);
             return 1;
         } else return 0;
     }
     aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP.bwt_seed_len);
-    int i; 
-    if (a_reg->reg[0].beg > AP.bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd)
-		push_reg(remain_reg, (reg_t){a_reg->reg[0].refid, a_reg->reg[0].is_rev, 
-				                     0, a_reg->reg[0].ref_beg, 
-				                     1, a_reg->reg[0].beg-1});
+    int i;
+    if (a_reg->reg[0].beg > AP.bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd) {
+		push_reg(remain_reg, 0, 0, 0, a_reg->reg[0].chr_beg, a_reg->reg[0].ref_beg, a_reg->reg[0].ref_beg_n, 1, a_reg->reg[0].beg-1);
+    }
     for (i = 1; i < a_reg->reg_n; ++i) {
         if (a_reg->reg[i].beg - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->reg[i].beg-1-a_reg->reg[i-1].end <= reg_thd) {
-			if (a_reg->reg[i].refid == a_reg->reg[i-1].refid && a_reg->reg[i].is_rev == a_reg->reg[i-1].is_rev)
-				push_reg(remain_reg, (reg_t){a_reg->reg[i].refid, a_reg->reg[i].is_rev,
-						                     a_reg->reg[i-1].ref_end, a_reg->reg[i].ref_beg, 
-						                     a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
-			else 
-				push_reg(remain_reg, (reg_t){-1, -1, 0, 0, a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
+            push_reg(remain_reg, a_reg->reg[i-1].chr_end, a_reg->reg[i-1].ref_end, a_reg->reg[i-1].ref_end_n, a_reg->reg[i].chr_beg, a_reg->reg[i].ref_beg, a_reg->reg[i].ref_beg_n, a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1);
+            
 		}
     }
-	if (a_reg->read_len - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->read_len-a_reg->reg[i-1].end <= reg_thd) 
-		push_reg(remain_reg, (reg_t){a_reg->reg[i-1].refid, a_reg->reg[i-1].is_rev,
-				                     a_reg->reg[i-1].ref_end, 0,
-				                     a_reg->reg[i-1].end+1, a_reg->read_len});
+	if (a_reg->read_len - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->read_len-a_reg->reg[i-1].end <= reg_thd) {
+		push_reg(remain_reg, a_reg->reg[i-1].chr_end, a_reg->reg[i-1].ref_end, a_reg->reg[i-1].ref_end_n, 0, 0, 0, a_reg->reg[i-1].end+1, a_reg->read_len);
+    }
     return remain_reg->reg_n;
 }
 
@@ -400,19 +428,20 @@ void push_reg_res(aln_reg *reg, res_t *res)
             fprintf(stderr, "[push_reg_res] Not enough memory.\n"); exit(0);
         }
     }
-	reg->reg[reg->reg_n].refid = res->chr-1;
-	reg->reg[reg->reg_n].is_rev = 1-res->nsrand;
+    reg->reg[reg->reg_n].chr_beg[0] = res->chr;
+    reg->reg[reg->reg_n].chr_end[0] = res->chr;
     if (res->nsrand == 1) { // '+'
         reg->reg[reg->reg_n].beg = (res->cigar[0] & 0xf) == CSOFT_CLIP ? ((res->cigar[0]>>4)+1):1;
         reg->reg[reg->reg_n].end = (res->cigar[res->cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res->cigar[res->cigar_len-1]>>4)):reg->read_len;
-		reg->reg[reg->reg_n].ref_beg = res->offset;
-		reg->reg[reg->reg_n].ref_end = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
+		reg->reg[reg->reg_n].ref_beg[0] = res->offset;
+		reg->reg[reg->reg_n].ref_end[0] = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
     } else { // '-'
         reg->reg[reg->reg_n].beg = (res->cigar[res->cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res->cigar[res->cigar_len-1]>>4) + 1):1;
         reg->reg[reg->reg_n].end = (res->cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res->cigar[0]>>4)):reg->read_len;
-		reg->reg[reg->reg_n].ref_end = res->offset;
-		reg->reg[reg->reg_n].ref_beg = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
+		reg->reg[reg->reg_n].ref_end[0] = res->offset;
+		reg->reg[reg->reg_n].ref_beg[0] = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
     }
+    reg->reg[reg->reg_n].ref_end_n = 1;
     res->reg_beg = reg->reg[reg->reg_n].beg;
     res->reg_end = reg->reg[reg->reg_n].end;
     reg->reg_n++;
@@ -783,8 +812,9 @@ int lsat_main_aln(thread_aux_t *aux)
         // bwt aln
         bwt_aln_remain(a_reg, p->a_res+2, bwt, bns, pac, p->seq, &(p->rseq), *APP, *AP);
         aln_free_reg(a_reg);
-
+#ifdef __DEBUG__
         COUNT++; fprintf(stderr, "%16d reads have been aligned.\n", COUNT);
+#endif
     }
     aux->line_m = line_m;
     return 0;

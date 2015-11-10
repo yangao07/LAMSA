@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "lsat_dp_con.h"
 #include "lsat_aln.h"
 #include "split_mapping.h"
 #include "lsat_heap.h"
@@ -118,8 +119,8 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
     rat2 = (e-s+1+0.0)/(e2-s2+1+0.0);
     //if ((rat1>=0.7 || rat2>=0.7)) { //0.7 XXX
 	if (rat1 < 0.7 && rat2 < 0.7) {
-			L_MF(line, line_end, a) = L_NMERG;
-			return 0;
+        L_MF(line, line_end, a) = L_NMERG;
+        return 0;
 	} else if 
 		(L_LS(line, line_end, a) <= L_LS(line, line_end, b) / 2 || // merged and  dumped
 		 L_LS(line, line_end, a) <= L_BS(line, line_end, b) / 2 ) {
@@ -917,6 +918,8 @@ void branch_track_new(frag_dp_node **f_node, int x, int y, node_score *ns)
 int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, 
                             lsat_aln_per_para APP, lsat_aln_para AP,
                             int left_b, int right_b, 
+                            int chr_beg[], uint64_t ref_beg[], int ref_beg_n,
+                            int chr_end[], uint64_t ref_end[], int ref_end_n,
                             line_node **line, int *line_end,
 							int line_n_max)
 {
@@ -965,6 +968,26 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         if (_right.x == START_NODE.x) break;
         node_i = f_node[_right.x][_right.y].node_n-1;
         line_end[l_i] = node_i+1;
+        int s_i = f_node[_right.x][_right.y].seed_i, a_i = f_node[_right.x][_right.y].aln_i;
+        for (i = 0; i < ref_beg_n; i++) {
+            if (a_msg[s_i].at[a_i].chr == chr_beg[i] 
+               && abs((a_msg[s_i].at[a_i].offset-ref_beg[i]) - (s_i-left_b)*(AP.seed_len+AP.seed_inv)) < AP.SV_len_thd) {
+                // connectable with main-result
+                if (score > 1) score += score/2;
+                else score++;
+                goto L_START;
+            }
+        }
+        for (i = 0; i < ref_end_n; i++) {
+            if (a_msg[s_i].at[a_i].chr == chr_end[i] 
+               && abs((a_msg[s_i].at[a_i].offset-ref_end[i]) - (s_i-right_b)*(AP.seed_len+AP.seed_inv)) < AP.SV_len_thd) {
+                // connectable with main-result
+                if (score > 1) score += score/2;
+                else score++;
+                goto L_START;
+            }
+        }
+L_START:
         L_LS(line,line_end,l_i) = score;
         L_BS(line,line_end,l_i) = score;
         while (_right.x != head.x) {
@@ -986,10 +1009,12 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
 int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
                 lsat_aln_per_para APP, lsat_aln_para AP, 
                 int left, int right, 
+                int chr_beg[], uint64_t ref_beg[], int ref_beg_n,
+                int chr_end[], uint64_t ref_end[], int ref_end_n,
                 line_node **line, int *line_end, 
                 int line_n_max, int per_max_multi) 
 {
-    int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, line, line_end, line_n_max);//, 0, 0);
+    int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, chr_beg, ref_beg, ref_beg_n, chr_end, ref_end, ref_end_n, line, line_end, line_n_max);//, 0, 0);
     line_set_bound1(line, line_end, 0,  &l, left, right, per_max_multi);
     ///l = line_remove(line, line_end, 0, l);
     return l;
@@ -1146,7 +1171,9 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         }
         if ((*f_msg) == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enough memory.(line_m: %d)\n", line_n); exit(1); }
         (*line_m)= line_n;
+#ifdef __DEBUG__
         fprintf(stderr, "line-num: %d\t", line_n);
+#endif
     }
 
 	for (l = 0; l < line_n; ++l) {
@@ -1240,7 +1267,8 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
 		}
 		if (right == -2) continue;
 		// store line-info in _line
-		l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, _line, _line_end, line_n_max, per_max_multi);
+        // trg_ref_beg/ref_end XXX here
+		l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, re_reg->reg[i].chr_beg, re_reg->reg[i].ref_beg, re_reg->reg[i].ref_beg_n, re_reg->reg[i].chr_end, re_reg->reg[i].ref_end, re_reg->reg[i].ref_end_n, _line, _line_end, line_n_max, per_max_multi);
 		// copy from _line to line
         for (j = 0; j < l; ++j) {
             line_end[l_n+j] = _line_end[j];
