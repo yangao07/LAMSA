@@ -312,21 +312,29 @@ void aln_res_free(aln_res *res, int n)
     free(res);
 }
 
+#define REF_M 100
 aln_reg *aln_init_reg(int read_len)
 {
     aln_reg *reg = (aln_reg*)malloc(sizeof(aln_reg));
     reg->reg_n = 0; reg->reg_m = 1;
     reg->read_len = read_len;
     reg->reg = (reg_t*)malloc(sizeof(reg_t));
-    reg->reg->ref_beg_n = reg->reg->ref_end_n = 0; reg->reg->ref_m = 10;
-    reg->reg->chr_beg = (int*)malloc(10 * sizeof(int));
-    reg->reg->chr_end = (int*)malloc(10 * sizeof(int));
-    reg->reg->ref_beg = (uint64_t*)malloc(10 * sizeof(uint64_t));
-    reg->reg->ref_end = (uint64_t*)malloc(10 * sizeof(uint64_t));
+    reg->reg->ref_beg_n = reg->reg->ref_end_n = 0; reg->reg->ref_m = REF_M;
+    reg->reg->chr_beg = (int*)malloc(REF_M * sizeof(int));
+    reg->reg->chr_end = (int*)malloc(REF_M * sizeof(int));
+    reg->reg->ref_beg = (uint64_t*)malloc(REF_M * sizeof(uint64_t));
+    reg->reg->ref_end = (uint64_t*)malloc(REF_M * sizeof(uint64_t));
     return reg;
 }
 
-void aln_free_reg(aln_reg *reg) { free(reg->reg->chr_beg); free(reg->reg->chr_end); free(reg->reg->ref_beg); free(reg->reg->ref_end); free(reg->reg); free(reg); }
+void aln_free_reg(aln_reg *reg) { 
+    int i;
+    for (i = 0; i < reg->reg_m; ++i) {
+        free(reg->reg[i].chr_beg); free(reg->reg[i].chr_end); free(reg->reg[i].ref_beg); free(reg->reg[i].ref_end); 
+    }
+    free(reg->reg);
+    free(reg); 
+}
 
 int reg_comp(const void *a, const void *b) { return (*(reg_t*)a).beg - (*(reg_t*)b).beg; }
 void aln_sort_reg(aln_reg *a_reg) { qsort(a_reg->reg, a_reg->reg_n, sizeof(reg_t), reg_comp); }
@@ -377,12 +385,12 @@ void push_reg(aln_reg *reg, int chr_beg[], uint64_t ref_beg[], int ref_beg_n, in
         }
         // 
         for (i = reg->reg_n; i < reg->reg_m; ++i) {
-            reg->reg[i].ref_m = 10;
+            reg->reg[i].ref_m = REF_M;
             reg->reg[i].ref_beg_n = reg->reg[i].ref_end_n = 0;
-            reg->reg[i].chr_beg = (int*)malloc(10 * sizeof(int));
-            reg->reg[i].chr_end = (int*)malloc(10 * sizeof(int));
-            reg->reg[i].ref_beg = (uint64_t*)malloc(10 * sizeof(uint64_t));
-            reg->reg[i].ref_beg = (uint64_t*)malloc(10 * sizeof(uint64_t));
+            reg->reg[i].chr_beg = (int*)malloc(REF_M * sizeof(int));
+            reg->reg[i].chr_end = (int*)malloc(REF_M * sizeof(int));
+            reg->reg[i].ref_beg = (uint64_t*)malloc(REF_M * sizeof(uint64_t));
+            reg->reg[i].ref_end = (uint64_t*)malloc(REF_M * sizeof(uint64_t));
         }
     }
     reg->reg[reg->reg_n].beg = beg;
@@ -422,10 +430,19 @@ int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para AP, int re
 
 void push_reg_res(aln_reg *reg, res_t *res)
 {
+    int i;
     if (reg->reg_n == reg->reg_m) {
         reg->reg_m <<= 1;
         if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
             fprintf(stderr, "[push_reg_res] Not enough memory.\n"); exit(0);
+        }
+        for (i = reg->reg_n; i < reg->reg_m; ++i) {
+            reg->reg[i].ref_m = REF_M;
+            reg->reg[i].ref_beg_n = reg->reg[i].ref_end_n = 0;
+            reg->reg[i].chr_beg = (int*)malloc(REF_M * sizeof(int));
+            reg->reg[i].chr_end = (int*)malloc(REF_M * sizeof(int));
+            reg->reg[i].ref_beg = (uint64_t*)malloc(REF_M * sizeof(uint64_t));
+            reg->reg[i].ref_end = (uint64_t*)malloc(REF_M * sizeof(uint64_t));
         }
     }
     reg->reg[reg->reg_n].chr_beg[0] = res->chr;
@@ -441,10 +458,9 @@ void push_reg_res(aln_reg *reg, res_t *res)
 		reg->reg[reg->reg_n].ref_end[0] = res->offset;
 		reg->reg[reg->reg_n].ref_beg[0] = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
     }
+    reg->reg[reg->reg_n].ref_beg_n = 1;
     reg->reg[reg->reg_n].ref_end_n = 1;
-    res->reg_beg = reg->reg[reg->reg_n].beg;
-    res->reg_end = reg->reg[reg->reg_n].end;
-    reg->reg_n++;
+    res->reg_beg = reg->reg[reg->reg_n].beg; res->reg_end = reg->reg[reg->reg_n].end; reg->reg_n++;
 }
 
 void get_reg(aln_res *res, aln_reg *reg)

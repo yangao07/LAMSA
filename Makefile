@@ -5,6 +5,7 @@ OBJS=		main.o build_ref.o bntseq.o lsat_heap.o lsat_aln.o lsat_dp_con.o frag_che
 			./lsat_sam_parse/bam_aux.o ./lsat_sam_parse/bam.o ./lsat_sam_parse/bam_import.o \
 			./lsat_sam_parse/kstring.o ./lsat_sam_parse/sam_header.o ./lsat_sam_parse/sam_view.o \
 			bwt.o bwt_aln.o utils.o
+#PROG=		lsat_gdb
 PROG=		lsat
 PROG1=      ~/bin/lsat
 LIB=		-lm -lz -lpthread
@@ -22,4 +23,4 @@ $(PROG1):$(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) $(LIB) -o $@
 
 clean:
-	rm -f *.o lsat ~/bin/lsat
+	rm -f *.o lsat lsat_gdb ~/bin/lsat
