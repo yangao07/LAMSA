@@ -580,7 +580,7 @@ int line_set_bound1(line_node **line, int *line_end,
 
 //for best coverage and connect
 //add "overlap ins"
-int get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, lsat_aln_para AP)    //(i,j)对应节点，来自pre的第pre_a个aln
+int get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, lsat_aln_per_para APP, lsat_aln_para AP)    //(i,j)对应节点，来自pre的第pre_a个aln
 {
     if (pre == -1 || i == -1) { *flag = F_MATCH; return 0; }	//for bound node
     if (pre == i) {
@@ -593,19 +593,19 @@ int get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, l
         *flag = F_CHR_DIF; return 0;//PRICE_DIF_CHR;
     }
 
-    int seed_len = AP.seed_len; int seed_inv = AP.seed_inv;
+    int seed_len = APP.seed_len; int seed_inv = APP.seed_inv;
     int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * (seed_len+seed_inv);	
     int64_t act = a_msg[i].at[j].offset;
     int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act)) - (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id-a_msg[i].read_id) < 0)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
 
-    int mat_dis = AP.match_dis;
+    int mat_dis = APP.match_dis;
     if (dis <= mat_dis && dis >= -mat_dis) {
         if (abs(a_msg[pre].read_id - a_msg[i].read_id) == 1) *flag = F_MATCH;
         else if (abs(a_msg[pre].read_id - a_msg[i].read_id) < 10) *flag = F_MISMATCH; // XXX long dis
         else *flag = F_LONG_MISMATCH;
     } else if (dis > mat_dis && dis < AP.SV_len_thd) *flag = F_DELETE;
     else if ((dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*(seed_len+seed_inv)-seed_len))) // nonoverlaped ins
-          || (dis < -(AP.split_len/2) && dis >= -AP.SV_len_thd)) { // overlaped ins XXX
+          || (dis < -AP.split_len && dis >= -AP.SV_len_thd)) { // overlaped ins XXX
         *flag = F_INSERT; 
     } else { *flag = F_UNCONNECT; return 0; }
     dis=abs(dis); dis += (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id - a_msg[i].read_id) < 0)? a_msg[i].at[j].cigar_len : a_msg[pre].at[pre_a].cigar_len);
@@ -636,7 +636,7 @@ void fnode_set(frag_dp_node *f_node, line_node from,
 int frag_dp_init(frag_dp_node **f_node, 
                  aln_msg *a_msg, int seed_i, 
                  line_node from, 
-                 lsat_aln_para AP,
+                 lsat_aln_per_para APP, lsat_aln_para AP,
                  int dp_flag)
 {
     int i;
@@ -648,10 +648,10 @@ int frag_dp_init(frag_dp_node **f_node,
         int con_flag, con_score, dis;
         for (i = 0; i < a_msg[seed_i].n_aln; ++i) {
             
-            dis = get_fseed_dis(a_msg, from.x, from.y, seed_i, i, &con_flag, AP);
+            dis = get_fseed_dis(a_msg, from.x, from.y, seed_i, i, &con_flag, APP, AP);
             //											XXX MATCH, MISMATCH: same score?
             //											mismatch too long, socre??? XXX
-            con_score = AP.frag_score_table[con_flag];
+            con_score = APP.frag_score_table[con_flag];
 
             if (con_flag != F_UNCONNECT && con_flag != F_CHR_DIF)
                 fnode_set(&(f_node[seed_i][i]), from, 2+con_score, dis, con_flag, dp_flag);
@@ -680,7 +680,7 @@ int fnode_add_son(frag_dp_node **f_node,
 //    similar to MEM, match/mismatch have the highest priority in dp.
 int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg, 
                    int seed_i, int aln_i, int start, 
-                   lsat_aln_para AP, 
+                   lsat_aln_per_para APP, lsat_aln_para AP, 
                    int dp_flag)
 {
     int i, j, con_flag, con_score, dis;
@@ -695,7 +695,7 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
         for (j = 0; j < a_msg[i].n_aln; ++j) {
             if (f_node[i][j].dp_flag == dp_flag)// || f_node[i][j].dp_flag == UPDATE_FLAG)
             {
-                dis = get_fseed_dis(a_msg, i, j, seed_i, aln_i, &con_flag, AP);
+                dis = get_fseed_dis(a_msg, i, j, seed_i, aln_i, &con_flag, APP, AP);
                 if (con_flag == F_UNCONNECT || con_flag == F_CHR_DIF)
                     continue;
                 // '+' strand: successor-Match
@@ -709,7 +709,7 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
                             continue;
                         else { 
                             max_from = (line_node){i,j};
-                            con_score = AP.frag_score_table[con_flag];
+                            con_score = APP.frag_score_table[con_flag];
                             max_score = f_node[i][j].score + 1 + con_score;
                             max_flag = con_flag;
                             max_dis = f_node[i][j].dis_pen + dis;
@@ -722,14 +722,14 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
                 ///XXX cigar-diff, when score equal with each other
                 else if (con_flag <= F_MISMATCH) {
                     max_from = (line_node){i,j};
-                    con_score = AP.frag_score_table[con_flag];
+                    con_score = APP.frag_score_table[con_flag];
                     max_score = f_node[i][j].score + 1 + con_score;
                     max_flag = con_flag;
                     max_dis = f_node[i][j].dis_pen + dis;
                     goto UPDATE;
                 }
 
-                con_score = AP.frag_score_table[con_flag];
+                con_score = APP.frag_score_table[con_flag];
                 if (f_node[i][j].score + 1 + con_score > max_score)	{
                     max_from = (line_node){i,j};
                     max_score = f_node[i][j].score + 1 + con_score;
@@ -763,7 +763,7 @@ UPDATE:
 
 int frag_dp_per_init(frag_dp_node **f_node, aln_msg *a_msg, 
                      int seed_i, int aln_i, line_node from, 
-                     lsat_aln_para AP,
+                     lsat_aln_per_para APP, lsat_aln_para AP,
                      int dp_flag)
 {
     if (from.x == START_NODE.x) { //UNLIMITED
@@ -771,10 +771,10 @@ int frag_dp_per_init(frag_dp_node **f_node, aln_msg *a_msg,
         fnode_set(&(f_node[seed_i][aln_i]), from, 1, a_msg[seed_i].at[aln_i].cigar_len, F_MATCH, dp_flag);
     } else {
         int con_flag, con_score, dis;
-        dis = get_fseed_dis(a_msg, from.x, from.y, seed_i, aln_i, &con_flag, AP);
+        dis = get_fseed_dis(a_msg, from.x, from.y, seed_i, aln_i, &con_flag, APP, AP);
         //											XXX MATCH, MISMATCH: same score?
         //											mismatch too long, socre??? XXX
-        con_score = AP.frag_score_table[con_flag];
+        con_score = APP.frag_score_table[con_flag];
 
         if (con_flag != F_UNCONNECT && con_flag != F_CHR_DIF)
             fnode_set(&(f_node[seed_i][aln_i]), from, 2+con_score, dis, con_flag, dp_flag);
@@ -941,14 +941,14 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
     for (i = start; i <= end; ++i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
             if (f_node[i][j].dp_flag != TRACKED_FLAG)
-                frag_dp_per_init(f_node, a_msg, i, j, head, AP, dp_flag);
+                frag_dp_per_init(f_node, a_msg, i, j, head, APP, AP, dp_flag);
         }
     }
     //dp update
     for (i = start+1; i <= end; ++i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
             if (f_node[i][j].dp_flag == dp_flag)
-                frag_dp_update(f_node, a_msg, i, j, start, AP, dp_flag);
+                frag_dp_update(f_node, a_msg, i, j, start, APP, AP, dp_flag);
         }
     }
     // tree-pruning
@@ -1033,7 +1033,7 @@ void frag_min_extend(frag_dp_node **f_node, aln_msg *a_msg,
     while (i >= 0) {
         if (a_msg[i].n_aln > aln_min) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
-                get_fseed_dis(a_msg, i, j, last_x, last_y, &con_flag, AP);
+                get_fseed_dis(a_msg, i, j, last_x, last_y, &con_flag, APP, AP);
                 if (con_flag == F_MATCH || con_flag == F_MISMATCH || con_flag == F_LONG_MISMATCH) {
                     f_node[i][j].dp_flag = dp_flag;
                     break;
@@ -1046,7 +1046,7 @@ void frag_min_extend(frag_dp_node **f_node, aln_msg *a_msg,
     while (i < APP.seed_out) {
         if (a_msg[i].n_aln > aln_min) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
-                get_fseed_dis(a_msg, last_x, last_y, i, j, &con_flag, AP);
+                get_fseed_dis(a_msg, last_x, last_y, i, j, &con_flag, APP, AP);
                 if (con_flag == F_MATCH || con_flag == F_MISMATCH || con_flag == F_LONG_MISMATCH) {
                     f_node[i][j].dp_flag = dp_flag;
                     break;
@@ -1078,14 +1078,14 @@ int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
     for (i = left.x + 1; i < right.x; ++i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
             if (f_node[i][j].dp_flag == dp_flag || f_node[i][j].dp_flag == 0-dp_flag)
-                frag_dp_per_init(f_node, a_msg, i, j, head, AP, dp_flag);
+                frag_dp_per_init(f_node, a_msg, i, j, head, APP, AP, dp_flag);
         }
     }
     //dp update
     for (i = left.x + 2; i < right.x; ++i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
             if (f_node[i][j].dp_flag == dp_flag)
-                frag_dp_update(f_node, a_msg, i, j, left.x+1, AP, dp_flag);
+                frag_dp_update(f_node, a_msg, i, j, left.x+1, APP, AP, dp_flag);
         }
     }
     //find backtrack start node
@@ -1117,7 +1117,7 @@ int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
         f_node[right.x][right.y].from = head;//left;
         f_node[right.x][right.y].score = old_score;
         f_node[right.x][right.y].node_n = 1;
-        frag_dp_update(f_node, a_msg, right.x, right.y, left.x+1, AP, dp_flag);
+        frag_dp_update(f_node, a_msg, right.x, right.y, left.x+1, APP, AP, dp_flag);
         max_score = f_node[right.x][right.y].score;
         max_node = f_node[right.x][right.y].from;
         max_n = f_node[right.x][right.y].node_n-1; // right is NOT inculding 
@@ -1248,8 +1248,8 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
     int left_id, right_id, left, right, l;
     for (i = 0; i < re_reg->reg_n; ++i) {
         // get region boundary (left, right)
-        left_id = (re_reg->reg[i].beg +  AP.seed_inv - 1) / AP.seed_step+1; 
-        right_id = (re_reg->reg[i].end - 1) / AP.seed_step+1;
+        left_id = (re_reg->reg[i].beg +  APP.seed_inv - 1) / APP.seed_step+1; 
+        right_id = (re_reg->reg[i].end - 1) / APP.seed_step+1;
 		if (right_id > APP.seed_all) right_id -= 1;
 		left = right = -2;
 		for (j = 0; j < APP.seed_out; ++j) {
@@ -1292,17 +1292,17 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
                   line_node **_line, int line_n_max, int per_max_multi)
 {
     int i, j, k, line_n;
-    int min_n = AP.first_loci_thd, min_exist=0, min_num = 0;
+    int min_n = APP.min_thd, min_exist=0, min_num = 0;
 
     { // dp init
         for (i = 0; i < APP.seed_out; ++i)
         {
             if (a_msg[i].n_aln <= min_n)
             {
-                frag_dp_init(*f_node, a_msg, i, START_NODE, AP, MIN_FLAG);
+                frag_dp_init(*f_node, a_msg, i, START_NODE, APP, AP, MIN_FLAG);
                 min_exist = 1;
                 ++min_num;
-            } else frag_dp_init(*f_node, a_msg, i, START_NODE, AP, MULTI_FLAG);
+            } else frag_dp_init(*f_node, a_msg, i, START_NODE, APP, AP, MULTI_FLAG);
         }
         //fraction XXX
         if (!min_exist || min_num * 3 < APP.seed_out)
@@ -1310,13 +1310,13 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
             for (i = 0; i < APP.seed_out; ++i) {
                 for (j = 0; j < a_msg[i].n_aln; ++j) (*f_node)[i][j].dp_flag = MIN_FLAG;
             }
-            min_n = AP.per_aln_m;
+            min_n = APP.per_aln_n;
             min_exist = 1;
         }
     }
     { // dp update
         //min extend, when min_n == PER_ALN_N: no need to extend
-        if (min_n != AP.per_aln_m)
+        if (min_n != APP.per_aln_n)
         {
             for (i = 0; i < APP.seed_out; ++i) {
                 if (a_msg[i].n_aln <= min_n) {
@@ -1329,7 +1329,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
         for (i = 1; i < APP.seed_out; ++i) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
                 if ((*f_node)[i][j].dp_flag == MIN_FLAG)
-                    frag_dp_update(*f_node, a_msg, i, j, 0/*update start pos*/, AP, MIN_FLAG);
+                    frag_dp_update(*f_node, a_msg, i, j, 0/*update start pos*/, APP, AP, MIN_FLAG);
             }
         }
     }
