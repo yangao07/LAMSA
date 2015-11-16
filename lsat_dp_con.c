@@ -1146,7 +1146,9 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         }
         if ((*f_msg) == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enough memory.(line_m: %d)\n", line_n); exit(1); }
         (*line_m)= line_n;
+#ifdef __DEBUG__
         fprintf(stderr, "line-num: %d\t", line_n);
+#endif
     }
 
 	for (l = 0; l < line_n; ++l) {

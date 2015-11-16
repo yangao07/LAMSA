@@ -298,7 +298,7 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, lsat_aln_para AP
 	int dis;
 	if (a_i > b_i) dis = a_offset - b_offset;
 	else dis = b_offset - a_offset;
-	if (abs(dis) < 2) {	//match or mismatch
+	if (abs(dis) == 0) {	//match or mismatch
             if (abs(b_i - a_i) < hash_len + 2 * hash_step)	//1-mismatch seed allowed
 				*con_flag = F_MATCH;
 			else if (abs(b_i - a_i) < hash_len + 6 * hash_step)	//dis: 5 hash-seeds

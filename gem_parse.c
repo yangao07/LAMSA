@@ -63,6 +63,17 @@ void md2m(char *c, int *m, int *mm)
     }
 }
 
+int get_d(int indel_n)
+{
+    int i = 1;
+    while (indel_n > 10) {
+        i++;
+        indel_n /= 10;
+    }
+    return i;
+}
+
+
 //9A50G11>2-1
 void md2cigar(char *md, map_t *map)
 {
@@ -78,7 +89,7 @@ void md2cigar(char *md, map_t *map)
 			sscanf(md+i, ">%d%[+-]", &indel_n, &id);
 			_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
 			map->NM += (indel_n+mm);
-			i += (indel_n/10+1+2);
+            i += get_d(indel_n) + 2;
 		} else {
 			c_i = i;
 			for (; md[i] && md[i]!='>'; ++i) {

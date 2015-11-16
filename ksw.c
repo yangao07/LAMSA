@@ -543,6 +543,9 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
                 int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
                 int w, int *n_cigar_, cigar32_t **cigar_)
 {
+#ifdef __DEBUG
+    if (qlen < 0 || tlen < 0) fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
+#endif
 	eh_t *eh;
 	int8_t *qp; // query profile
 	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, score, n_col;
@@ -1050,7 +1053,7 @@ void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, const uint8_t *qu
 {
     int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
 
-    if (abs(Sn) < AP.split_len && abs(Hn) < AP.split_len && abs(Sn - Hn) < AP.split_len) { // for small 'nS' and 'nH', change into indels
+    if (abs(Sn) < AP.split_len/2 && abs(Hn) < AP.split_len/2 && abs(Sn - Hn) < AP.split_len/2) { // for small 'nS' and 'nH', change into indels
         cigar32_t *g_cigar; int g_clen;
         if (Sn > 0 && Hn > 0) {
             ksw_global(Sn, query+lqe, Hn, target+lte, m, mat, AP.gapo, AP.gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);

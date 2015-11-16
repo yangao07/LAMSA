@@ -151,8 +151,6 @@ int get_ref_intv(uint8_t **ref_bseq, int *ref_max_blen,
 	//for (j = 0; j < len; j++)
 	//	fprintf(stdout, "%d", (int)seq1[j]);
 	//fprintf(stdout, "\n");
-	if (len > 100)
-		fprintf(stderr, "debug");
 	return (int)len;
 }
 
@@ -350,15 +348,22 @@ void _push_cigar(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *_ciga
     if (_cigar_n == 0) return;
 	int i,j;
 	i = *cigar_n;
-	if (((i-1) >= 0) && (((*cigar)[i-1] & 0xf) == (_cigar[0] & 0xf))) {
-		(*cigar)[i-1] += ((_cigar[0] >> 4) << 4);
-		j = 1;
-	} else j = 0;
 
-	for (; j < _cigar_n; ++i,++j) {
-		if (i == *cigar_m) {
+    if ((i-1) >= 0) {
+        if(((*cigar)[i-1] & 0xf) == (_cigar[0] & 0xf)) {
+            (*cigar)[i-1] += ((_cigar[0] >> 4) << 4);
+            j = 1;
+        } else if ((((*cigar)[i-1] & 0xf) == CINS && (_cigar[0] & 0xf) == CSOFT_CLIP)   // xI+yS -> (x+y)S 
+                ||(((*cigar)[i-1] & 0xf) == CSOFT_CLIP && (_cigar[0] & 0xf) == CINS)){ // xS+yI -> (x+y)S 
+            (*cigar)[i-1] = ((((*cigar)[i-1]>>4) + (_cigar[0]>>4)) << 4) | CSOFT_CLIP;
+            j = 1;
+        } else j = 0;
+    } else j = 0;
+
+    for (; j < _cigar_n; ++i,++j) {
+        if (i == *cigar_m) {
             (*cigar_m) = (*cigar_m) ? (*cigar_m)<<1 : 4;
-			(*cigar) = (cigar32_t*)realloc(*cigar, (*cigar_m) * sizeof (cigar32_t));
+            (*cigar) = (cigar32_t*)realloc(*cigar, (*cigar_m) * sizeof (cigar32_t));
 			if ((*cigar) == NULL)	{fprintf(stderr, "\n[frag_check] Memory is not enougy.\n");exit(1);}
 		}
 		(*cigar)[i] = _cigar[j];

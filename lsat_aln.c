@@ -43,7 +43,7 @@ int lsat_aln_usage(void)
 
     fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [Def=0]\n");
 	fprintf(stderr, "         -l [INT]      The seed length. [Def=50]\n");
-	fprintf(stderr, "         -v [INT]      The interval length of adjacent seeds. [Def=50]\n");
+	fprintf(stderr, "         -v [INT]      The interval length of adjacent seeds. [Def=100]\n");
 	fprintf(stderr, "         -p [INT]      The maximun allowed number of a seed's locations. [Def=200]\n");
 	fprintf(stderr, "         -d [INT]      The maximun number of seed's locations for first round's DP. [Def=2]\n\n");
     
@@ -674,15 +674,14 @@ void init_aln_para(lsat_aln_para *AP)
     AP->per_aln_m = PER_ALN_MAX; 
 
     AP->seed_len = SEED_LEN;
-    AP->seed_inv = SEED_INTERVAL;
     AP->seed_step = SEED_LEN+SEED_INTERVAL;
-    AP->match_dis = AP->seed_step/25; // 4% indel allowed
+    //AP->seed_inv = SEED_INTERVAL;
+    //AP->match_dis = AP->seed_step/25; // 4% indel allowed
     AP->per_aln_m = SEED_PER_LOCI;
     AP->first_loci_thd = SEED_FIRST_ROUND_LOCI;
 
     AP->SV_len_thd = SV_MAX_LEN;
     AP->split_len = SPLIT_ALN_LEN;
-    AP->split_pen = SPLIT_ALN_PEN;
 
     AP->res_mul_max = RES_MAX_N;
 
@@ -784,7 +783,9 @@ int lsat_main_aln(thread_aux_t *aux)
         bwt_aln_remain(a_reg, p->a_res+2, bwt, bns, pac, p->seq, &(p->rseq), *APP, *AP);
         aln_free_reg(a_reg);
 
+#ifdef __DEBUG__
         COUNT++; fprintf(stderr, "%16d reads have been aligned.\n", COUNT);
+#endif
     }
     aux->line_m = line_m;
     return 0;
@@ -1186,7 +1187,7 @@ int lsat_aln(int argc, char *argv[])
 
             case 's': seed_program = atoi(optarg); break;
 			case 'l': AP->seed_len = atoi(optarg); break;
-			case 'v': AP->seed_inv = atoi(optarg); break;
+			case 'v': AP->seed_step = atoi(optarg); break;
 			case 'p': AP->per_aln_m = atoi(optarg); break;
 			case 'd': AP->first_loci_thd = atoi(optarg); break;
 
@@ -1201,6 +1202,8 @@ int lsat_aln(int argc, char *argv[])
             default: return lsat_aln_usage();
         }
     }
+    AP->seed_inv = AP->seed_step-AP->seed_len;
+    AP->match_dis = AP->seed_step / 25; // 4% indel allowed
     if (argc - optind != 2)
         return lsat_aln_usage();
 
