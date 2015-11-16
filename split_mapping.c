@@ -298,7 +298,7 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, lsat_aln_para AP
 	int dis;
 	if (a_i > b_i) dis = a_offset - b_offset;
 	else dis = b_offset - a_offset;
-	if (dis == 0) {	//match or mismatch
+	if (abs(dis) < 2) {	//match or mismatch
             if (abs(b_i - a_i) < hash_len + 2 * hash_step)	//1-mismatch seed allowed
 				*con_flag = F_MATCH;
 			else if (abs(b_i - a_i) < hash_len + 6 * hash_step)	//dis: 5 hash-seeds
@@ -955,12 +955,11 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                             _push_cigar1(split_cigar, split_clen, split_m, ((Hn-Sn)<<4)|CDEL);
                             _push_cigar1(split_cigar, split_clen, split_m, (Sn<<4)|CMATCH); // -nM XXX
                         }
-                    } else */
-                    {
+                    } else */{
                         _push_cigar0(split_cigar, split_clen, split_m, (Sn<<4)|CSOFT_CLIP); 
                         _push_cigar0(split_cigar, split_clen, split_m, (Hn<<4)|CHARD_CLIP);
                     }
-                    _push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
+                   _push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
                     overlap = 0;
                     free(_cigar);
                 } else {// no blank & overlap, push SV cigar
