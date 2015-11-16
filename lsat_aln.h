@@ -14,6 +14,11 @@
 #define SPLIT_ALN_PEN 10
 #define SV_MAX_LEN 10000
 #define RES_MAX_N 10
+#define PER_ALN_MAX 200
+#define SEED_LEN 50
+#define SEED_INTERVAL 50
+#define SEED_PER_LOCI 200
+#define SEED_FIRST_ROUND_LOCI 2
 
 //aln_per_para
 
@@ -27,6 +32,7 @@
 #define F_MATCH         0
 #define F_SPLIT_MATCH   1
 #define F_MISMATCH      2
+#define F_MATCH_THD     2
 #define F_LONG_MISMATCH 3
 
 #define F_INSERT        4
@@ -126,12 +132,12 @@ typedef struct {	//全部read包含seed数目信息
 	//char **read_name;
     int *seed_all;	//存放每条read的seed数目    index from 1
     int *read_len;	//length of read
-    int *read_level;//level of read length
+    //int *read_level;//level of read length
 	int *last_len;	//last_len                  index from 1
     int seed_max;   //read中分割成的seed数目最大值	
     int read_max_len;    //max length of read
-    int *seed_len;
-    int *seed_inv;
+    //int *seed_len;
+    //int *seed_inv;
 } seed_msg;
 
 typedef struct {
@@ -277,22 +283,37 @@ typedef struct {
 
 typedef struct {
     // read msg
-    char read_name[100];
+    char read_name[1024];
     int read_len;
-    int read_level; //level of read length
 
     // seed msg
-    int seed_len;   //length of seed
-    int seed_inv;   //interval between adjacent seeds
-    int seed_step;  //sum of len and inv
     int last_len;
-
     int seed_all;   //number of all the seeds
-    int per_aln_n;  //number of seeds' aln-results
     int seed_out;   //number of seeds that are filtered out for next step
+} lsat_aln_per_para;    // specially for every read
+//APP
 
-    // aln para
-    int min_thd;    //minimum number of seed's aln-result for first round's DP (min-len)
+typedef struct {
+    int aln_type;
+
+    int n_thread;   // for mulit-threads
+
+    int seed_len, seed_inv, seed_step; // length, interval of seeds
+    int per_aln_m;  // max number of seeds' aln-results
+    int first_loci_thd; 
+
+    int SV_len_thd;
+    int split_len;  // min length of gap that causes split-alignment
+    int split_pen;  // split score penalty
+    int res_mul_max;// max number of read's aln-results
+
+    int hash_len, hash_key_len, hash_step, hash_size;
+    int bwt_seed_len, bwt_max_len;
+
+    FILE *outp;
+
+    int match_dis; int del_thd; int ins_thd; //XXX moved to AP
+
     int *frag_score_table;
         /*frag_score_table[10] = {
               1,    F_MATCH
@@ -306,26 +327,6 @@ typedef struct {
              -6,    F_UNCONNECT
              -6,    F_UNMATCH
         };*/
-    int match_dis; int del_thd; int ins_thd;
-} lsat_aln_per_para;    // specially for every read
-//APP
-
-typedef struct {
-    int aln_type;
-
-    int n_thread;   // for mulit-threads
-
-    int per_aln_m;  // max number of seeds' aln-results
-    int SV_len_thd;
-    int split_len;  // min length of gap that causes split-alignment
-    int split_pen;  // split score penalty
-    int res_mul_max;// max number of read's aln-results
-
-    int hash_len, hash_key_len, hash_step, hash_size;
-    int bwt_seed_len, bwt_max_len;
-
-    FILE *outp;
-
     // SW para
     int gapo, gape; // gap open penalty, gap extension penalty
     int match, mis;     // score matrix, match and mismatch

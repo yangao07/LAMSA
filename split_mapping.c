@@ -301,13 +301,15 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, lsat_aln_para AP
 	if (dis == 0) {	//match or mismatch
             if (abs(b_i - a_i) < hash_len + 2 * hash_step)	//1-mismatch seed allowed
 				*con_flag = F_MATCH;
-			else *con_flag = F_MISMATCH;
+			else if (abs(b_i - a_i) < hash_len + 6 * hash_step)	//dis: 5 hash-seeds
+                *con_flag = F_MISMATCH;
+            else *con_flag = F_LONG_MISMATCH;
 	} else { // SV or F_UNCONNECT
 		if (dis > 0) *con_flag = F_DELETE;
 		else if (dis >= -(abs(b_i-a_i)-hash_len)) *con_flag = F_INSERT; // unoverlaped-ins
         //else *con_flag = F_UNCONNECT;
 		// overlapped
-        else if (dis <= -(AP.split_len)) { // SV_SPLIT_LEN
+        else if (dis <= -(AP.split_len/2)) { // SV_SPLIT_LEN
             if (ref_offset > 0) { // INS region
                 if (b_i>a_i) {
                     // if (read_len-ref_len+b_i+b_offset >= b_i-(a_i+hash_len-1) && read_len-(a_i+hash_len-1+a_offset)>= b_i-(a_i+hash_len-1))
@@ -373,7 +375,7 @@ int hash_dp_init(hash_dp_node **h_node,
 				h_node[node_i][i].dp_flag = 0 - dp_flag;
 			} else {
 				h_node[node_i][i].from = head;
-				h_node[node_i][i].score = 2 - ((con_flag == F_MATCH)?0: HASH_SV_PEN);
+				h_node[node_i][i].score = 2 - ((con_flag <= F_MATCH_THD)?0: HASH_SV_PEN);
 				h_node[node_i][i].node_n = 1;
 				h_node[node_i][i].match_flag = con_flag;
 				h_node[node_i][i].dp_flag = dp_flag;
@@ -440,7 +442,7 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
 				if (h_node[i][j].dp_flag < 0)
 					continue;
 				hash_main_dis(h_node[i][j].read_i, h_node[i][j].offset, h_node[last_x][last_y].read_i, h_node[last_x][last_y].offset, AP, &con_flag, ref_len, read_len, ref_offset);
-				if (con_flag == F_MATCH)
+				if (con_flag == F_MATCH) // only MATCH XXX
 				{
 					h_node[i][j].dp_flag = dp_flag;
 					last_x = i;
@@ -468,7 +470,7 @@ int hash_min_extend(hash_dp_node **h_node, int *len_a,
 				if (h_node[i][j].dp_flag < 0)
 					continue;
 				hash_main_dis(h_node[last_x][last_y].read_i, h_node[last_x][last_y].offset, h_node[i][j].read_i, h_node[i][j].offset, AP, &con_flag, ref_len, read_len, ref_offset);
-				if (con_flag == F_MATCH)
+				if (con_flag == F_MATCH) // only MATCH XXX
 				{
 					h_node[i][j].dp_flag = dp_flag;
 					last_x = i;
@@ -508,8 +510,8 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 					hash_main_dis(h_node[i][j].read_i, h_node[i][j].offset, h_node[node_x][node_y].read_i, h_node[node_x][node_y].offset, AP, &con_flag, ref_len, read_len, ref_offset);
 					if (con_flag == F_UNCONNECT)
 						continue;
-					if (h_node[i][j].score + 1 - ((con_flag==F_MATCH)?0:HASH_SV_PEN) > max_score) {
-						max_score = h_node[i][j].score + 1 - ((con_flag==F_MATCH)?0:HASH_SV_PEN);
+					if (h_node[i][j].score + 1 - ((con_flag<=F_MATCH_THD)?0:HASH_SV_PEN) > max_score) {
+						max_score = h_node[i][j].score + 1 - ((con_flag<=F_MATCH_THD)?0:HASH_SV_PEN);
 						max_from = (line_node){i, j};
 						max_flag = con_flag;
 					}
@@ -523,7 +525,7 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 			h_node[node_x][node_y].from = max_from;
 			h_node[node_x][node_y].match_flag = max_flag;
 			if (max_flag == F_MATCH)
-				h_node[max_from.x][max_from.y].dp_flag = 0 - dp_flag;       //extend the mathc-node-line as long as possible, in forward direction
+				h_node[max_from.x][max_from.y].dp_flag = 0 - dp_flag;       //extend the match-node-line as long as possible, in forward direction
 			h_node[node_x][node_y].node_n += h_node[max_from.x][max_from.y].node_n;
 		}
 	} else {
@@ -581,7 +583,7 @@ int hash_mini_dp_init(hash_dp_node **h_node, int *len_a,
 			else
 			{
 				h_node[node_i][i].from = head;
-				h_node[node_i][i].score = 2 - (con_flag == F_MATCH?0 : HASH_SV_PEN);	//XXX
+				h_node[node_i][i].score = 2 - (con_flag <= F_MATCH_THD?0 : HASH_SV_PEN);	//XXX
 				h_node[node_i][i].node_n = 1;
 				h_node[node_i][i].match_flag = con_flag;
 				h_node[node_i][i].dp_flag = mini_dp_flag;
@@ -883,7 +885,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 		start_i = 0;
 		//XXX here only one node
 		for (i = 0; i < m_len; ++i) {
-			if (i == m_len-1 || h_node[line[i+1].x][line[i+1].y].match_flag != F_MATCH) {
+			if (i == m_len-1 || h_node[line[i+1].x][line[i+1].y].match_flag >= F_MATCH_THD) {
 				//start -> i
 				g_cigar[0] = (h_node[line[i].x][line[i].y].read_i-h_node[line[start_i].x][line[start_i].y].read_i+hash_len-tail_in-head_in-overlap) << 4 | CMATCH;
 				_push_cigar1(split_cigar, split_clen, split_m, g_cigar[0]);
