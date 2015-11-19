@@ -5,6 +5,7 @@
 #include "lsat_aln.h"
 #include "split_mapping.h"
 #include "bwt_aln.h"
+#include "lsat_heap.h"
 #include "bntseq.h"
 #include "bwt.h"
 #include "ksw.h"
@@ -47,6 +48,8 @@ void bwt_init_dp(bwt_seed_t **seed_v, int seed_n)
         for (j = 0; j < (*seed_v)[i].n; ++j) {
             (*seed_v)[i].loc[j].from = START_NODE;
             (*seed_v)[i].loc[j].score = 1;
+            (*seed_v)[i].loc[j].node_n = 1;
+            (*seed_v)[i].loc[j].track_flag = 0;
         }
     }
 }
@@ -74,6 +77,7 @@ void bwt_update_dp(bwt_seed_t **seed_v, int seed_n)
                     if (con_flag == F_MATCH) {
                         (*seed_v)[i].loc[j].from = (line_node){m, n};
                         (*seed_v)[i].loc[j].score = (*seed_v)[m].loc[n].score+1;
+                        (*seed_v)[i].loc[j].node_n = (*seed_v)[m].loc[n].node_n +1;
 goto Next;
 					}
                 }
@@ -83,31 +87,78 @@ Next:;
     }
 }
 
-int bwt_backtrack(bwt_seed_t **seed_v, int seed_n, line_node **line)
+// return: res_mul_max
+int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lsat_aln_para AP, int seed_n, line_node **line, int *node_n)
 {
-    int i, j;
-    int max_score=0/*also is max_node_num*/; line_node max_node=START_NODE;
+    int l_n = 0; 
+    int i, j, k, reg_hit;
+    int max_score=0;
+
+    extern node_score *node_init_score(int n);
+    extern int heap_add_node(node_score *ns, line_node node, int score, int NM);
+    extern void node_free_score(node_score *ns);
+
+    node_score *ns = node_init_score(AP.res_mul_max);
+
+    ns->node_n = 0;
     for (i = seed_n-1; i >= 0; --i) {
         for (j = 0; j < (*seed_v)[i].n; ++j) {
+            if ((*seed_v)[i].loc[j].track_flag) continue;
+            // check for reg
+            reg_hit=0;
+            for (k = 0; k < reg.beg_n; ++k) {
+                if ((*seed_v)[i].loc[j].ref_id == reg.ref_beg[k].chr-1 && (*seed_v)[i].loc[j].is_rev == reg.ref_beg[k].is_rev
+                        && abs((*seed_v)[i].loc[j].ref_pos-reg.ref_beg[k].ref_pos) < AP.SV_len_thd) {
+                    reg_hit = 1;
+                    break;
+                }
+            }
+            if (reg_hit == 0) {
+                for (k = 0; k < reg.end_n; ++k) {
+                    if ((*seed_v)[i].loc[j].ref_id == reg.ref_end[k].chr-1 && (*seed_v)[i].loc[j].is_rev == reg.ref_end[k].is_rev
+                            && abs((*seed_v)[i].loc[j].ref_pos-reg.ref_end[k].ref_pos) < AP.SV_len_thd) {
+                        reg_hit = 1;
+                        break;
+                    }
+                }
+            }
+            if (reg_hit) (*seed_v)[i].loc[j].score += (*seed_v)[i].loc[j].score/2;
             if ((*seed_v)[i].loc[j].score > max_score) {
                 max_score = (*seed_v)[i].loc[j].score;
-                max_node = (line_node){i, j};
+                heap_add_node(ns, (line_node){i,j}, max_score, 0);
+            } else if ((*seed_v)[i].loc[j].score >= max_score/2) 
+                heap_add_node(ns, (line_node){i,j}, (*seed_v)[i].loc[j].score, 0);
+            // set track_flag
+            line_node from = (line_node){i,j};
+            while(from.x != START_NODE.x) {
+                (*seed_v)[from.x].loc[from.y].track_flag = 1;
+                from = (*seed_v)[from.x].loc[from.y].from;
             }
         }
     }
-    line_node right = max_node; i = max_score - 1;
-    while (right.x != START_NODE.x) {
-        (*line)[i] = right; 
-        right = (*seed_v)[right.x].loc[right.y].from;
-        --i;
+    line_node right; int tmp1, tmp2;
+    while (1) {
+        right = node_pop(ns, &tmp1, &tmp2);
+        if (right.x == START_NODE.x) break;
+        if ((*seed_v)[right.x].loc[right.y].score < max_score/2) continue;
+        i = (*seed_v)[right.x].loc[right.y].node_n - 1;
+        node_n[l_n] = i+1;
+        while (right.x != START_NODE.x) {
+            line[l_n][i] = right;
+            right = (*seed_v)[right.x].loc[right.y].from;
+            --i;
+        }
+        l_n++; 
     }
-    return max_score;
+
+    node_free_score(ns);
+    return l_n;
 }
 
-int bwt_cluster_seed(bwt_seed_t **seed_v, int seed_n, line_node **line)
+int bwt_cluster_seed(bwt_seed_t **seed_v, reg_t reg, lsat_aln_para AP, int seed_n, line_node **line, int *node_n)
 {
     bwt_init_dp(seed_v, seed_n); bwt_update_dp(seed_v, seed_n);
-    return bwt_backtrack(seed_v, seed_n, line);
+    return bwt_backtrack(seed_v, reg, AP, seed_n, line, node_n);
 }
 
 void bwt_set_bound(bwt_seed_t *seed_v, line_node *line, int node_n, int seed_len, int reg_len, bwt_bound *left, bwt_bound *right)
@@ -232,48 +283,58 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
         } else if (l-k+1 <= 5 * max_hit){ 
 			// select specific seed-results, which are close to the existing result.
 			// keep 100 seed-results, at most.
-            int cnt=0;
+            int cnt=0, reg_hit;
 			for (m = k; m <=l; ++m) {
                 bwtint_t ref_pos = bwt_sa(bwt, m);
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
-				if (is_rev != reg.is_rev) continue;
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
-				if (ref_id != reg.refid) continue;
                 uint64_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
-                //bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
-				if (is_rev) {
-					//fprintf(stderr, "ref_beg: %d\nabs_pos: %d\nref_end: %d\n", reg.ref_beg, abs_pos, reg.ref_end);
-					if ((!reg.ref_beg || (abs_pos < reg.ref_beg && reg.ref_beg-abs_pos < AP.SV_len_thd)) && (!reg.ref_end || (abs_pos > reg.ref_end && abs_pos-reg.ref_end < AP.SV_len_thd))) {
-						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
-						cnt++;
-						if (cnt == max_hit) break;
-					}
-				} else {
-					if ((reg.ref_beg==0 || (abs_pos > reg.ref_beg && abs_pos-reg.ref_beg<AP.SV_len_thd)) && (!reg.ref_end || (abs_pos < reg.ref_end && reg.ref_end-abs_pos < AP.SV_len_thd))) {
-						bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
-						cnt++;
-						if (cnt == max_hit) break;
-					}
-				}
-			}
-		}
+                reg_hit = 0;
+                for (j = 0; j < reg.beg_n; ++j) {
+                    if (ref_id == reg.ref_beg[j].chr-1 && is_rev == reg.ref_beg[j].is_rev
+                     && abs(abs_pos-reg.ref_beg[j].ref_pos) < AP.SV_len_thd) {
+                        reg_hit = 1;
+                        break;
+                    }
+                }
+                if (reg_hit == 0) {
+                for (j = 0; j < reg.end_n; ++j) {
+                    if (ref_id == reg.ref_end[j].chr-1 && is_rev == reg.ref_end[j].is_rev
+                     && abs(abs_pos-reg.ref_end[j].ref_pos) < AP.SV_len_thd) {
+                        reg_hit = 1;
+                        break;
+                    }
+                }
+                }
+                if (reg_hit == 0) continue;
+                bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
+                cnt++;
+                if (cnt == max_hit) break;
+            }
+        }
     }
-    // cluster seeds, find one best cluster
-    line_node *line = (line_node*)malloc((reg_len-seed_len+1) * sizeof(line_node));
-    int node_n; bwt_bound left_bound, right_bound;
-	// use DP, Spanning-tree and Pruning
-    extern void aln_reloc_res(aln_res *a_res, int line_n, int XA_m);
-    if ((node_n = bwt_cluster_seed(seed_v, reg_len-seed_len+1, &line)) > 0) {
-		if (re_res->l_n == re_res->l_m) aln_reloc_res(re_res, (re_res->l_n << 1), AP.res_mul_max);
+    // cluster seeds, find optimal res_mul_max cluster
+    line_node **line = (line_node**)malloc(AP.res_mul_max * sizeof(line_node*));
+    for (i = 0; i < AP.res_mul_max; ++i) line[i] = (line_node*)malloc((reg_len-seed_len+1) * sizeof(line_node));
+    int *node_n = (int*)malloc(AP.res_mul_max * sizeof(int)); int l_n;
 
-		bwt_set_bound(*seed_v, line, node_n, seed_len, reg_len, &left_bound, &right_bound);
-		bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
-		re_res->la[re_res->l_n].merg_msg = (line_node){1,-1};
-        re_res->l_n++;
+    bwt_bound left_bound, right_bound;
+    // use DP, Spanning-tree and Pruning
+    extern void aln_reloc_res(aln_res *a_res, int line_n, int XA_m);
+    if ((l_n = bwt_cluster_seed(seed_v, reg, AP, reg_len-seed_len+1, line, node_n)) > 0) {
+        for (i = 0; i < l_n; ++i) {
+            if (re_res->l_n == re_res->l_m) aln_reloc_res(re_res, (re_res->l_n << 1), AP.res_mul_max);
+
+            bwt_set_bound(*seed_v, line[i], node_n[i], seed_len, reg_len, &left_bound, &right_bound);
+            //bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
+            bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
+            re_res->la[re_res->l_n].line_score = 0;
+            re_res->l_n++;
+        }
     }
     // free
     free(bwt_seed); bwt_free_seed(seed_v, reg_len-seed_len+1);
-    free(line);
+    for (i = 0; i < AP.res_mul_max; ++i) free(line[i]); free(line); free(node_n);
     return 0;
 }
 

@@ -58,7 +58,7 @@
 //    0x1 Not Merged(1), Merged(0)
 //    0x2 Merged, Head(1) or Body(0)
 //    0x4 Inter(1) or Not Inter(0)
-//  [end+2] -> (line-score, x)
+//  [end+3] -> (line-score, x)
 
 #define L_MERGB 0x0
 #define L_NMERG 0x1
@@ -66,7 +66,7 @@
 #define L_INTER 0x4
 #define L_DUMP  0x8
 
-#define L_EXTRA 4                    // extra line-node variables
+#define L_EXTRA 5                    // extra line-node variables
 #define L_LB(l,e,i) (l[i][e[i]].x)   // line left-boundary
 #define L_RB(l,e,i) (l[i][e[i]].y)   // line right-boundary
 #define E_LB(l,e,i) (l[i][e[i]+1].x) // extend left-boundary
@@ -76,6 +76,8 @@
 
 #define L_LS(l,e,i) (l[i][e[i]+3].x) // line score
 #define L_BS(l,e,i) (l[i][e[i]+3].y) // best score of merged-lines
+
+#define L_NM(l,e,i) (l[i][e[i]+4].x) // dis+NM
 
 
 //  [end+2] -> (line-score, x)
@@ -196,10 +198,22 @@ typedef struct {
 } line_node;
 #define nodeEq(a,b) (a.x==b.x && a.y==b.y)
 
-typedef struct {
+/*typedef struct {
 	int refid, is_rev;
 	uint64_t ref_beg, ref_end;
     int beg, end;
+} reg_t;*/
+
+typedef struct {
+    int8_t is_rev;
+    int chr;
+    uint64_t ref_pos;
+} reg_b;
+
+typedef struct {
+    reg_b *ref_beg, *ref_end;
+    int beg_n, end_n, beg_m, end_m;
+    int beg, end; // read
 } reg_t;
 
 /*typedef struct {
@@ -235,7 +249,7 @@ typedef struct {
 
 typedef struct {
     line_node *node;
-    int *score;
+    int *score, *NM;
     int min_score_thd;
 
     int max_n;
@@ -265,10 +279,12 @@ typedef struct {
     int son_n; // number of son-nodes
     int son_max;            //ALLOC
     line_node *son;
-    int max_score;          
+    int max_score, max_NM; 
     line_node max_node;     
 
-	int score; int dis_pen; // score: for connect, dis_pen: for SV/indel penalty
+	int score;  // score: for connect
+    int tol_NM; // total NM, from head to cur node.
+
 
 	uint8_t match_flag;
 	int dp_flag;

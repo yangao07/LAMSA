@@ -80,8 +80,8 @@ void md2cigar(char *md, map_t *map)
     int md_len = strlen(md);
     int i=0; 
 	char *c = (char*)malloc((md_len+1) * sizeof(char)); int c_i;
-    char id; int indel_n;
-    int m, mm;
+    char id; int indel_n=0;
+    int m=0, mm=0;
 	map->cigar->cigar_n = 0;
 	map->NM = 0;
 	while (i < md_len) {

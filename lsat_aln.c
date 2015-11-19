@@ -318,13 +318,44 @@ aln_reg *aln_init_reg(int read_len)
     reg->reg_n = 0; reg->reg_m = 1;
     reg->read_len = read_len;
     reg->reg = (reg_t*)malloc(sizeof(reg_t));
+    reg->reg->beg_n = reg->reg->end_n = 0;
+    reg->reg->beg_m = reg->reg->end_m = 10; // XXX res_mul_max
+    reg->reg->ref_beg = (reg_b*)malloc(10 * sizeof(reg_b));
+    reg->reg->ref_end = (reg_b*)malloc(10 * sizeof(reg_b));
+
     return reg;
 }
 
-void aln_free_reg(aln_reg *reg) { free(reg->reg); free(reg); }
+void aln_free_reg(aln_reg *reg) { 
+    int i;
+    for (i = 0; i < reg->reg_m; ++i) {
+        free(reg->reg[i].ref_beg); free(reg->reg[i].ref_end);
+    }
+    free(reg->reg); free(reg); 
+}
 
 int reg_comp(const void *a, const void *b) { return (*(reg_t*)a).beg - (*(reg_t*)b).beg; }
 void aln_sort_reg(aln_reg *a_reg) { qsort(a_reg->reg, a_reg->reg_n, sizeof(reg_t), reg_comp); }
+
+void push_reg_b(reg_t *reg1, int beg_n, reg_b beg[], int end_n, reg_b end[]) {
+    int i;
+    for (i = 0; i < beg_n; ++i) {
+        if (reg1->beg_n == reg1->beg_m) {
+            reg1->beg_m <<= 1;
+            reg1->ref_beg = (reg_b*)realloc(reg1->ref_beg, reg1->beg_m * sizeof(reg_b));
+        }
+        reg1->ref_beg[reg1->beg_n] = beg[i];
+        reg1->beg_n++;
+    }
+    for (i = 0; i < end_n; ++i) {
+        if (reg1->end_n == reg1->end_m) {
+            reg1->end_m <<= 1;
+            reg1->ref_end = (reg_b*)realloc(reg1->ref_end, reg1->end_m * sizeof(reg_b));
+        }
+        reg1->ref_end[reg1->end_n] = end[i];
+        reg1->end_n++;
+    }
+}
 
 void aln_merg_reg(aln_reg *a_reg, int thd) {
     //if (a_reg->reg_n == 0)return;
@@ -332,89 +363,95 @@ void aln_merg_reg(aln_reg *a_reg, int thd) {
     for (i = 1; i < a_reg->reg_n; ++i) {
 		// merge when the distance between two regs is smaller than the 'thd'
         if(a_reg->reg[i].beg - a_reg->reg[cur_i].end - 1 < thd) {
-		    if(a_reg->reg[i].end > a_reg->reg[cur_i].end) 
-				a_reg->reg[cur_i].end = a_reg->reg[i].end;
+		    if(a_reg->reg[i].end > a_reg->reg[cur_i].end) a_reg->reg[cur_i].end = a_reg->reg[i].end;
+            push_reg_b(a_reg->reg+cur_i, a_reg->reg[i].beg_n, a_reg->reg[i].ref_beg,a_reg->reg[i].end_n, a_reg->reg[i].ref_end);
 		} else {
             cur_i++;
-            a_reg->reg[cur_i].beg = a_reg->reg[i].beg;
-            a_reg->reg[cur_i].end = a_reg->reg[i].end;
+            if (cur_i != i) {
+                a_reg->reg[cur_i].beg = a_reg->reg[i].beg; 
+                a_reg->reg[cur_i].end = a_reg->reg[i].end;
+                a_reg->reg[cur_i].beg_n = a_reg->reg[cur_i].end_n = 0;
+                push_reg_b(a_reg->reg+cur_i, a_reg->reg[i].beg_n, a_reg->reg[i].ref_beg,a_reg->reg[i].end_n, a_reg->reg[i].ref_end);
+            }
         }
     }
     a_reg->reg_n = cur_i+1;
 }
 
-void push_reg(aln_reg *reg, reg_t r)
-{
-    if (reg->reg_n == reg->reg_m) {
-        reg->reg_m <<= 1;
-        if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
-            fprintf(stderr, "[push_reg] Not enough memory.\n"); exit(0);
-        }
+void reg_reloc(reg_t **r, int r_n, int r_m) {
+    *r = (reg_t*)realloc(*r, r_m * sizeof(reg_t));
+    int i;
+    for (i = r_n; i < r_m; ++i) {
+        (*r)[i].end_n = (*r)[i].beg_n = 0;
+        (*r)[i].end_m = (*r)[i].beg_m = 10;
+        (*r)[i].ref_beg = (reg_b*)malloc(10 * sizeof(reg_b));
+        (*r)[i].ref_end = (reg_b*)malloc(10 * sizeof(reg_b));
     }
-    reg->reg[reg->reg_n].beg = r.beg;
-    reg->reg[reg->reg_n].end = r.end;
-	reg->reg[reg->reg_n].refid = r.refid;
-	reg->reg[reg->reg_n].is_rev = r.is_rev;
-	reg->reg[reg->reg_n].ref_beg = r.ref_beg;
-	reg->reg[reg->reg_n].ref_end = r.ref_end;
-    reg->reg_n++;
 }
 
+void push_reg(aln_reg *reg, int beg, int end, int beg_n, reg_b ref_beg[], int end_n, reg_b ref_end[])
+{
+    int r_n = reg->reg_n;
+    if (r_n == reg->reg_m) {
+        reg->reg_m <<= 1;
+        reg_reloc(&(reg->reg), r_n, reg->reg_m);
+    }
+    reg->reg[r_n].beg = beg;
+    reg->reg[r_n].end = end;
+    reg->reg[r_n].beg_n = reg->reg[r_n].end_n = 0;
+    push_reg_b(reg->reg+r_n, beg_n, ref_beg, end_n, ref_end);
+    reg->reg_n++;
+}
+/*typedef struct {
+	int refid, is_rev;
+	uint64_t ref_beg, ref_end;
+    int beg, end;
+} reg_t;*/
 // dump remain-regions that are longger than 'thd'
 int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lsat_aln_para AP, int reg_thd)
 {
     if (a_reg->reg_n == 0) {
         if (AP.bwt_seed_len < a_reg->read_len && a_reg->read_len <= reg_thd) {
-            push_reg(remain_reg, (reg_t){-1, -1, 0, 0, 1, a_reg->read_len});
+            push_reg(remain_reg, 1, a_reg->read_len, 0, 0, 0, 0);
             return 1;
         } else return 0;
     }
     aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP.bwt_seed_len);
     int i; 
     if (a_reg->reg[0].beg > AP.bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd)
-		push_reg(remain_reg, (reg_t){a_reg->reg[0].refid, a_reg->reg[0].is_rev, 
-				                     0, a_reg->reg[0].ref_beg, 
-				                     1, a_reg->reg[0].beg-1});
+        push_reg(remain_reg, 1, a_reg->reg[0].beg-1, 0, 0, a_reg->reg[0].beg_n, a_reg->reg[0].ref_beg);
     for (i = 1; i < a_reg->reg_n; ++i) {
-        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->reg[i].beg-1-a_reg->reg[i-1].end <= reg_thd) {
-			if (a_reg->reg[i].refid == a_reg->reg[i-1].refid && a_reg->reg[i].is_rev == a_reg->reg[i-1].is_rev)
-				push_reg(remain_reg, (reg_t){a_reg->reg[i].refid, a_reg->reg[i].is_rev,
-						                     a_reg->reg[i-1].ref_end, a_reg->reg[i].ref_beg, 
-						                     a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
-			else 
-				push_reg(remain_reg, (reg_t){-1, -1, 0, 0, a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1});
-		}
+        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->reg[i].beg-1-a_reg->reg[i-1].end <= reg_thd)
+            push_reg(remain_reg, a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1, a_reg->reg[i-1].end_n, a_reg->reg[i-1].ref_end, a_reg->reg[i].beg_n, a_reg->reg[i].ref_beg);
     }
 	if (a_reg->read_len - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->read_len-a_reg->reg[i-1].end <= reg_thd) 
-		push_reg(remain_reg, (reg_t){a_reg->reg[i-1].refid, a_reg->reg[i-1].is_rev,
-				                     a_reg->reg[i-1].ref_end, 0,
-				                     a_reg->reg[i-1].end+1, a_reg->read_len});
+        push_reg(remain_reg, a_reg->reg[i-1].end+1, a_reg->read_len, a_reg->reg[i-1].end_n, a_reg->reg[i-1].ref_end, 0, 0);
     return remain_reg->reg_n;
 }
 
 void push_reg_res(aln_reg *reg, res_t *res)
 {
-    if (reg->reg_n == reg->reg_m) {
+    int r_n = reg->reg_n;
+    if (r_n == reg->reg_m) {
         reg->reg_m <<= 1;
-        if ((reg->reg = (reg_t*)realloc(reg->reg, reg->reg_m * sizeof(reg_t))) == NULL) {
-            fprintf(stderr, "[push_reg_res] Not enough memory.\n"); exit(0);
-        }
+        reg_reloc(&(reg->reg), r_n, reg->reg_m);
     }
-	reg->reg[reg->reg_n].refid = res->chr-1;
-	reg->reg[reg->reg_n].is_rev = 1-res->nsrand;
+    reg->reg[r_n].ref_beg[0].chr = reg->reg[r_n].ref_end[0].chr = res->chr;
+	reg->reg[r_n].ref_beg[0].is_rev = reg->reg[r_n].ref_end[0].is_rev = 1-res->nsrand;
     if (res->nsrand == 1) { // '+'
-        reg->reg[reg->reg_n].beg = (res->cigar[0] & 0xf) == CSOFT_CLIP ? ((res->cigar[0]>>4)+1):1;
-        reg->reg[reg->reg_n].end = (res->cigar[res->cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res->cigar[res->cigar_len-1]>>4)):reg->read_len;
-		reg->reg[reg->reg_n].ref_beg = res->offset;
-		reg->reg[reg->reg_n].ref_end = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
+        reg->reg[r_n].beg = (res->cigar[0] & 0xf) == CSOFT_CLIP ? ((res->cigar[0]>>4)+1):1;
+        reg->reg[r_n].end = (res->cigar[res->cigar_len-1] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res->cigar[res->cigar_len-1]>>4)):reg->read_len;
+		reg->reg[r_n].ref_beg[0].ref_pos = res->offset;
+		reg->reg[r_n].ref_end[0].ref_pos = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
     } else { // '-'
-        reg->reg[reg->reg_n].beg = (res->cigar[res->cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res->cigar[res->cigar_len-1]>>4) + 1):1;
-        reg->reg[reg->reg_n].end = (res->cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res->cigar[0]>>4)):reg->read_len;
-		reg->reg[reg->reg_n].ref_end = res->offset;
-		reg->reg[reg->reg_n].ref_beg = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
+        reg->reg[r_n].beg = (res->cigar[res->cigar_len-1] & 0xf) == CSOFT_CLIP ? ((res->cigar[res->cigar_len-1]>>4) + 1):1;
+        reg->reg[r_n].end = (res->cigar[0] & 0xf) == CSOFT_CLIP ? (reg->read_len - (res->cigar[0]>>4)):reg->read_len;
+		reg->reg[r_n].ref_end[0].ref_pos = res->offset;
+		reg->reg[r_n].ref_beg[0].ref_pos = res->offset+refInCigar(res->cigar, res->cigar_len)-1;
     }
-    res->reg_beg = reg->reg[reg->reg_n].beg;
-    res->reg_end = reg->reg[reg->reg_n].end;
+    res->reg_beg = reg->reg[r_n].beg;
+    res->reg_end = reg->reg[r_n].end;
+    reg->reg[r_n].beg_n = reg->reg[r_n].end_n = 1;
     reg->reg_n++;
 }
 
@@ -777,11 +814,14 @@ int lsat_main_aln(thread_aux_t *aux)
             frag_check(a_msg, f_msg, p->a_res+1, bns, pac, p->seq, &(p->rseq), *APP, *AP, line_n, &hash_num, &hash_node);
             get_reg(p->a_res+1, a_reg);
         }
-        // rearrange a_res(0,1)
-        rearr_aln_res(p->a_res, 2);
         // bwt aln
         bwt_aln_remain(a_reg, p->a_res+2, bwt, bns, pac, p->seq, &(p->rseq), *APP, *AP);
+        get_reg(p->a_res+2, a_reg);
+
         aln_free_reg(a_reg);
+
+        // rearrange a_res(0,1,2)
+        rearr_aln_res(p->a_res, 3);
 
 #ifdef __DEBUG__
         COUNT++; fprintf(stderr, "%16d reads have been aligned.\n", COUNT);

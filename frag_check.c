@@ -409,7 +409,7 @@ void merge_cigar(cigar32_t **c1, int *c1_n, int *c1_m, uint64_t *c1_refend, int 
 				  bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, lsat_aln_para AP)
 {
     if (c2_n == 0) return;
-	if (*c1_n !=0  && (((((*c1)[*c1_n-1] & 0xf) == CINS || ((*c1)[*c1_n-1] & 0xf) == CDEL) && (_c2[0] & 0xf) != CSOFT_CLIP && (_c2[0] & 0xf) != CHARD_CLIP)
+	if (*c1_n > 1  && (((((*c1)[*c1_n-1] & 0xf) == CINS || ((*c1)[*c1_n-1] & 0xf) == CDEL) && (_c2[0] & 0xf) != CSOFT_CLIP && (_c2[0] & 0xf) != CHARD_CLIP)
 	   || (((_c2[0] & 0xf) == CINS || (_c2[0] & 0xf) == CDEL) && ((*c1)[*c1_n-1] & 0xf) != CSOFT_CLIP && ((*c1)[*c1_n-1] & 0xf) != CHARD_CLIP))) { // repair boundary
 		    /* seq1, ref */ /*    seq2, read     */
 		int len1, len11=0,  len2, len21=0, len22=0, len_dif1=0, len_dif2=0;
@@ -650,7 +650,8 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
             }
         } else if (dis < -AP.match_dis) { 
             s_tlen = s_qlen + dis;
-            if (s_tlen < 0) { // overlapped ins
+            if (s_tlen < 2 * AP.hash_step) {
+            //if (s_tlen < 0) { // overlapped ins
                 int _s_tlen = s_qlen + hash_len;
                 s_tseq = (uint8_t*)malloc(_s_tlen * sizeof(uint8_t));
                 int lqe, lte, rqe, rte;

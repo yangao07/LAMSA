@@ -1,7 +1,7 @@
 #ifndef LSAT_HEAP
 
 
-line_node node_pop(node_score *ns, int *score);
+line_node node_pop(node_score *ns, int *score, int *NM);
 //void node_max_heap(node_score *ns, int i);
 void build_node_max_heap(node_score *ns);
 line_node node_heap_extract_max(node_score *ns, int *score);
@@ -13,7 +13,7 @@ line_node node_heap_extract_minpos(node_score *ns);
 //void node_min_heap(node_score *ns, int i);
 void build_node_min_heap(node_score *ns);
 //line_node node_heap_extract_min(node_score *ns);
-int node_heap_update_min(node_score *ns, line_node node, int score);
+int node_heap_update_min(node_score *ns, line_node node, int score, int NM);
 
 
 #define LSAT_HEAP

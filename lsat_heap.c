@@ -2,12 +2,13 @@
 #include <stdio.h>
 #include "lsat_aln.h"
 
-line_node node_pop(node_score *ns, int *score)
+line_node node_pop(node_score *ns, int *score, int *NM)
 {
     if (ns->node_n < 1) 
         return (line_node){-1,0};
     line_node node = ns->node[--(ns->node_n)];
     *score = ns->score[ns->node_n];
+    *NM = ns->NM[ns->node_n];
     return node;
 }
 
@@ -16,10 +17,10 @@ void node_max_heap(node_score *ns, int i)
 {
     int l = 2*i+1; int r = 2*(i+1);
     int max, tmp;
-    if (l < ns->node_n && ns->score[l] > ns->score[i]) 
+    if (l < ns->node_n && (ns->score[l] > ns->score[i] || (ns->score[l] == ns->score[i] && ns->NM[l] < ns->NM[i]))) 
         max = l;
     else max = i;
-    if (r < ns->node_n && ns->score[r] > ns->score[max]) 
+    if (r < ns->node_n && (ns->score[r] > ns->score[max] || (ns->score[r] == ns->score[max] && ns->NM[r] < ns->NM[max])))
         max = r;
     if (max != i)
     {
@@ -48,6 +49,7 @@ line_node node_heap_extract_max(node_score *ns, int *score)
     *score = ns->score[0];
     ns->node[0] = ns->node[--(ns->node_n)];
     ns->score[0] = ns->score[ns->node_n];
+    ns->NM[0] = ns->NM[ns->node_n];
     node_max_heap(ns, 0);
     return max;
 }
@@ -67,6 +69,7 @@ void node_maxpos_heap(node_score *ns, int i)
         tmp = ns->node[i].x, ns->node[i].x = ns->node[max].x, ns->node[max].x = tmp;
         tmp = ns->node[i].y, ns->node[i].y = ns->node[max].y, ns->node[max].y = tmp;
         tmp = ns->score[i], ns->score[i] = ns->score[max], ns->score[max] = tmp;
+        tmp = ns->NM[i], ns->NM[i] = ns->NM[max], ns->NM[max] = tmp;
         node_maxpos_heap(ns, max);
     }
 }
@@ -88,6 +91,7 @@ line_node node_heap_extract_maxpos(node_score *ns)
     line_node max = ns->node[0];
     ns->node[0] = ns->node[--(ns->node_n)];
     ns->score[0] = ns->score[ns->node_n];
+    ns->NM[0] = ns->NM[ns->node_n];
     node_maxpos_heap(ns, 0);
     return max;
 }
@@ -107,6 +111,7 @@ void node_minpos_heap(node_score *ns, int i)
         tmp = ns->node[i].x, ns->node[i].x = ns->node[min].x, ns->node[min].x = tmp;
         tmp = ns->node[i].y, ns->node[i].y = ns->node[min].y, ns->node[min].y = tmp;
         tmp = ns->score[i], ns->score[i] = ns->score[min], ns->score[min] = tmp;
+        tmp = ns->NM[i], ns->NM[i] = ns->NM[min], ns->NM[min] = tmp;
         node_minpos_heap(ns, min);
     }
 }
@@ -128,6 +133,7 @@ line_node node_heap_extract_minpos(node_score *ns)
     line_node min = ns->node[0];
     ns->node[0] = ns->node[--(ns->node_n)];
     ns->score[0] = ns->score[ns->node_n];
+    ns->NM[0] = ns->NM[ns->node_n];
     node_minpos_heap(ns, 0);
     return min;
 }
@@ -146,16 +152,17 @@ void node_min_heap(node_score *ns, int i)
 {
     int l = 2*i+1; int r = 2*(i+1);
     int min, tmp;
-    if (l < ns->node_n && ns->score[l] < ns->score[i])
+    if (l < ns->node_n && (ns->score[l] < ns->score[i] || (ns->score[l] == ns->score[i] && ns->NM[l] > ns->NM[i])))
         min = l;
     else min = i;
-    if (r < ns->node_n && ns->score[r] < ns->score[i]) 
+    if (r < ns->node_n && (ns->score[r] < ns->score[min] || (ns->score[r] == ns->score[min] && ns->NM[r] > ns->NM[min])))
         min = r;
     if (min != i)
     {
         tmp = ns->node[i].x, ns->node[i].x = ns->node[min].x, ns->node[min].x = tmp;
         tmp = ns->node[i].y, ns->node[i].y = ns->node[min].y, ns->node[min].y = tmp;
         tmp = ns->score[i], ns->score[i] = ns->score[min], ns->score[min] = tmp;
+        tmp = ns->NM[i], ns->NM[i] = ns->NM[min], ns->NM[min] = tmp;
         node_min_heap(ns, min);
     }
 }
@@ -180,12 +187,13 @@ void build_node_min_heap(node_score *ns)
     return min;
 }*/
 
-int node_heap_update_min(node_score *ns, line_node node, int score)
+int node_heap_update_min(node_score *ns, line_node node, int score, int NM)
 {
-    if (ns->score[0] < score)
+    if (ns->score[0] < score || (ns->score[0] == score && ns->NM[0] > NM))
     {
         int ret = ns->node[0].x;
         ns->score[0] = score;
+        ns->NM[0] = NM;
         ns->node[0] = node;
         node_min_heap(ns, 0);
         return ret;
