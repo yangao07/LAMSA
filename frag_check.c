@@ -657,11 +657,12 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                 int lqe, lte, rqe, rte;
 
                 // left-extend
+                cigar32_t *l_cigar=0; int l_cigar_n=0, l_cigar_m;
                 ref_offset = at1.offset + AP.seed_len + at1.len_dif;
                 pac2fa_core(bns, pac, at1.chr, ref_offset-1, &_s_tlen, s_tseq);
-                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, bwasw_sc_mat, 3, hash_len*bwasw_sc_mat[0], AP, &lqe, &lte, &_cigar, &_cigar_n, &_cigar_m);
-                _push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
-                free(_cigar);
+                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, bwasw_sc_mat, 3, hash_len*bwasw_sc_mat[0], AP, &lqe, &lte, &l_cigar, &l_cigar_n, &l_cigar_m);
+                //_push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
+                //free(_cigar);
 
                 // right-extend
                 ref_offset = at2.offset - _s_tlen;
@@ -678,13 +679,14 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 					s_tseq[_s_tlen-1-i] = s_tseq[i];
 					s_tseq[i] = tmp;
 				}
-                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, bwasw_sc_mat, 3, hash_len*bwasw_sc_mat[0], AP, &rqe, &rte, &_cigar, &_cigar_n, &_cigar_m);
-                _invert_cigar(&_cigar, _cigar_n);
+                cigar32_t *r_cigar=0; int r_cigar_n=0, r_cigar_m;
+                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, bwasw_sc_mat, 3, hash_len*bwasw_sc_mat[0], AP, &rqe, &rte, &r_cigar, &r_cigar_n, &r_cigar_m);
+                _invert_cigar(&r_cigar, r_cigar_n);
                 
                 // merge, add overlap-flag('S/H')
-                extern void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, const uint8_t *query, int qlen, int lqe, int rqe, cigar32_t *rcigar, int rn_cigar, const uint8_t *target, int tlen, int lte, int rte, lsat_aln_para AP, int m, const int8_t *mat);
-                sw_mid_fix(&s_cigar, &s_clen, &s_cm, s_tseq, s_qlen, lqe, rqe, _cigar, _cigar_n, s_tseq, s_qlen+dis, lte, rte, AP, 5, bwasw_sc_mat);
-                free(_cigar);
+                extern void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *lcigar, int ln_cigar, cigar32_t *rcigar, int rn_cigar, const uint8_t *query, int qlen, int lqe, int rqe, const uint8_t *target, int tlen, int lte, int rte, lsat_aln_para AP, int m, const int8_t *mat);
+                sw_mid_fix(&s_cigar, &s_clen, &s_cm, l_cigar, l_cigar_n, r_cigar, r_cigar_n, s_qseq, s_qlen, lqe, rqe, s_tseq, s_qlen+dis, lte, rte, AP, 5, bwasw_sc_mat);
+                free(l_cigar); free(r_cigar);
             } else {
                 // for DUP
                 s_tlen += 2*(hash_len-dis);
@@ -696,8 +698,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                     ksw_bi_extend(s_qlen, s_qseq, s_tlen, s_tseq+hash_len-dis, 5, bwasw_sc_mat, abs(s_tlen-s_qlen)+3, hash_len*bwasw_sc_mat[0], hash_len*bwasw_sc_mat[0], AP, &_cigar, &_cigar_n, &_cigar_m);
                     _push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
                     free(_cigar);
-                }
-                else {
+                } else {
                     res = split_indel_map(&s_cigar, &s_clen, &s_cm, s_qseq, s_qlen, s_tseq+hash_len-dis, s_tlen, -dis, AP, hash_num, hash_node);
                 }
             }

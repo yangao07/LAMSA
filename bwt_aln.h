@@ -11,7 +11,7 @@ typedef struct {
     uint8_t is_rev;
     uint64_t ref_pos;
     line_node from;
-    int score, node_n;
+    int score, NM, node_n;
     int track_flag;
 } loc_t;
 

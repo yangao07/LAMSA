@@ -543,9 +543,9 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
                 int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
                 int w, int *n_cigar_, cigar32_t **cigar_)
 {
-#ifdef __DEBUG
-    if (qlen < 0 || tlen < 0) fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
-#endif
+//#ifdef __DEBUG
+    if (qlen < 0 || tlen < 0) { fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
+//#endif
 	eh_t *eh;
 	int8_t *qp; // query profile
 	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, score, n_col;
@@ -1049,33 +1049,17 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     return 1;
 }
 
-void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, const uint8_t *query, int qlen, int lqe, int rqe, cigar32_t *rcigar, int rn_cigar, const uint8_t *target, int tlen, int lte, int rte, lsat_aln_para AP, int m, const int8_t *mat)
+void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *lcigar, int ln_cigar, cigar32_t *rcigar, int rn_cigar, const uint8_t *query, int qlen, int lqe, int rqe, const uint8_t *target, int tlen, int lte, int rte, lsat_aln_para AP, int m, const int8_t *mat)
 {
     int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
 
     if (abs(Sn) < AP.split_len/2 && abs(Hn) < AP.split_len/2 && abs(Sn - Hn) < AP.split_len/2) { // for small 'nS' and 'nH', change into indels
         cigar32_t *g_cigar; int g_clen;
-        if (Sn > 0 && Hn > 0) {
-            ksw_global(Sn, query+lqe, Hn, target+lte, m, mat, AP.gapo, AP.gape, abs(Sn-Hn)+3, &g_clen, &g_cigar);
-            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-            _push_cigar(cigar, cigar_n, cigar_m, rcigar, rn_cigar);
-        } else if (Sn <= 0 && Hn <= 0) {
-            ksw_global(rqe+Sn, query+lqe, rte+Hn, target+lte, m, mat, AP.gapo, AP.gape, abs(rqe+Sn-rte-Hn)+3, &g_clen, &g_cigar);
-            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-        } else if (Sn > 0 && Hn <= 0) {
-            _push_cigar1(cigar, cigar_n, cigar_m, (Sn <<4)|CINS);
-            ksw_global(rqe, query+lqe+Sn, rte+Hn, target+lte, m, mat, AP.gapo, AP.gape, abs(rqe-rte-Hn)+3, &g_clen, &g_cigar);
-            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-        } else {// Sn <=0 && Hn > 0
-            _push_cigar1(cigar, cigar_n, cigar_m, (Hn <<4)|CDEL);
-            ksw_global(rqe+Sn, query+lqe, rte, target+lte+Hn, m, mat, AP.gapo, AP.gape, abs(rqe+Sn-rte)+3, &g_clen, &g_cigar);
-            _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
-            free(g_cigar);
-        }
+        ksw_global(qlen, query, tlen, target, m, mat, AP.gapo, AP.gape, abs(tlen-qlen)+3, &g_clen, &g_cigar);
+        _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
+        free(g_cigar);
     } else {
+        _push_cigar(cigar, cigar_n, cigar_m, lcigar, ln_cigar);
         _push_cigar0(cigar, cigar_n, cigar_m, (Sn << 4) | CSOFT_CLIP);
         _push_cigar0(cigar, cigar_n, cigar_m, Hn << 4 | CHARD_CLIP);
         _push_cigar(cigar, cigar_n, cigar_m, rcigar, rn_cigar);
@@ -1135,11 +1119,11 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     int cigar_n = 0, cigar_m = 10;
 
     // left
-    _push_cigar(&cigar, &cigar_n, &cigar_m, lcigar, ln_cigar);
+    //_push_cigar(&cigar, &cigar_n, &cigar_m, lcigar, ln_cigar);
 
     // middle S/H
     int Sn = qlen - lqe - rqe;//, Hn = tlen - lte - rte;
-    sw_mid_fix(&cigar, &cigar_n, &cigar_m, query, qlen, lqe, rqe, rcigar, rn_cigar, target, tlen, lte, rte, AP, m, mat);
+    sw_mid_fix(&cigar, &cigar_n, &cigar_m, lcigar, ln_cigar, rcigar, rn_cigar, query, qlen, lqe, rqe, target, tlen, lte, rte, AP, m, mat);
 
     *cigar_ = cigar; *n_cigar_ = cigar_n; *m_cigar_ = cigar_m;
     if (lcigar) free(lcigar); 

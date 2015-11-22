@@ -48,6 +48,7 @@ void bwt_init_dp(bwt_seed_t **seed_v, int seed_n)
         for (j = 0; j < (*seed_v)[i].n; ++j) {
             (*seed_v)[i].loc[j].from = START_NODE;
             (*seed_v)[i].loc[j].score = 1;
+            (*seed_v)[i].loc[j].NM = 0;
             (*seed_v)[i].loc[j].node_n = 1;
             (*seed_v)[i].loc[j].track_flag = 0;
         }
@@ -61,7 +62,8 @@ int bwt_seed_con(bwt_seed_t seed1, int l1, bwt_seed_t seed2, int l2, int *con_fl
         return 0;
     }
     int dis = (seed1.loc[l1].is_rev?-1:1)*(seed1.loc[l1].ref_pos - seed2.loc[l2].ref_pos) - (seed1.pos - seed2.pos);
-    if (abs(dis) <= 10) *con_flag = F_MATCH;
+    if (abs(dis) <= 1) *con_flag = F_MATCH;
+    //if (abs(dis) <= 10) *con_flag = F_MATCH;
     else *con_flag = F_UNCONNECT;
     return abs(dis);
 }
@@ -77,6 +79,7 @@ void bwt_update_dp(bwt_seed_t **seed_v, int seed_n)
                     if (con_flag == F_MATCH) {
                         (*seed_v)[i].loc[j].from = (line_node){m, n};
                         (*seed_v)[i].loc[j].score = (*seed_v)[m].loc[n].score+1;
+                        (*seed_v)[i].loc[j].NM = (*seed_v)[m].loc[n].NM+max_dis;
                         (*seed_v)[i].loc[j].node_n = (*seed_v)[m].loc[n].node_n +1;
 goto Next;
 					}
@@ -92,7 +95,7 @@ int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lsat_aln_para AP, int seed_n, 
 {
     int l_n = 0; 
     int i, j, k, reg_hit;
-    int max_score=0;
+    int max_score=0; int track_flag;
 
     extern node_score *node_init_score(int n);
     extern int heap_add_node(node_score *ns, line_node node, int score, int NM);
@@ -125,9 +128,9 @@ int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lsat_aln_para AP, int seed_n, 
             if (reg_hit) (*seed_v)[i].loc[j].score += (*seed_v)[i].loc[j].score/2;
             if ((*seed_v)[i].loc[j].score > max_score) {
                 max_score = (*seed_v)[i].loc[j].score;
-                heap_add_node(ns, (line_node){i,j}, max_score, 0);
+                heap_add_node(ns, (line_node){i,j}, max_score, (*seed_v)[i].loc[j].NM);
             } else if ((*seed_v)[i].loc[j].score >= max_score/2) 
-                heap_add_node(ns, (line_node){i,j}, (*seed_v)[i].loc[j].score, 0);
+                heap_add_node(ns, (line_node){i,j}, (*seed_v)[i].loc[j].score, (*seed_v)[i].loc[j].NM);
             // set track_flag
             line_node from = (line_node){i,j};
             while(from.x != START_NODE.x) {
@@ -137,14 +140,27 @@ int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lsat_aln_para AP, int seed_n, 
         }
     }
     line_node right; int tmp1, tmp2;
+    // track_flag: 0<-untracked(useless), 1<-tracked(candidate), 2<-output(filtered_out)
     while (1) {
         right = node_pop(ns, &tmp1, &tmp2);
         if (right.x == START_NODE.x) break;
         if ((*seed_v)[right.x].loc[right.y].score < max_score/2) continue;
+        track_flag = 1;
+        line_node from = right;
+        while (from.x != START_NODE.x) {
+            if ((*seed_v)[from.x].loc[from.y].track_flag == 2) {
+                track_flag = 2;
+                break;
+            }
+            from = (*seed_v)[from.x].loc[from.y].from;
+        }
+        if (track_flag == 2) continue;
+
         i = (*seed_v)[right.x].loc[right.y].node_n - 1;
         node_n[l_n] = i+1;
         while (right.x != START_NODE.x) {
             line[l_n][i] = right;
+            (*seed_v)[right.x].loc[right.y].track_flag = 2;
             right = (*seed_v)[right.x].loc[right.y].from;
             --i;
         }
@@ -181,31 +197,57 @@ void bwt_set_bound(bwt_seed_t *seed_v, line_node *line, int node_n, int seed_len
 void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, int reg_beg, int reg_len,
                  bwt_bound *left, bwt_bound *right, lsat_aln_para AP, lsat_aln_per_para APP, line_aln_res *la)
 {
+    int extra_ext_len = 100;
     la->cur_res_n = 0;
 	la->res[0].chr = ref_id+1; la->res[0].nsrand = 1-is_rev;
-    int i; uint8_t *query = (uint8_t*)malloc(reg_len * sizeof(uint8_t));
-    if (is_rev) for (i = 0; i < reg_len; ++i) query[reg_len-1-i] = (read_bseq[reg_beg-1+i]<4)?3-read_bseq[reg_beg-1+i]:4; 
-    else for (i = 0; i < reg_len; ++i) query[i] = read_bseq[reg_beg-1+i];
+    int i; 
+    int left_eta_len, extra_beg, right_eta_len, extra_end, extra_reg_len;
+    uint8_t *query;
+    if (is_rev) {
+        left_eta_len = ((APP.read_len-(reg_beg+reg_len-1))>extra_ext_len) ? extra_ext_len:(APP.read_len-(reg_beg+reg_len-1));
+        extra_end = reg_beg+reg_len+left_eta_len-1;
+        right_eta_len = (reg_beg-1)>extra_ext_len?extra_ext_len:(reg_beg-1);
+        extra_beg = reg_beg-right_eta_len;
 
-    uint64_t ref_start = (left->ref_pos - (left->read_pos - 1) - AP.bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos - 1) - AP.bwt_seed_len);
-    int ref_len = (int)(right->ref_pos + reg_len - right->read_pos + AP.bwt_seed_len - ref_start + 1);
+        extra_reg_len = reg_len + left_eta_len + right_eta_len;
+        query = (uint8_t*)malloc(extra_reg_len * sizeof(uint8_t)); // reg_len + extra_len
+
+        for(i = 0; i < extra_reg_len; ++i) 
+            query[extra_reg_len-1-i] = (read_bseq[extra_beg-1+i]<4)?3-read_bseq[extra_beg-1+i]:4;
+    } else {
+        left_eta_len = (reg_beg-1)>extra_ext_len?extra_ext_len:(reg_beg-1);
+        extra_beg = reg_beg-left_eta_len;
+        right_eta_len = ((APP.read_len-(reg_beg+reg_len-1))>extra_ext_len) ? extra_ext_len:(APP.read_len-(reg_beg+reg_len-1));
+        extra_end = reg_beg + reg_len + right_eta_len -1;
+
+        extra_reg_len = reg_len + left_eta_len + right_eta_len;
+        query = (uint8_t*)malloc(extra_reg_len * sizeof(uint8_t)); // reg_len + extra_len
+
+        for (i = 0; i < extra_reg_len; ++i) 
+            query[i] = read_bseq[extra_beg-1+i];
+    }
+
+    uint64_t ref_start = (left->ref_pos - (left->read_pos-1+left_eta_len) - AP.bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos-1+left_eta_len) - AP.bwt_seed_len);
+    int ref_len = (int)(right->ref_pos + reg_len-right->read_pos+right_eta_len + AP.bwt_seed_len - ref_start + 1);
     uint8_t *target = (uint8_t*)malloc(ref_len * sizeof(uint8_t));
     pac2fa_core(bns, pac, ref_id+1, ref_start-1, &ref_len, target);
 
     int _qle, _tle, qlen, tlen; uint8_t *_q=0, *_t=0;
     qlen = right->read_pos-left->read_pos+1, tlen = right->ref_pos-left->ref_pos+1;
     cigar32_t *mid_cigar; int mid_cigar_n;
-    // push head 'S'
-	if (is_rev) _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), (APP.read_len-(reg_beg+reg_len-1))<<4 | CSOFT_CLIP);
-	else _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_beg-1) << 4) | CSOFT_CLIP);
+    res_t *cur_res = la->res+la->cur_res_n;
+
+    // push head 'S' (before left_extra)
+	if (is_rev) _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (APP.read_len-extra_end)<<4 | CSOFT_CLIP);
+	else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((extra_beg-1) << 4) | CSOFT_CLIP);
 
     // mid global-sw
-    ksw_global(qlen, query+left->read_pos-1, tlen, target+left->ref_pos-ref_start, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
+    ksw_global(qlen, query+(left->read_pos-1+left_eta_len), tlen, target+left->ref_pos-ref_start, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
 
     cigar32_t *cigar=NULL; int cigar_n, cigar_m;
-    if (left->read_pos > 1) { // left extend
+    //if (left->read_pos > 1) { // left extend
         // invert query and target,
-        qlen = left->read_pos-1;
+        qlen = left->read_pos - 1 + left_eta_len;
         _q = (uint8_t*)malloc(qlen * sizeof(uint8_t));
         for (i = 0; i < qlen; ++i) _q[i] = query[qlen-1-i];
         tlen = left->ref_pos-ref_start;
@@ -216,35 +258,35 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
         if (cigar!=NULL) {
             left->read_pos -= _qle;
             left->ref_pos -= _tle;
-            _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((left->read_pos-1)<<4)|CSOFT_CLIP);
+            _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((qlen-_qle)<<4)|CSOFT_CLIP);
             _invert_cigar(&cigar, cigar_n);
-            _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), cigar, cigar_n);
+            _push_cigar(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), cigar, cigar_n);
             free(cigar);
-        } else _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((left->read_pos-1)<<4)|CSOFT_CLIP);
+        } else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (qlen<<4)|CSOFT_CLIP);
 		
         free(_q); free(_t);
-    } 
-    la->res[la->cur_res_n].offset = left->ref_pos;
+    //} 
+    cur_res->offset = left->ref_pos;
     // push mid-cigar
-    _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), mid_cigar, mid_cigar_n);
+    _push_cigar(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), mid_cigar, mid_cigar_n);
     free(mid_cigar);
 
-    if (right->read_pos < reg_len) { // right extend
-        qlen = reg_len - right->read_pos;
+    //if (right->read_pos < reg_len) { // right extend
+        qlen = reg_len - right->read_pos + right_eta_len;
         tlen = ref_start+ref_len-1-right->ref_pos;
-        ksw_extend_core(qlen, query+right->read_pos, tlen, target+ref_len-tlen, 5, bwasw_sc_mat, abs(qlen-tlen)+3, AP.bwt_seed_len*bwasw_sc_mat[0], AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        ksw_extend_core(qlen, query+right->read_pos+left_eta_len, tlen, target+ref_len-tlen, 5, bwasw_sc_mat, abs(qlen-tlen)+3, AP.bwt_seed_len*bwasw_sc_mat[0], AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
-            _push_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), cigar, cigar_n);
+            _push_cigar(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), cigar, cigar_n);
             right->read_pos += _qle;
             right->ref_pos += _tle;
 			free(cigar);
 		}
-		_push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_len-right->read_pos)<<4)|CSOFT_CLIP);
-    }
+		_push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((reg_len-right->read_pos+right_eta_len)<<4)|CSOFT_CLIP);
+    //}
 
-    // push tail 'S'
-	if (is_rev)_push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), ((reg_beg-1) << 4) | CSOFT_CLIP);
-	else _push_cigar1(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), (APP.read_len-(reg_beg+reg_len-1))<<4 | CSOFT_CLIP);
+    // push tail 'S' (after right_extra)
+	if (is_rev)_push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((extra_beg-1) << 4) | CSOFT_CLIP);
+	else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (APP.read_len-extra_end)<<4 | CSOFT_CLIP);
 
 	if (is_rev) {
         if (*read_rbseq == NULL) {
@@ -252,8 +294,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
             for (i = 0; i < APP.read_len; ++i) (*read_rbseq)[i] = (read_bseq[APP.read_len-1-i]<4)?3-read_bseq[APP.read_len-1-i]:4;
         }
 		lsat_res_aux(la, bns, pac, *read_rbseq, APP.read_len, AP, APP);
-	}
-	else lsat_res_aux(la, bns, pac, read_bseq, APP.read_len, AP, APP);
+	} else lsat_res_aux(la, bns, pac, read_bseq, APP.read_len, AP, APP);
 
     free(query); free(target);
 }
@@ -298,13 +339,13 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
                     }
                 }
                 if (reg_hit == 0) {
-                for (j = 0; j < reg.end_n; ++j) {
-                    if (ref_id == reg.ref_end[j].chr-1 && is_rev == reg.ref_end[j].is_rev
-                     && abs(abs_pos-reg.ref_end[j].ref_pos) < AP.SV_len_thd) {
-                        reg_hit = 1;
-                        break;
+                    for (j = 0; j < reg.end_n; ++j) {
+                        if (ref_id == reg.ref_end[j].chr-1 && is_rev == reg.ref_end[j].is_rev
+                                && abs(abs_pos-reg.ref_end[j].ref_pos) < AP.SV_len_thd) {
+                            reg_hit = 1;
+                            break;
+                        }
                     }
-                }
                 }
                 if (reg_hit == 0) continue;
                 bwt_set_seed(*seed_v, ref_id, is_rev, abs_pos, i);
@@ -326,7 +367,6 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
             if (re_res->l_n == re_res->l_m) aln_reloc_res(re_res, (re_res->l_n << 1), AP.res_mul_max);
 
             bwt_set_bound(*seed_v, line[i], node_n[i], seed_len, reg_len, &left_bound, &right_bound);
-            //bwt_aln_res((*seed_v)[line[0].x].loc[line[0].y].ref_id, (*seed_v)[line[0].x].loc[line[0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
             bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
             re_res->la[re_res->l_n].line_score = 0;
             re_res->l_n++;
