@@ -245,7 +245,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     ksw_global(qlen, query+(left->read_pos-1+left_eta_len), tlen, target+left->ref_pos-ref_start, 5, bwasw_sc_mat, AP.gapo, AP.gape, abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
 
     cigar32_t *cigar=NULL; int cigar_n, cigar_m;
-    //if (left->read_pos > 1) { // left extend
+    if (left->read_pos > 1 || left_eta_len > 0) { // left extend
         // invert query and target,
         qlen = left->read_pos - 1 + left_eta_len;
         _q = (uint8_t*)malloc(qlen * sizeof(uint8_t));
@@ -265,13 +265,13 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
         } else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (qlen<<4)|CSOFT_CLIP);
 		
         free(_q); free(_t);
-    //} 
+    } 
     cur_res->offset = left->ref_pos;
     // push mid-cigar
     _push_cigar(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), mid_cigar, mid_cigar_n);
     free(mid_cigar);
 
-    //if (right->read_pos < reg_len) { // right extend
+    if (right->read_pos < reg_len || right_eta_len > 0) { // right extend
         qlen = reg_len - right->read_pos + right_eta_len;
         tlen = ref_start+ref_len-1-right->ref_pos;
         ksw_extend_core(qlen, query+right->read_pos+left_eta_len, tlen, target+ref_len-tlen, 5, bwasw_sc_mat, abs(qlen-tlen)+3, AP.bwt_seed_len*bwasw_sc_mat[0], AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
@@ -282,7 +282,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
 			free(cigar);
 		}
 		_push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((reg_len-right->read_pos+right_eta_len)<<4)|CSOFT_CLIP);
-    //}
+    }
 
     // push tail 'S' (after right_extra)
 	if (is_rev)_push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((extra_beg-1) << 4) | CSOFT_CLIP);

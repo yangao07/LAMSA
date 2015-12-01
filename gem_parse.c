@@ -39,13 +39,12 @@ void _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _ciga
 }
 #endif 
 
-void md2m(char *c, int *m, int *mm)
+void md2m(char *c, int len, int *m, int *mm)
 {
     *m=0; *mm=0;
     if (*c == 0) return;
     int i; char *s;
 
-    int len = strlen(c);
     for (i = 0; i < len; ++i) {
         if (c[i] >= 'A' && c[i] <= 'T')
         {
@@ -80,28 +79,31 @@ void md2cigar(char *md, map_t *map)
     int md_len = strlen(md);
     int i=0; 
 	char *c = (char*)malloc((md_len+1) * sizeof(char)); int c_i;
+	char *indel = (char*)malloc((md_len+1) * sizeof(char));
     char id; int indel_n=0;
-    int m=0, mm=0;
+    int m, mm;
 	map->cigar->cigar_n = 0;
 	map->NM = 0;
 	while (i < md_len) {
 		if (md[i] == '>') { // indel
-			sscanf(md+i, ">%d%[+-]", &indel_n, &id);
+			sscanf(md+i, ">%[^+-]%[+-]", indel, &id);
+            indel_n = atoi(indel);
 			_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
-			map->NM += (indel_n+mm);
+			map->NM += indel_n;
             i += get_d(indel_n) + 2;
 		} else {
 			c_i = i;
 			for (; md[i] && md[i]!='>'; ++i) {
 				c[i-c_i] = md[i];
 			}
-			c[i-c_i] = '\0';
-			md2m(c, &m, &mm);
+            m = 0, mm = 0;
+            c[i-c_i] = '\0';
+			md2m(c, i-c_i, &m, &mm);
 			_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (m+mm) << 4 | CMATCH);
 			map->NM += mm;
 		}
 	}
-	free(c);
+	free(c); free(indel);
 }
 
 map_msg *map_init_msg(int n)
@@ -176,7 +178,7 @@ int main(int argc, char* argv[])
 	char name[100]; int msg_len;
 	char *t, *s; int t_i, _t_i;
 	char chr[10], strand, md[200];
-	long long offset;
+	long long offset; char os[100];
 	int i;
 
 	while (fgetline(mapf, &gem_line, &line_len) != EOF) {
@@ -204,7 +206,8 @@ int main(int argc, char* argv[])
 				}
 			}
 			_t_i = t_i;
-			sscanf(t, "%[^:]:%c:%lld:%[^:]", chr, &strand, &offset, md);
+			sscanf(t, "%[^:]:%c:%[^:]:%[^:]", chr, &strand, os, md);
+            offset = atoll(os);
 			t_i = _t_i;
 			md2cigar(md, &(m_msg->map[m_msg->map_n]));
 			m_msg->map[m_msg->map_n].offset = offset;
@@ -241,7 +244,7 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 	char name[100]; int msg_len;
 	char *t; int t_i, _t_i;
 	char chr[10], strand, md[200];
-	long long offset;
+	long long offset; char os[100];
 	int i;
 
 	fgetline(mapf, &gem_line, &line_len, &gem_line_m);
@@ -250,7 +253,7 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 	sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg);
 	if (strcmp(aln_msg, "-") == 0) {
 #ifdef __DEBUG__
-		fprintf(stdout, "-\n");
+		fprintf(stderr, "-\n");
 #endif
 		goto RET;
 	}
@@ -275,7 +278,8 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 			}
 		}
 		_t_i = t_i;
-		sscanf(t, "%[^:]:%c:%lld:%[^:]", chr, &strand, &offset, md);
+		sscanf(t, "%[^:]:%c:%[^:]:%[^:]", chr, &strand, os, md);
+        offset = atoll(os);
 		t_i = _t_i;
 		md2cigar(md, &(m_msg->map[m_msg->map_n]));
 		if (strand == '-') _invert_cigar(&(m_msg->map[m_msg->map_n].cigar->cigar), m_msg->map[m_msg->map_n].cigar->cigar_n);
@@ -284,9 +288,9 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 		strcpy(m_msg->map[m_msg->map_n].chr, chr);
 
 #ifdef __DEBUG__
-		fprintf(stdout, "%s, %c, %lld, ", chr, strand, offset);
-		printcigar(stdout, m_msg->map[m_msg->map_n].cigar->cigar, m_msg->map[m_msg->map_n].cigar->cigar_n);
-		fprintf(stdout, "\n");
+		fprintf(stderr, "%s, %c, %lld, ", chr, strand, offset);
+		printcigar(stderr, m_msg->map[m_msg->map_n].cigar->cigar, m_msg->map[m_msg->map_n].cigar->cigar_n);
+		fprintf(stderr, "\n");
 #endif
 		if (strcmp(chr, "chrM")!=0)
 			++(m_msg->map_n);

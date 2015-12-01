@@ -1171,11 +1171,10 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
 
 #ifdef __DEBUG__
     for (i = 0; i < line_n; ++i) {
-        printf("%d(%d,%d score: %d):\t", i+1, L_MF(line, line_end, i), L_MH(line, line_end,i), L_LS(line, line_end, i));
+        fprintf(stderr, "%d(%d,%d score: %d):\t", i+1, L_MF(line, line_end, i), L_MH(line, line_end,i), L_LS(line, line_end, i));
         for (l = 0; l < line_end[i]; ++l)
-            printf("(%d, %d)\t", a_msg[line[i][l].x].read_id-1, line[i][l].y);
-        //printf("(%d, %d)\t", line[i][l].x, line[i][l].y);
-        printf("\n");
+            fprintf(stderr, "(%d, %d)\t", a_msg[line[i][l].x].read_id-1, line[i][l].y);
+        fprintf(stderr, "\n");
     }
 #endif
 
@@ -1249,7 +1248,7 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         ((*f_msg)+l)->frag_left_bound = left_bound;
         ((*f_msg)+l)->line_score = L_LS(line, line_end, l);
 #ifdef __DEBUG__
-        fprintf(stdout, "#%d: left %d, right %d\n", l+1, left_bound, right_bound);
+        fprintf(stderr, "#%d: left %d, right %d\n", l+1, left_bound, right_bound);
 #endif
     }
     *l_n = l;

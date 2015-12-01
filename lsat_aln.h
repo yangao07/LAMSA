@@ -93,9 +93,12 @@
 
 #define SOAP2_DP_DIR "./soap2-dp"
 
+#define MAPQ_MAX 254
+
 /* CIGAR operations */
 /* from samtools-0.1.19 */
 #define CIGAR_STR "MIDNSHP=XB"
+#define CIGAR_STR_HC "MIDNHHP=XB"
 /* M: match or mismatch */
 #define CMATCH      0
 /* I: insertion to the reference */

@@ -48,7 +48,6 @@ typedef struct {
     uint64_t refend; int readend; // for merge_cigar
 
     int score;          // alignment score
-    uint8_t mapq;       // mapping quality
     int NM;             // edit distance
     //cigar32_t *MD;    // mis-match postion string XXX
     //int m_m, m_n;   
@@ -67,6 +66,7 @@ typedef struct {
     int res_m, cur_res_n;
     res_t *res;
     int tol_score, tol_NM; // tol score of all res, including split penalty 
+    uint8_t mapQ;
 } line_aln_res;
 
 typedef struct {
@@ -74,6 +74,7 @@ typedef struct {
 	line_aln_res *la;	
 
     int read_len;
+    float cov_f;
 } aln_res;
 
 extern const int8_t sc_mat[25];

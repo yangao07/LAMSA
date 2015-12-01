@@ -497,6 +497,20 @@ int res_comp(const void*a,const void*b)
     else return (*(qua_node*)b).b-(*(qua_node*)a).b; 
 }
 
+float get_cov_f(aln_res *res, aln_reg *reg)
+{
+    float cov_f; int i, cov=0;
+
+    reg->reg_n = 0;
+    for (i = 0; i < 3; ++i) get_reg(res+i, reg);
+    aln_sort_reg(reg); aln_merg_reg(reg, 0);
+
+    for (i = 0; i < reg->reg_n; ++i) 
+        cov += (reg->reg[i].end-reg->reg[i].beg+1); 
+    cov_f = (cov+0.0)/reg->read_len;
+    return cov_f;
+}
+
 // rearrange the aln_res (merge and filter by the score and cover-region)
 void rearr_aln_res(aln_res *res, int n)
 {
@@ -528,6 +542,9 @@ void rearr_aln_res(aln_res *res, int n)
     head[head_n++] = 0;
     // NOT merg
     (res+qua[0].x)->la[qua[0].y].merg_msg = (line_node){1, 0}; // NOT merge and ONLY best
+    for (i = 0; i < qua_n; ++i) (res+qua[i].x)->la[qua[i].y].mapQ = 255; 
+
+    int mapq_max = MAPQ_MAX * res->cov_f;
     
     int cov_qua_i;
     for (i = 1; i < qua_n; ++i) {
@@ -545,12 +562,24 @@ void rearr_aln_res(aln_res *res, int n)
                 (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].XA_n++;
             }
             (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].merg_msg.y = 1; // {1,1}, Merge, has alternative
-            // i.merg_flag = MERG_BODY
+            // set mapQ for primary
+            uint8_t tmpQ = mapq_max * (qua[cov_qua_i].a - qua[i].a)/qua[cov_qua_i].a;
+            if (tmpQ < ((res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].mapQ))
+                (res+qua[cov_qua_i].x)->la[qua[cov_qua_i].y].mapQ = tmpQ;
+
             (res+qua[i].x)->la[qua[i].y].merg_msg = (line_node){2, 0}; // Merge, body 
         } else {
             // DUMP
             (res+qua[i].x)->la[qua[i].y].merg_msg = (line_node){0, -1}; // DUMP
         }
+    }
+
+    // re-set mapQ, based on head_n
+    for (i = 0; i < qua_n; ++i) {
+        if ((res+qua[i].x)->la[qua[i].y].merg_msg.x != 1) continue;
+        if ((res+qua[i].x)->la[qua[i].y].mapQ == 255) {
+            (res+qua[i].x)->la[qua[i].y].mapQ = mapq_max / head_n;
+        } else (res+qua[i].x)->la[qua[i].y].mapQ /= head_n;
     }
     free(qua); aln_free_reg(reg);
 }
@@ -818,10 +847,11 @@ int lsat_main_aln(thread_aux_t *aux)
         bwt_aln_remain(a_reg, p->a_res+2, bwt, bns, pac, p->seq, &(p->rseq), *APP, *AP);
         get_reg(p->a_res+2, a_reg);
 
-        aln_free_reg(a_reg);
-
+        p->a_res->cov_f = get_cov_f(p->a_res, a_reg);
         // rearrange a_res(0,1,2)
         rearr_aln_res(p->a_res, 3);
+
+        aln_free_reg(a_reg);
 
 #ifdef __DEBUG__
         COUNT++; fprintf(stderr, "%16d reads have been aligned.\n", COUNT);
@@ -975,14 +1005,19 @@ void aln_res_output(FILE *outp, aln_res *res, int res_n, char *name, uint8_t *se
                 all++;
                 //if (p->la[i].res[j].dump) continue;
                 // QNAME/FLAG/RNAME/POS/MAPQ //XXX FLAG: primary/secondary
-                ksprintf(&sam_str, "%s\t%d\t%s\t%lld\t%d\t", name, p->la[i].res[j].nsrand?0:16, bns->anns[p->la[i].res[j].chr-1].name, (long long)p->la[i].res[j].offset, p->la[i].res[j].mapq); 
+                ksprintf(&sam_str, "%s\t%d\t%s\t%lld\t%d\t", name, p->la[i].res[j].nsrand?0:16, bns->anns[p->la[i].res[j].chr-1].name, (long long)p->la[i].res[j].offset, p->la[i].mapQ); 
                 // CIGAR
-                for (l = 0; l < p->la[i].res[j].cigar_len; ++l)
-                    ksprintf(&sam_str, "%d%c", p->la[i].res[j].cigar[l]>>4, CIGAR_STR[p->la[i].res[j].cigar[l]&0xf]);
+                if (prim_flag == 0) {
+                    for (l = 0; l < p->la[i].res[j].cigar_len; ++l)
+                        ksprintf(&sam_str, "%d%c", p->la[i].res[j].cigar[l]>>4, CIGAR_STR[p->la[i].res[j].cigar[l]&0xf]);
+                } else {
+                    for (l = 0; l < p->la[i].res[j].cigar_len; ++l)
+                        ksprintf(&sam_str, "%d%c", p->la[i].res[j].cigar[l]>>4, CIGAR_STR_HC[p->la[i].res[j].cigar[l]&0xf]);
+                }
                 // mate infomation
                 kputs("\t*\t0\t0", &sam_str);
                 if (prim_flag == 0) {
-                    // SEQ and QUAL // for secondary res, do NOT print SEQ and QUAL
+                    // SEQ and QUAL
                     int si;
                     if (p->la[i].res[j].nsrand == 1) {                  
                         kputc('\t', &sam_str);
@@ -998,7 +1033,23 @@ void aln_res_output(FILE *outp, aln_res *res, int res_n, char *name, uint8_t *se
                         else kputc('*', &sam_str);
                     }
                     prim_flag = 1;
-                } else kputs("\t*\t*", &sam_str);
+                } else { // HARD_CLIPINT
+                    // SEQ and QUAL
+                    int si;
+                    if (p->la[i].res[j].nsrand == 1) {                  
+                        kputc('\t', &sam_str);
+                        for (si = p->la[i].res[j].reg_beg-1; si < p->la[i].res[j].reg_end; ++si) kputc("ACGTN"[seq[si]], &sam_str);
+                        kputc('\t', &sam_str);
+                        if (qual) for (si = p->la[i].res[j].reg_beg-1; si < p->la[i].res[j].reg_end; ++si) kputc(qual[si], &sam_str);
+                        else kputc('*', &sam_str);
+                    } else { // reverse strand
+                        kputc('\t', &sam_str);
+                        for (si = p->la[i].res[j].reg_end-1; si >= p->la[i].res[j].reg_beg-1; --si) kputc("TGCAN"[seq[si]], &sam_str);
+                        kputc('\t', &sam_str);
+                        if (qual) for (si = p->la[i].res[j].reg_end-1; si >= p->la[i].res[j].reg_beg-1; --si) kputc(qual[si], &sam_str);   
+                        else kputc('*', &sam_str);
+                    }
+                }
                 // optional_tags
                 ksprintf(&sam_str, "\tNM:i:%d\tAS:i:%d", p->la[i].res[j].NM, p->la[i].res[j].score);
                 check_cigar(p->la[i].res[j].cigar, p->la[i].res[j].cigar_len, name, res->read_len); 

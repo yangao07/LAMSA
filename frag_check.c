@@ -634,7 +634,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 		//fprintf(stdout, "s1: %lld, exp_s2: %lld act_s2: %lld %d\n", (long long)pos, (long long)exp, (long long)act, dis);
 #ifdef __DEBUG__
         if (abs(dis) > AP.match_dis) 
-			fprintf(stdout, "%d\t%lld\t%d\t%s\n", at1.chr, (long long)pos, abs(dis), dis>0?"DEL":"INS");
+			fprintf(stderr, "%d\t%lld\t%d\t%s\n", at1.chr, (long long)pos, abs(dis), dis>0?"DEL":"INS");
 #endif
 		if (dis > AP.match_dis) {	//DEL
             s_tlen = s_qlen + dis;
@@ -940,7 +940,6 @@ void copy_res(res_t *f, res_t *t)
     t->readend = f->readend;
     
     t->score = f->score;
-    t->mapq = f->mapq;
     t->NM = f->NM;
 }
 
@@ -991,7 +990,6 @@ void lsat_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_b
         // calculate NM and AS
         r->NM = n_mm + n_e;
         r->score = n_m * AP.match - n_mm * AP.mis - n_o * AP.gapo - n_e * AP.gape;
-        r->mapq = 100; //XXX
 		if (r->score < 0) { // XXX
             for (i = m+1; i <= la->cur_res_n; ++i) {
                 copy_res(la->res+i, la->res+i-1);
