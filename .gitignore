@@ -1,56 +1,25 @@
 # Object files
-*.o
-
-# Libraries
-*.lib
-*.a
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+src/*.o
 
 # Executables
-*.exe
-*.out
-*.app
-lsat
+lamsa
+gdb_lamsa
+
+# Project files
+.cproject
+.project
 
 #ctags
+src/tags
 tags
 
 #cscope
+src/cscope.*
 cscope.*
 
 #data
-Data/*
 data/*
-out
-
-#soap2-dp
-soap2-dp/*
-
-#bwa
-bwa/*
-
-#gem
-gem/*
+test/*
 
 #output
 output/*
-out*
-
-#temp source files
-LSAT/*
-
-#eclipse project
-*project
-
-#err log
-error.log
-
-#shell
-lsat.sh
-run.sh
-mol.sh

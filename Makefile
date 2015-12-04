@@ -1,25 +1,38 @@
-CC=			gcc
-CFLAGS=		-g -Wall -O3 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function
-OBJS=		main.o build_ref.o bntseq.o lsat_heap.o lsat_aln.o lsat_dp_con.o frag_check.o split_mapping.o ksw.o \
-			gem_parse.o is.o bwtindex.o bwt_gen.o QSufSort.o\
-			./lsat_sam_parse/bam_aux.o ./lsat_sam_parse/bam.o ./lsat_sam_parse/bam_import.o \
-			./lsat_sam_parse/kstring.o ./lsat_sam_parse/sam_header.o ./lsat_sam_parse/sam_view.o \
-			bwt.o bwt_aln.o utils.o
-PROG=		lsat
-PROG1=      ~/bin/lsat
-LIB=		-lm -lz -lpthread
-#MACRO=     -D __NEW__
-#MACRO=		-D __DEBUG__
-.SUFFIXES:.c .o
+CC      =	gcc
+CFLAGS  =	-g -Wall -O3 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function
+DFLAGS  =	-g -Wall  
+LIB     =	-lm -lz -lpthread
+
+BIN_DIR =	.
+SRC_DIR =   ./src
+
+SOURCE  =	$(wildcard ${SRC_DIR}/*.c) 
+#SOURCE  =	main.c build_ref.c bntseq.c lamsa_heap.c lamsa_aln.c lamsa_dp_con.c frag_check.c split_mapping.c ksw.c \
+			gem_parse.c is.c bwtindex.c bwt_gen.c QSufSort.c kstring.c \
+			bwt.c bwt_aln.c utils.c
+OBJS    =	$(SOURCE:.c=.o)
+
+BIN     =	$(BIN_DIR)/lamsa
+
+DEBUG   =   $(BIN_DIR)/gdb_lamsa
+DMARCRO =	-D __DEBUG__
 
 .c.o:
-	$(CC) -c $(CFLAGS) $(MACRO) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@
 
-all:$(PROG) $(PROG1)
-$(PROG):$(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) $(LIB) -o $@
-$(PROG1):$(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) $(LIB) -o $@
+all:       $(SOURCE) $(BIN) 
+#lamsa:     $(SOURCE) $(BIN) 
+gdb_lamsa: $(SOURCE) $(DEBUG) 
+
+
+$(BIN): $(OBJS)
+	$(CC) $(OBJS) -o $@ $(LIB)
+
+$(DEBUG):
+	$(CC) $(DFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
 
 clean:
-	rm -f *.o lsat ~/bin/lsat
+	rm -f $(SRC_DIR)/*.o $(BIN)
+
+clean_debug:
+	rm -f $(SRC_DIR)/*.o $(DEBUG)
