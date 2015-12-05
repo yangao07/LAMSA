@@ -8,9 +8,9 @@ Long Approximated Matches-based Split Aligner
 	./lamsa aln ref.fa read.fq > aln.sam
 
 ## Introduction
-LAMSA(Long Approximated Matches-based Split Aligner) is a  novel read alignment approach with faster speed and good ability of handling both co-linear and non-co-linear SV events.
+LAMSA (Long Approximated Matches-based Split Aligner) is a  novel read alignment approach with faster speed and good ability of handling both co-linear and non-co-linear SV events within the long reads.
 
-LAMSA takes the advantage of the rareness of SVs to implement a specifically designed two-step split read alignment strategy, which efficiently solves the small events and mitigates the affection of repeats with co-linear alignment, and then well-handles the relatively large or non-co-linear events with a sparse dynamic programming (SDP)-based split alignment approach.
+LAMSA takes the advantage of the rareness of SVs to implement a specifically designed two-step split read alignment strategy. That is, LAMSA initially splits the read into fragments and co-linearly align the fragments to solve the small events and mitigate the affection of repeats. The alignments of the fragments are then used for implementing a sparse dynamic programming (SDP)-based split alignment approach to further handle the large or non-colinear events.
 
 LAMSA has outstanding throughput on aligning both simulated and real datasets having various read length and sequencing error rates. It is severaly to over 100 folds faster than the state-of-art long read aligners. Morever, it also has good ability of handling various kinds of SV events within the read. 
 
@@ -40,7 +40,8 @@ lamsa aln ref.fa read.fa/fq > aln.sam
 
 ## Commands and options
 ```
-lamsa aln     [-t nThreads] [-l seedLen] [-i seedInv] [-p maxLoci] [-V maxSVLen]
+lamsa aln     [-t nThreads] [-l seedLen] [-i seedInv] [-p maxLoci] [-V maxSVLen] 
+              [-v overlapRatio] [-s maxSkeletonNum] [-R bwtMaxReg] [-k bwtKmerLen]
               [-m matchScore] [-M mismatchScore] [-O gapOpenPen] [-E gapExtPen] 
               [-r maxOutputNum]  [-g minSplitLen] [-SC] [-o outSAM] 
                <ref.fa> <read.fa/fq>
@@ -48,17 +49,26 @@ lamsa aln     [-t nThreads] [-l seedLen] [-i seedInv] [-p maxLoci] [-V maxSVLen]
 Algorithm options:
 
     -t --thread    [INT]    Number of threads. [1]
-    -l --seed-len  [INT]    Seed length. Moreover, LAMSA uses short sequence tool(e.g., GEM) to align
-                            seeds and obtain their approximate matches. [50]
-    -i --seed-inv  [INT]    Interval size of adjacent seeds. LAMSA extracts seeds on the starting
-                            positons of every i bp. [100]
+    -l --seed-len  [INT]    Seed length. Moreover, LAMSA uses short sequence tool(e.g., GEM) to query
+                            seeds' approximate matches on the reference. [50]
+    -i --seed-inv  [INT]    Interval size of adjacent seeds. LAMSA extracts seeds starting at every
+                            -i bp of the read. [100]
     -p --max-loci  [INT]    Maximum allowed number of a seed's locations. If a seed has more than -p
                             approximate matches, LAMSA would consider the seed is too repetitive, and
                             idiscard all the matches. [200]
-
     -V --SV-len    [INT]    Expected maximum length of SV. If the genomic distance of two seeds is
                             short than -V bp, they are avalibale to be connected to construct a
                             skeleton. [10000]
+    -v --ovlp-rat  [FLOAT]  Minimum overlapping ratio to cluster two skeletons or alignment records. 
+                            [0.7]
+    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster for a specific 
+                            read region. For a specific region of read, LAMSA reserves the top -s 
+                            skeletons. These skeletons are used to generate best and alternative 
+                            alignment records. [10]
+    -R --max-reg   [INT]    Maximum length of remain read region to trigger a bwt-based query. Unmapped 
+                            read region which is longer than -R bp would not be further processed. 
+                            [300]
+    -k --bwt-kmer  [INT]    BWT-seed length. [19]
 
 Scoring options:
 
@@ -69,13 +79,12 @@ Scoring options:
                             (i.e. -O is for opening a zero-length gap). [2]
 
 Output options:
-
-    -r --max-out   [INT]    Maximum number of output records for a specific split read region. For a
-                            specific region, LAMSA reserves the top -r alignment records. The record
-                            with highest alignment score is considered as best alignment, others are
-                            considered as alternative alignments. If the score of an alternative
-                            alignment is less than half of the best alignment, it will not be output.
-                            [10
+    -r --max-out   [INT]    Maximum number of output records for a specific split read region. For a 
+                            specific region, LAMSA reserves the top -r alignment records. The record 
+                            with highest alignment score is considered as best alignment, others are 
+                            considered as alternative alignments. If the score of an alternative 
+                            alignment is less than half of the best alignment, it will not be output. 
+                            [10]
     -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. To avoid generating
                             insertion(I) or deletion(D) longer than -g bp in the SAM cigar. [100]
 
