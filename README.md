@@ -44,7 +44,7 @@ lamsa aln     [-t nThreads] [-l seedLen] [-i seedInv] [-p maxLoci] [-V maxSVLen]
               [-v overlapRatio] [-s maxSkeletonNum] [-R bwtMaxReg] [-k bwtKmerLen]
               [-m matchScore] [-M mismatchScore] [-O gapOpenPen] [-E gapExtPen] 
               [-r maxOutputNum]  [-g minSplitLen] [-SC] [-o outSAM] 
-               <ref.fa> <read.fa/fq>
+              <ref.fa> <read.fa/fq>
               
 Algorithm options:
 
@@ -65,8 +65,8 @@ Algorithm options:
                             read region. For a specific region of read, LAMSA reserves the top -s 
                             skeletons. These skeletons are used to generate best and alternative 
                             alignment records. [10]
-    -R --max-reg   [INT]    Maximum length of remain read region to trigger a bwt-based query. Unmapped 
-                            read region which is longer than -R bp would not be further processed. 
+    -R --max-reg   [INT]    Maximum length of remain unmapped read region to trigger a bwt-based query. 
+                            Unmapped region that is longer than -R bp would not be further processed. 
                             [300]
     -k --bwt-kmer  [INT]    BWT-seed length. [19]
 

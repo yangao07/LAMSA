@@ -31,24 +31,28 @@ int lamsa_aln_usage(void)
 
     fprintf(stderr, "    -t --thread    [INT]    Number of threads. [1]\n");
     //fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [0]\n");
-	fprintf(stderr, "    -l --seed-len  [INT]    Seed length. [50]\n");
-	fprintf(stderr, "    -i --seed-inv  [INT]    Interval size of adjacent seeds. [100]\n");
-	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of a seed's locations. [200]\n");
-    fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. [%d]\n\n", SV_MAX_LEN);
+	fprintf(stderr, "    -l --seed-len  [INT]    Seed length. [%d]\n", SEED_LEN);
+	fprintf(stderr, "    -i --seed-inv  [INT]    Interval size of adjacent seeds. [%d]\n", SEED_INTERVAL);
+	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of a seed's locations. [%d]\n", SEED_PER_LOCI);
+    fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. [%d]\n", SV_MAX_LEN);
+    fprintf(stderr, "    -v --ovlp-rat  [FLOAT]  Minimum overlappint ratio to cluster two skeletons or alignment records. (0~1) [%.1f]\n", OVLP_RAT);
+    fprintf(stderr, "    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster. [%d]\n", MAX_SKEL);
+    fprintf(stderr, "    -R --max-reg   [INT]    Maximum length of remain unmapped read region to trigger a bwt-based query. [%d]\n", MAX_BWT_REG);
+    fprintf(stderr, "    -k --bwt-kmer  [INT]    BWT-seed length. [%d]\n\n", BWT_KMER);
 	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
     
 
     fprintf(stderr, "Scoring options:\n\n");
 
-    fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [1]\n");
-    fprintf(stderr, "    -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [3]\n");
-    fprintf(stderr, "    -O --open-pen  [INT]    Gap open penalty for SW-alignment. [5]\n");
-    fprintf(stderr, "    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. [2]\n\n");
+    fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [%d]\n", MAT_SCORE);
+    fprintf(stderr, "    -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [%d]\n", MIS_PEN);
+    fprintf(stderr, "    -O --open-pen  [INT]    Gap open penalty for SW-alignment. [%d]\n", OPEN_PEN);
+    fprintf(stderr, "    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. [%d]\n\n", EXT_PEN);
 
     fprintf(stderr, "Output options:\n\n");
 
     fprintf(stderr, "    -r --max-out   [INT]    Maximum number of output records for a specific split read region. [%d]\n", RES_MAX_N);
-    fprintf(stderr, "    -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. [100]\n");
+    fprintf(stderr, "    -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. [%d]\n", SPLIT_ALN_LEN);
     fprintf(stderr, "    -S --soft-clip          Use soft clipping for supplementary alignment. [false]\n");
     fprintf(stderr, "    -C --comment            Append FASTQ comment to SAM output. [false]\n");
     fprintf(stderr, "    -o --output    [STR]    Output file (SAM format). [stdout]\n\n");
@@ -58,8 +62,7 @@ int lamsa_aln_usage(void)
     //fprintf(stderr, "         -A [STR]      The seeds' alignment result. When '-N' is used. [\"seed_prefix.out.0\"]\n");
     
     fprintf(stderr, "    -h --help               Print this short usage.\n");
-    fprintf(stderr, "    -H --HELP               Print a detailed usage.\n");
-    fprintf(stderr, "\n");
+    fprintf(stderr, "    -H --HELP               Print a detailed usage.\n\n");
     return 1;
 }
 
@@ -72,25 +75,35 @@ int lamsa_aln_de_usage(void)
 
     fprintf(stderr, "    -t --thread    [INT]    Number of threads. [1]\n");
     //fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [0]\n");
-	fprintf(stderr, "    -l --seed-len  [INT]    Seed length. Moreover, LAMSA uses short sequence tool(e.g., GEM) to align\n");
-    fprintf(stderr, "                            seeds and obtain their approximate matches. [50]\n");
-	fprintf(stderr, "    -i --seed-inv  [INT]    Interval size of adjacent seeds. LAMSA extracts seeds on the starting\n");
-    fprintf(stderr, "                            positons of every i bp. [100]\n");
+	fprintf(stderr, "    -l --seed-len  [INT]    Seed length. Moreover, LAMSA uses short sequence tool(e.g., GEM) to query\n");
+    fprintf(stderr, "                            seeds' approximate matches on ther reference. [%d]\n", SEED_LEN);
+	fprintf(stderr, "    -i --seed-inv  [INT]    Interval size of adjacent seeds. LAMSA extracts seeds starting at every\n");
+    fprintf(stderr, "                            -i bp of the read. [%d]\n", SEED_INTERVAL);
 	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of a seed's locations. If a seed has more than -p\n");
     fprintf(stderr, "                            approximate matches, LAMSA would consider the seed is too repetitive, and\n");
-    fprintf(stderr, "                            idiscard all the matches. [200]\n\n");
+    fprintf(stderr, "                            idiscard all the matches. [%d]\n", SEED_PER_LOCI);
     fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. If the genomic distance of two seeds is\n");
     fprintf(stderr, "                            short than -V bp, they are avalibale to be connected to construct a\n");
-    fprintf(stderr, "                            skeleton. [%d]\n\n", SV_MAX_LEN);
+    fprintf(stderr, "                            skeleton. [%d]\n", SV_MAX_LEN);
+    fprintf(stderr, "    -v --ovlp-rat  [FLOAT]  Minimum overlapping ratio to cluster two skeletons or alignment records.\n");
+    fprintf(stderr, "                            (0~1) [%.1f]\n", OVLP_RAT);
+    fprintf(stderr, "    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster for a specific\n");
+    fprintf(stderr, "                            read region. For a specific region of read, LAMSA reserves the top -s\n");
+    fprintf(stderr, "                            skeletons. These skeletons are used to generate best and alternative\n");
+    fprintf(stderr, "                            alignment records. [%d] \n", MAX_SKEL);
+    fprintf(stderr, "    -R --max-reg   [INT]    Maximum length of remain unmapped read region to trigger a bwt-based query.\n");
+    fprintf(stderr, "                            Unmapped region that is longer than -R bp would not be further processed.\n"); 
+    fprintf(stderr, "                            [%d]\n", MAX_BWT_REG);
+    fprintf(stderr, "    -k --bwt-kmer  [INT]    BWT-seed length. [%d]]\n\n", BWT_KMER);
 	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
     
     fprintf(stderr, "Scoring options:\n\n");
 
-    fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [1]\n");
-    fprintf(stderr, "    -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [3]\n");
-    fprintf(stderr, "    -O --open-pen  [INT]    Gap open penalty for SW-alignment. [5]\n");
+    fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [%d]\n", MAT_SCORE);
+    fprintf(stderr, "    -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [%d]\n", MIS_PEN);
+    fprintf(stderr, "    -O --open-pen  [INT]    Gap open penalty for SW-alignment. [%d]\n", OPEN_PEN);
     fprintf(stderr, "    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. A gap of length k costs O + k*E\n");
-    fprintf(stderr, "                            (i.e. -O is for opening a zero-length gap). [2]\n\n");
+    fprintf(stderr, "                            (i.e. -O is for opening a zero-length gap). [%d]\n\n", EXT_PEN);
 
     fprintf(stderr, "Output options:\n\n");
     fprintf(stderr, "    -r --max-out   [INT]    Maximum number of output records for a specific split read region. For a\n");
@@ -98,9 +111,9 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "                            with highest alignment score is considered as best alignment, others are\n");
     fprintf(stderr, "                            considered as alternative alignments. If the score of an alternative\n");
     fprintf(stderr, "                            alignment is less than half of the best alignment, it will not be output.\n");
-    fprintf(stderr, "                            [%d\n", RES_MAX_N);
+    fprintf(stderr, "                            [%d]\n", RES_MAX_N);
     fprintf(stderr, "    -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. To avoid generating\n");
-    fprintf(stderr, "                            insertion(I) or deletion(D) longer than -g bp in the SAM cigar. [%d]\n\n", SPLIT_ALN_LEN);
+    fprintf(stderr, "                            insertion(I) or deletion(D) longer than -g bp in the SAM cigar. [%d]\n", SPLIT_ALN_LEN);
     fprintf(stderr, "    -S --soft-clip          Use soft clipping for supplementary alignment. It is strongly recommended\n");
     fprintf(stderr, "                            to turn off this option to reduce the redundancy of output when mapping\n");
     fprintf(stderr, "                            relatively long reads. [false]\n");
@@ -112,8 +125,7 @@ int lamsa_aln_de_usage(void)
     //fprintf(stderr, "         -A [STR]      The seeds' alignment result. When '-N' is used. [\"seed_prefix.out.0\"]\n");
     
     fprintf(stderr, "    -h --help               Print a short usage.\n");
-    fprintf(stderr, "    -H --HELP               Print this detailed usage.\n");
-    fprintf(stderr, "\n");
+    fprintf(stderr, "    -H --HELP               Print this detailed usage.\n\n");
     return 1;
 }    
 
@@ -526,7 +538,7 @@ void get_reg(aln_res *res, aln_reg *reg)
     }
 }
 
-int get_cover_res(aln_reg *reg, aln_res *res, int qua_i, int *cov_qua_i, qua_node *qua, int head[], int head_n)
+int get_cover_res(aln_reg *reg, aln_res *res, int qua_i, int *cov_qua_i, qua_node *qua, int head[], int head_n, float ovlp_r)
 {
     extern float cover_rate(int s1, int e1, int s2, int e2);
     int reg_i, i, j, res_i, l_i;
@@ -539,7 +551,7 @@ int get_cover_res(aln_reg *reg, aln_res *res, int qua_i, int *cov_qua_i, qua_nod
             res_i = qua[head[i]].x;
             l_i = qua[head[i]].y;
             for (j = 0; j <= (res+res_i)->la[l_i].cur_res_n; ++j) {
-                if (cover_rate(reg->reg[reg_i].beg, reg->reg[reg_i].end, _r->reg_beg, _r->reg_end) > 0.7) {
+                if (cover_rate(reg->reg[reg_i].beg, reg->reg[reg_i].end, _r->reg_beg, _r->reg_end) >= ovlp_r) {
                     *cov_qua_i = head[i];
                     return 1; // cover
                 }
@@ -573,7 +585,7 @@ float get_cov_f(aln_res *res, aln_reg *reg)
 }
 
 // rearrange the aln_res (merge and filter by the score and cover-region)
-void rearr_aln_res(aln_res *res, int n)
+void rearr_aln_res(aln_res *res, int n, float ovlp_r)
 {
     extern void copy_res(res_t *f, res_t *t);
     int a_i, i, j; aln_res *p;
@@ -609,7 +621,7 @@ void rearr_aln_res(aln_res *res, int n)
     
     int cov_qua_i;
     for (i = 1; i < qua_n; ++i) {
-        if (!get_cover_res(reg, res, i, &cov_qua_i, qua, head, head_n)) { // NOT cover
+        if (!get_cover_res(reg, res, i, &cov_qua_i, qua, head, head_n, ovlp_r)) { // NOT cover
             // NOT merg
             for (j = 0; j <= (res+qua[i].x)->la[qua[i].y].cur_res_n; ++j) push_reg_res(reg, (res+qua[i].x)->la[qua[i].y].res+j);
             head[head_n++] = i;
@@ -797,8 +809,6 @@ void init_aln_para(lamsa_aln_para *AP)
 {
     AP->n_thread = 1;
 
-    AP->per_aln_m = PER_ALN_MAX; 
-
     AP->seed_len = SEED_LEN;
     AP->seed_step = SEED_LEN+SEED_INTERVAL;
     //AP->seed_inv = SEED_INTERVAL;
@@ -807,8 +817,11 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->first_loci_thd = SEED_FIRST_ROUND_LOCI;
 
     AP->SV_len_thd = SV_MAX_LEN;
-    AP->split_len = SPLIT_ALN_LEN;
+    AP->ske_max = MAX_SKEL;
+    AP->ovlp_rat = (float)OVLP_RAT;
 
+    AP->split_len = SPLIT_ALN_LEN;
+    AP->split_pen = SPLIT_ALN_PEN;
     AP->res_mul_max = RES_MAX_N;
 
     AP->hash_len = HASH_LEN;
@@ -816,16 +829,16 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->hash_step = HASH_STEP;
     AP->hash_size = (int)pow(NT_N, AP->hash_key_len);
     
-    AP->bwt_seed_len = 19;
-    AP->bwt_max_len = 300;
+    AP->bwt_seed_len = BWT_KMER;
+    AP->bwt_max_len = MAX_BWT_REG;
 
     AP->supp_soft = 0;
     AP->comm = 0;
     AP->outp = stdout;
 
     AP->frag_score_table = f_BCC_score_table;
-    AP->gapo = 5; AP->gape = 2;
-    AP->match = 1; AP->mis = 3;
+    AP->match = MAT_SCORE; AP->mis = MIS_PEN;
+    AP->gapo = OPEN_PEN; AP->gape = EXT_PEN;
     AP->end_bonus = 5;
     AP->zdrop = 100;
 }
@@ -876,7 +889,7 @@ int lamsa_main_aln(thread_aux_t *aux)
     int *line_end = aux->line_end; int *_line_end = aux->_line_end;
     frag_msg **f_msg = aux->f_msg;
     uint32_t *hash_num = aux->hash_num; uint64_t **hash_node = aux->hash_node;
-    int per_max_multi = AP->res_mul_max, line_n_max = aux->line_n_max, line_m = aux->line_m;
+    int line_n_max = aux->line_n_max, line_m = aux->line_m;
 
     int i, j, k;
 
@@ -894,13 +907,13 @@ int lamsa_main_aln(thread_aux_t *aux)
         // aln_res, aln_reg
         p->a_res = aln_init_res(1, p->len, 3, AP->res_mul_max); // aln_res, remain_res, bwt_remain_res
         aln_reg *a_reg = aln_init_reg(p->len);
-        int line_n = frag_line_BCC(a_msg, f_msg, *APP, *AP, line, line_end, &line_m, f_node, _line, line_n_max, per_max_multi);
+        int line_n = frag_line_BCC(a_msg, f_msg, *APP, *AP, line, line_end, &line_m, f_node, _line, line_n_max);
         if (line_n > 0) {
             frag_check(a_msg, f_msg, p->a_res, bns, pac, p->seq, &(p->rseq), *APP, *AP, line_n, &hash_num, &hash_node);
             get_reg(p->a_res, a_reg);
         }
         // remain region
-        line_n = frag_line_remain(a_reg, a_msg, f_msg, *APP, *AP, line, line_end, &line_m, f_node, _line, _line_end, line_n_max, per_max_multi);
+        line_n = frag_line_remain(a_reg, a_msg, f_msg, *APP, *AP, line, line_end, &line_m, f_node, _line, _line_end, line_n_max);
         if (line_n > 0) {
             frag_check(a_msg, f_msg, p->a_res+1, bns, pac, p->seq, &(p->rseq), *APP, *AP, line_n, &hash_num, &hash_node);
             get_reg(p->a_res+1, a_reg);
@@ -911,7 +924,7 @@ int lamsa_main_aln(thread_aux_t *aux)
 
         p->a_res->cov_f = get_cov_f(p->a_res, a_reg);
         // rearrange a_res(0,1,2)
-        rearr_aln_res(p->a_res, 3);
+        rearr_aln_res(p->a_res, 3, AP->ovlp_rat);
 
         aln_free_reg(a_reg);
 
@@ -1312,24 +1325,32 @@ int lamsa_aln_c(const char *ref_prefix, const char *read_prefix, int seed_info, 
 
 extern char *get_bin_dir(char *bin);
 
-    //while ((c =getopt(argc, argv, "t:l:i:p:r:V:g:m:M:O:E:SCo:hH")) >= 0)
+    //while ((c =getopt(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hH")) >= 0)
 const struct option long_opt [] = {
     { "thread", 1, NULL, 't' },
     { "seed-len", 1, NULL, 'l' },
     { "seed-inv", 1, NULL, 'i' },
     { "max-loci", 1, NULL, 'p' },
     { "SV-len", 1, NULL, 'V' },
+    { "ovlp-rat", 1, NULL, 'v' },
+    { "max-skel", 1, NULL, 's' },
+    { "max-reg", 1, NULL, 'R' },
+    { "bwt-kmer", 1, NULL, 'k' },
+
     { "match-sc", 1, NULL, 'm' },
     { "mis-pen", 1, NULL, 'M' },
     { "open-pen", 1, NULL, 'O' },
     { "ext-pen", 1, NULL, 'E' },
+
     { "max-out", 1, NULL, 'r' },
     { "gap-split", 1, NULL, 'g' },
     { "soft-clip", 0, NULL, 'S' },
     { "comment", 0, NULL, 'C' },
     { "output", 1, NULL, 'o' },
-    { "comment", 0, NULL, 'C' },
+
+    { "help", 0, NULL, 'h' },
     { "HELP", 0, NULL, 'H' },
+    { 0, 0, 0, 0}
 };
 
 int lamsa_aln(int argc, char *argv[])
@@ -1343,8 +1364,7 @@ int lamsa_aln(int argc, char *argv[])
     char seed_result_f[1024]="";
 
     //while ((c =getopt(argc, argv, "t:m:M:O:E:S:r:V:g:s:l:i:p:d:o:NIA:")) >= 0)
-    //while ((c =getopt(argc, argv, "t:l:i:p:r:V:g:m:M:O:E:SCo:hH")) >= 0)
-    while ((c =getopt_long(argc, argv, "t:l:i:p:V:m:M:O:E:r:g:SCo:hH", long_opt, NULL)) >= 0)
+    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hH", long_opt, NULL)) >= 0)
     {
         switch (c)
         {
@@ -1354,6 +1374,10 @@ int lamsa_aln(int argc, char *argv[])
 			case 'i': AP->seed_step = atoi(optarg); break;
 			case 'p': AP->per_aln_m = atoi(optarg); break;
             case 'V': AP->SV_len_thd = atoi(optarg); break;
+            case 'v': if ((AP->ovlp_rat = atof(optarg)) < 0 || AP->ovlp_rat > 1) return lamsa_aln_usage(); break;
+            case 's': AP->ske_max = atoi(optarg); break;
+            case 'R': AP->bwt_max_len = atoi(optarg); break;
+            case 'k': AP->bwt_seed_len = atoi(optarg); break;
 
             case 'm': AP->match = atoi(optarg); break;
             case 'M': AP->mis = atoi(optarg); break;

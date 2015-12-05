@@ -89,7 +89,7 @@ float cover_rate(int s1, int e1, int s2, int e2) {
     return rat1>rat2?rat1:rat2;
 }
 
-int line_merge(int a, int b, line_node **line, int *line_end) {
+int line_merge(int a, int b, line_node **line, int *line_end, float ovlp_r) {
     int s1, e1, s2, e2, s, e, hi;
     float rat1, rat2;
 
@@ -107,7 +107,7 @@ int line_merge(int a, int b, line_node **line, int *line_end) {
     
     rat1 = (e-s+1+0.0)/(e1-s1+1+0.0);
     rat2 = (e-s+1+0.0)/(e2-s2+1+0.0);
-	if (rat1 < 0.7 && rat2 < 0.7) {
+	if (rat1 < ovlp_r && rat2 < ovlp_r) {
 			L_MF(line, line_end, a) = L_NMERG;
 			return 0;
 	} else if 
@@ -434,7 +434,8 @@ int line_remove(line_node **line, int *line_end, int li, int len)
 
 int line_set_bound(line_node **line, int *line_end, 
                    int li, int *o_len, int left, int right, 
-                   trig_node **t_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg, int per_max_multi) 
+                   trig_node **t_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg, 
+                   int per_max_multi, float ovlp_r) 
 {
     if (*o_len <= 0) return 0;
     int i, j, len = *o_len;
@@ -443,7 +444,7 @@ int line_set_bound(line_node **line, int *line_end,
     // merge lines
     L_MF(line, line_end, li) = L_NMERG;
     for (i = 1; i < len; ++i)
-        line_merge(li+i, li+i-1, line, line_end);
+        line_merge(li+i, li+i-1, line, line_end, ovlp_r);
     // filter best/secondary line, and their tri-nodes, then find inter-line 
     line_filter(line, line_end, li, len, t_node, tri_n, f_node, a_msg, per_max_multi);
     *o_len = line_remove(line, line_end, li, len);
@@ -494,7 +495,8 @@ int line_set_bound(line_node **line, int *line_end,
 }
 
 int line_set_bound1(line_node **line, int *line_end, 
-                   int li, int *o_len, int left, int right, int per_max_multi) 
+                   int li, int *o_len, int left, int right, 
+                   int per_max_multi, float ovlp_r) 
 {
     if (*o_len <= 0) return 0;
     int i, j, len=*o_len;
@@ -504,7 +506,7 @@ int line_set_bound1(line_node **line, int *line_end,
     ///line[li][line_end[li]+1].x = -1;
     L_MF(line, line_end, li) = L_NMERG;
     for (i = 1; i < len; ++i)
-        line_merge(li+i, li+i-1, line, line_end);
+        line_merge(li+i, li+i-1, line, line_end, ovlp_r);
     // filter best/secondary line, and their tri-nodes, then find inter-line 
     line_filter1(line, line_end, li, len, per_max_multi);
     *o_len = line_remove(line, line_end, li, len);
@@ -976,10 +978,10 @@ int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
                 int left, int right, 
                 reg_t trg_reg,
                 line_node **line, int *line_end, 
-                int line_n_max, int per_max_multi) 
+                int line_n_max) 
 {
     int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, trg_reg, line, line_end, line_n_max);//, 0, 0);
-    line_set_bound1(line, line_end, 0,  &l, left, right, per_max_multi);
+    line_set_bound1(line, line_end, 0,  &l, left, right, AP.ske_max, AP.ovlp_rat);
     ///l = line_remove(line, line_end, 0, l);
     return l;
 }
@@ -1199,7 +1201,7 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
         lamsa_aln_per_para APP, lamsa_aln_para AP, 
         line_node **line, int *line_end, int *line_m, 
         frag_dp_node ***f_node, line_node **_line, int *_line_end,
-        int line_n_max, int per_max_multi)
+        int line_n_max)
 {
     int l_n = 0;
     aln_reg *re_reg = aln_init_reg(APP.read_len);
@@ -1227,7 +1229,7 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
         }
         if (right == -2) continue;
         // store line-info in _line
-        l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, re_reg->reg[i], _line, _line_end, line_n_max, per_max_multi);
+        l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, re_reg->reg[i], _line, _line_end, line_n_max);
         // copy from _line to line
         for (j = 0; j < l; ++j) {
             line_end[l_n+j] = _line_end[j];
@@ -1248,7 +1250,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
         lamsa_aln_per_para APP, lamsa_aln_para AP,
         line_node **line, int *line_end, int *line_m,
         frag_dp_node ***f_node,
-        line_node **_line, int line_n_max, int per_max_multi)
+        line_node **_line, int line_n_max)
 {
     int i, j, k, line_n;
     int min_n = AP.first_loci_thd, min_exist=0, min_num = 0;
@@ -1377,7 +1379,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
         }
         // min-lines have been extended, and sorted by end-pos
         // set boundary and filter best/secondary
-        line_set_bound(line, line_end, 0, &min_l, -1, APP.seed_out, inter_tri, inter_n, *f_node, a_msg, per_max_multi);
+        line_set_bound(line, line_end, 0, &min_l, -1, APP.seed_out, inter_tri, inter_n, *f_node, a_msg, AP.ske_max, AP.ovlp_rat);
         for (i = 0; i < o_l; ++i) free(inter_tri[i]);
         free(inter_tri); free(inter_n);
         node_free_score(ns);

@@ -9,15 +9,24 @@
 
 #define READ_MAX_NUM 1000
 //aln_para
-//#define PER_ALN_N 100
+#define SEED_LEN 50
+#define SEED_INTERVAL 100
+#define SEED_PER_LOCI 200
+#define SV_MAX_LEN 10000
+#define OVLP_RAT 0.7
+#define MAX_SKEL 10
+#define MAX_BWT_REG 300
+#define BWT_KMER 19
+
+#define MAT_SCORE 1
+#define MIS_PEN 3
+#define OPEN_PEN 5
+#define EXT_PEN 2
+
+#define RES_MAX_N 10
 #define SPLIT_ALN_LEN 100
 #define SPLIT_ALN_PEN 10
-#define SV_MAX_LEN 10000
-#define RES_MAX_N 10
-#define PER_ALN_MAX 200
-#define SEED_LEN 50
-#define SEED_INTERVAL 50
-#define SEED_PER_LOCI 200
+
 #define SEED_FIRST_ROUND_LOCI 2
 
 //aln_per_para
@@ -317,12 +326,16 @@ typedef struct {
     int first_loci_thd; 
 
     int SV_len_thd;
+    int ske_max;
+    float ovlp_rat;
+
+    int bwt_seed_len, bwt_max_len;
+
     int split_len;  // min length of gap that causes split-alignment
     int split_pen;  // split score penalty
     int res_mul_max;// max number of read's aln-results
 
     int hash_len, hash_key_len, hash_step, hash_size;
-    int bwt_seed_len, bwt_max_len;
 
     uint8_t supp_soft, comm; // soft for supp; comment
     FILE *outp;
