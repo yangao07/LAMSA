@@ -25,7 +25,7 @@ The memory usage of LAMSA can fit the configurations of most modern PCs. Its pea
 Current version of LAMSA needs to be run on Linux operating system.  
 The source code is written in C, and can be directly download from: https://github.com/hitbc/LAMSA
 A mirror is also in: https://github.com/gaoyan07/LAMSA  
-Moreover, in current version of LAMSA, we employed the GEM mapper (http://gemlibrary.sourceforge.net/) for generating the approximate matches of the fragments of reads. To be more user-friendly, we have built the source code of GEM mapper (version i3-20130406-045632) into that of LAMSA. In both of the genome indexing and read alignment, LAMSA will call the corresponding functions of GEM mapper automatically.
+Moreover, in current version of LAMSA, we employed the GEM mapper (http://gemlibrary.sourceforge.net/) for generating the approximate matches of the fragments of reads. To be more user-friendly, we have built the source code of GEM mapper (version core_i3-20130406-045632) into that of LAMSA. In both of the genome indexing and read alignment, LAMSA will call the corresponding functions of GEM mapper automatically.
 The makefile of LAMSA is attached. Use the make command for generating the executable file.  
 
 ## Synopsis
@@ -82,16 +82,16 @@ Scoring options:
     -m --match-sc  [INT]    Match score for SW-alignment. [1]
     -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [3]
     -O --open-pen  [INT]    Gap open penalty for SW-alignment. [5]
-    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. A gap of length k costs O + k*E
-                            (i.e. -O is for opening a zero-length gap). [2]
+    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. A gap of length k costs O + k*E.
+                            [2]
 
 Output options:
     -r --max-out   [INT]    Maximum number of output records for a specific split read region. For a 
                             specific region, LAMSA reserves the top -r alignment records. The record 
                             with highest alignment score is considered as best alignment, others are 
-                            considered as alternative alignments. If the score of an alternative 
-                            alignment is less than half of the best alignment, it will not be output. 
-                            [10]
+                            considered as alternative alignments. Moreover, if the score of an 
+                            alternative alignment is less than half of the best alignment, it will not 
+                            be output. [10]
     -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. A insertion of 
                             deletion longer than -g bp will cause two split alignment records as it is 
                             considered as a SV event. [100]
@@ -104,7 +104,7 @@ Output options:
 ```
 
 ## Simulation benchmarking
-We simulated a series of datasets from an in silico donor human genome. More precisely, we used RSVsim (version 1.10.0) to integrate 4002 SV events into human reference genome (GRCh37/hg19) to build the donor genome, including 532 duplications, 503 insertions, 2943 deletions and 24 inversions. The maximum size of the SV events are 10000 bp, and minimum size of the duplications, deletions and insertions is 50 bp, while the minimum size of the inversions is 500 bp. The ratio and the size of the SV events are configured by referring to the DGV database (http://dgv.tcag.ca/dgv/app/home). Then, using the simulated donor genome as input, 15 datasets respectively with 5 kinds of read lengths (5000, 10000, 20000, 50000 and 100000 bp) and 3 kinds of sequencing error rates (1%, 2% and 4%) were simulated by Wgsim(https://github.com/lh3/wgsim). Each of the datasets contains about 6 Giga bps, i.e., nearly 2X coverage of human genome. These datasets helped us to evaluate the performance of LAMSA. The donor genome and detailed list of simulated SV events have been uploaded to Google Drive, and can be downloaded through the following link: https://drive.google.com/folderview?id=0B24uQUND9m51UVlNWkJra19BMGs&usp=sharing
+We simulated a series of datasets from an in silico donor human genome. More precisely, we used RSVsim (version 1.10.0) to integrate 4002 SV events into human reference genome (GRCh37/hg19) to build the donor genome, including 532 duplications, 503 insertions, 2943 deletions and 24 inversions. The maximum size of the SV events are 10000 bp, and minimum size of the duplications, deletions and insertions is 50 bp, while the minimum size of the inversions is 500 bp. The ratio and the size of the SV events are configured by referring to the DGV database (http://dgv.tcag.ca/dgv/app/home). Then, using the simulated donor genome as input, 15 datasets respectively with 5 kinds of read lengths (5000, 10000, 20000, 50000 and 100000 bp) and 3 kinds of sequencing error rates (1%, 2% and 4%) were simulated by Wgsim(https://github.com/lh3/wgsim). Each of the datasets contains about 6 Giga bps. These datasets helped us to evaluate the performance of LAMSA. The donor genome and detailed list of simulated SV events have been uploaded to Google Drive, and can be downloaded through the following link: https://drive.google.com/folderview?id=0B24uQUND9m51UVlNWkJra19BMGs&usp=sharing
 
 
 ## Reference
