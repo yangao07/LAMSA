@@ -31,14 +31,14 @@ int lamsa_aln_usage(void)
 
     fprintf(stderr, "    -t --thread    [INT]    Number of threads. [1]\n");
     //fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [0]\n");
-	fprintf(stderr, "    -l --seed-len  [INT]    Seed length. [%d]\n", SEED_LEN);
-	fprintf(stderr, "    -i --seed-inv  [INT]    Interval size of adjacent seeds. [%d]\n", SEED_INTERVAL);
-	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of a seed's locations. [%d]\n", SEED_PER_LOCI);
+	fprintf(stderr, "    -l --seed-len  [INT]    Length of seeding fragments. [%d]\n", SEED_LEN);
+	fprintf(stderr, "    -i --seed-inv  [INT]    Distance between neighboring seeding fragments. [%d]\n", SEED_INTERVAL);
+	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of seeding fragments' hits. [%d]\n", SEED_PER_LOCI);
     fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. [%d]\n", SV_MAX_LEN);
-    fprintf(stderr, "    -v --ovlp-rat  [FLOAT]  Minimum overlappint ratio to cluster two skeletons or alignment records. (0~1) [%.1f]\n", OVLP_RAT);
+    fprintf(stderr, "    -v --ovlp-rat  [FLOAT]  Minimum overlapping ratio to cluster two skeletons or alignment records. (0~1) [%.1f]\n", OVLP_RAT);
     fprintf(stderr, "    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster. [%d]\n", MAX_SKEL);
-    fprintf(stderr, "    -R --max-reg   [INT]    Maximum length of remain unmapped read region to trigger a bwt-based query. [%d]\n", MAX_BWT_REG);
-    fprintf(stderr, "    -k --bwt-kmer  [INT]    BWT-seed length. [%d]\n\n", BWT_KMER);
+    fprintf(stderr, "    -R --max-reg   [INT]    Maximum allowed length of unaligned read part to trigger a bwt-based query. [%d]\n", MAX_BWT_REG);
+    fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. [%d]\n\n", BWT_KMER);
 	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
     
 
@@ -75,26 +75,30 @@ int lamsa_aln_de_usage(void)
 
     fprintf(stderr, "    -t --thread    [INT]    Number of threads. [1]\n");
     //fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [0]\n");
-	fprintf(stderr, "    -l --seed-len  [INT]    Seed length. Moreover, LAMSA uses short sequence tool(e.g., GEM) to query\n");
-    fprintf(stderr, "                            seeds' approximate matches on ther reference. [%d]\n", SEED_LEN);
-	fprintf(stderr, "    -i --seed-inv  [INT]    Interval size of adjacent seeds. LAMSA extracts seeds starting at every\n");
-    fprintf(stderr, "                            -i bp of the read. [%d]\n", SEED_INTERVAL);
-	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of a seed's locations. If a seed has more than -p\n");
+	fprintf(stderr, "    -l --seed-len  [INT]    Length of seeding fragments. Moreover, LAMSA splits the read into a\n");
+    fprintf(stderr, "                            series of -l bp long fragments, and employs NGS aligner to generate the\n");
+    fprintf(stderr, "                            approximate matches of the fragments. [50]\n");
+	fprintf(stderr, "    -i --seed-inv  [INT]    Distance between neighboring seeding fragments, LAMSA extracts seeding\n");
+    fprintf(stderr, "                            fragments starting at every -i bp of the read. [%d]\n", SEED_INTERVAL);
+	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of hits. If a seeding fragment has more than -p\n");
     fprintf(stderr, "                            approximate matches, LAMSA would consider the seed is too repetitive, and\n");
-    fprintf(stderr, "                            idiscard all the matches. [%d]\n", SEED_PER_LOCI);
-    fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. If the genomic distance of two seeds is\n");
-    fprintf(stderr, "                            short than -V bp, they are avalibale to be connected to construct a\n");
-    fprintf(stderr, "                            skeleton. [%d]\n", SV_MAX_LEN);
+    fprintf(stderr, "                            discard all the matches. [%d]\n", SEED_PER_LOCI);
+    fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. If the genomic distance of two seeding\n");
+    fprintf(stderr, "                            fragment is longer than -V bp, they cannot be connected to build a legal\n");
+    fprintf(stderr, "                            edge in the sparse dynamic programming process. [%d]\n", SV_MAX_LEN);
     fprintf(stderr, "    -v --ovlp-rat  [FLOAT]  Minimum overlapping ratio to cluster two skeletons or alignment records.\n");
     fprintf(stderr, "                            (0~1) [%.1f]\n", OVLP_RAT);
     fprintf(stderr, "    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster for a specific\n");
     fprintf(stderr, "                            read region. For a specific region of read, LAMSA reserves the top -s\n");
     fprintf(stderr, "                            skeletons. These skeletons are used to generate best and alternative\n");
     fprintf(stderr, "                            alignment records. [%d] \n", MAX_SKEL);
-    fprintf(stderr, "    -R --max-reg   [INT]    Maximum length of remain unmapped read region to trigger a bwt-based query.\n");
-    fprintf(stderr, "                            Unmapped region that is longer than -R bp would not be further processed.\n"); 
-    fprintf(stderr, "                            [%d]\n", MAX_BWT_REG);
-    fprintf(stderr, "    -k --bwt-kmer  [INT]    BWT-seed length. [%d]]\n\n", BWT_KMER);
+    fprintf(stderr, "    -R --max-reg   [INT]    Maximum allowed length of unaligned read part to trigger a bwt-based query.\n");
+    fprintf(stderr, "                            For a read part being unaligned after all the sparse dynamic programming\n");
+    fprintf(stderr, "                            process-based split alignment, if it is longer than -R bp, LAMSA will not\n");
+    fprintf(stderr, "                            further process it; otherwise, LAMSA will query the exact matches of the\n");
+    fprintf(stderr, "                            kmers of the unaligned part as hits to further align the read part. [%d]\n", MAX_BWT_REG);
+    fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. For the unaligned read part shorter than -R bp, LAMSA\n");
+    fprintf(stderr, "                            will extract all its -k bp tokens and query their exact match as hits. [%d]]\n\n", BWT_KMER);
 	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
     
     fprintf(stderr, "Scoring options:\n\n");

@@ -57,8 +57,8 @@ Algorithm options:
     -i --seed-inv  [INT]    Distance between neighboring seeding fragments. LAMSA extracts seeding 
                             fragments starting at every -i bp of the read. [100]
     -p --max-loci  [INT]    Maximum allowed number of hits. If a seeding fragment has more than -p 
-                            approximate matches, LAMSA would consider the seed is too repetitive, 
-                            and discard all the matches. [200]
+                            approximate matches, LAMSA would consider the seed is too repetitive, and
+                            discard all the matches. [200]
     -V --SV-len    [INT]    Expected maximum length of SV. If the genomic distance of two seeding 
                             fragments is longer than -V bp, they cannot be connected to build a legal 
                             edge in the sparse dynamic programming process. [10000]
