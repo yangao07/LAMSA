@@ -1,5 +1,5 @@
 # LAMSA
-Long Approximated Matches-based Split Aligner
+Long Approximate Matches-based Split Aligner
 
 ## Getting started
 	git clone https://github.com/hitbc/LAMSA.git
@@ -8,7 +8,7 @@ Long Approximated Matches-based Split Aligner
 	./lamsa aln ref.fa read.fq > aln.sam
 
 ## Introduction
-LAMSA (Long Approximated Matches-based Split Aligner) is a  novel split alignment approach with faster speed and good ability of handling SV events. It is well-suited to align long reads (over thousands of base-pairs). 
+LAMSA (Long Approximate Matches-based Split Aligner) is a  novel split alignment approach with faster speed and good ability of handling SV events. It is well-suited to align long reads (over thousands of base-pairs). 
 
 LAMSA takes the advantage of the rareness of SVs to implement a specifically designed two-step split read alignment strategy. That is, LAMSA initially splits the read into fragments and co-linearly align the fragments to solve the small events and mitigate the affection of repeats. The alignments of the fragments are then used for implementing a sparse dynamic programming (SDP)-based split alignment approach to further handle the large or non-co-linear events.
 
