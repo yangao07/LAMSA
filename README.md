@@ -92,9 +92,8 @@ Output options:
                             considered as alternative alignments. Moreover, if the score of an 
                             alternative alignment is less than half of the best alignment, it will not 
                             be output. [10]
-    -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. A insertion of 
-                            deletion longer than -g bp will cause two split alignment records as it is 
-                            considered as a SV event. [100]
+    -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. To avoid generating
+                            insertion(I) or deletion(D) longer than -g bp in the SAM cigar. [100]
     -S --soft-clip          Use soft clipping for supplementary alignment. It is strongly recommended
                             to turn off this option to reduce the redundancy of output when mapping
                             relatively long reads. [false]
