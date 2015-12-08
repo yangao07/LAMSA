@@ -145,6 +145,6 @@ int lamsa_index(int argc, char *argv[])
     else if(type==2) soap_bulid(bin_dir, prefix);
     else return lamsa_index_usage();
     
-    fprintf(stderr, "[lamsa_index] Time Consupmtion: %.3f sec.\n", (float)(clock()-t)/CLOCKS_PER_SEC);
+    //fprintf(stderr, "[lamsa_index] Time Consupmtion: %.3f sec.\n", (float)(clock()-t)/CLOCKS_PER_SEC);
 	return 0;
 }

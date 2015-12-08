@@ -314,6 +314,7 @@ int split_seed_info(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
         s_msg->read_m = m_read;
         if (last_len != len - seed_all * seed_len - (seed_all-1)*seed_inv)
         {
+            fprintf(stderr, "\n%s %d %d %d %d %d", read_name, seed_all, last_len, len, seed_all, seed_inv);
             fprintf(stderr, "\n[split seed] INFO file error.[3]\n"); exit(1);
         }
     }
@@ -814,7 +815,7 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->n_thread = 1;
 
     AP->seed_len = SEED_LEN;
-    AP->seed_step = SEED_LEN+SEED_INTERVAL;
+    AP->seed_step = SEED_INTERVAL;
     //AP->seed_inv = SEED_INTERVAL;
     //AP->match_dis = AP->seed_step/25; // 4% indel allowed
     AP->per_aln_m = SEED_PER_LOCI;
@@ -885,6 +886,8 @@ typedef struct {
 
 
 int COUNT=0;
+int THREAD_READ_I;
+pthread_rwlock_t RWLOCK;
 int lamsa_main_aln(thread_aux_t *aux)
 {
     lamsa_aln_para *AP = aux->AP; bwt_t *bwt = aux->bwt; uint8_t *pac = aux->pac; bntseq_t *bns = aux->bns;
@@ -895,10 +898,15 @@ int lamsa_main_aln(thread_aux_t *aux)
     uint32_t *hash_num = aux->hash_num; uint64_t **hash_node = aux->hash_node;
     int line_n_max = aux->line_n_max, line_m = aux->line_m;
 
-    int i, j, k;
+    int i = 0, j, k;
 
-    for (i = 0; i < aux->n_seqs; ++i) {
-        if (i %  AP->n_thread != aux->tid) continue;
+    while (1) {
+        pthread_rwlock_wrlock(&RWLOCK);
+        i = THREAD_READ_I++;
+        pthread_rwlock_unlock(&RWLOCK);
+        if (i >= aux->n_seqs) break;
+        //for (i = 0; i < aux->n_seqs; ++i) {
+        //if (i %  AP->n_thread != aux->tid) continue;
         lamsa_seq_t *p = aux->seqs + i; lamsa_aln_per_para *APP = p->APP;
         strcpy(READ_NAME, p->name);
         // set aln_msg
@@ -912,6 +920,7 @@ int lamsa_main_aln(thread_aux_t *aux)
         p->a_res = aln_init_res(1, p->len, 3, AP->res_mul_max); // aln_res, remain_res, bwt_remain_res
         aln_reg *a_reg = aln_init_reg(p->len);
         int line_n = frag_line_BCC(a_msg, f_msg, *APP, *AP, line, line_end, &line_m, f_node, _line, line_n_max);
+        
         if (line_n > 0) {
             frag_check(a_msg, f_msg, p->a_res, bns, pac, p->seq, &(p->rseq), *APP, *AP, line_n, &hash_num, &hash_node);
             get_reg(p->a_res, a_reg);
@@ -938,6 +947,7 @@ int lamsa_main_aln(thread_aux_t *aux)
         COUNT++;
         if (COUNT % 100000 == 0) fprintf(stderr, "%16d reads have been aligned.\n", COUNT);
 #endif
+        //}
     }
     aux->line_m = line_m;
     return 0;
@@ -1201,12 +1211,14 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
         aux[i].AP = AP; aux[i].bwt = bwt; aux[i].pac = pac; aux[i].bns = bns;
         aux_dp_init(aux+i, s_msg, *AP);
     }
+    pthread_rwlock_init(&RWLOCK, NULL);
 
     // core loop
 #ifdef __DEBUG__
 #define CHUNK_SIZE 1
 #endif
     while ((seqs = lamsa_read_seq(read_seq_t, seed_mapfp, *AP, s_msg, AP->n_thread*CHUNK_SIZE, &n_seqs)) != 0) { // read a chunk of read and other input data
+        THREAD_READ_I = 0;
         if (AP->n_thread <= 1) {// no multi-thread
             aux->n_seqs = n_seqs; aux->seqs = seqs;
             lamsa_main_aln(aux);
@@ -1218,6 +1230,8 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
             for (j = 0; j < AP->n_thread; ++j) {
                 aux[j].n_seqs = n_seqs; aux[j].seqs = seqs;
                 pthread_create(&tid[j], &attr, lamsa_thread_aln, aux+j);
+                // DEBUG
+                aux[j].tid = j;
             }
             for (j = 0; j < AP->n_thread; ++j) pthread_join(tid[j], 0);
             free(tid);
@@ -1227,6 +1241,7 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
         // free seqs
         lamsa_free_read_seq(seqs, n_seqs);
     }
+    pthread_rwlock_destroy(&RWLOCK);
     for (i = 0; i < AP->n_thread; ++i) 
         aux_dp_free(aux+i, s_msg, AP);
     free(aux); gzclose(readfp); fclose(seed_mapfp); kseq_destroy(read_seq_t);
@@ -1237,9 +1252,10 @@ int lamsa_gem(const char *ref_prefix, const char *read_prefix, char *bin_dir, in
 {
     char cmd[1024];
     sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %d %d", bin_dir, ref_prefix, read_prefix, per_loci, n_thread);
-    fprintf(stderr, "[lamsa_aln] Executing gem-mapper ... ");
-    if (system(cmd) != 0) { fprintf(stderr, "\n[lamsa_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
-    fprintf(stderr, "done!\n");
+    fprintf(stderr, "[lamsa_aln] Executing gem-mapper ... \n");
+    fprintf(stderr, "[lamsa_aln] Time consumption of gem-mapper:");
+    if (system(cmd) != 0) { fprintf(stderr, "[lamsa_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
+    fprintf(stderr, "[lamsa_aln] gem-mapper done!\n");
     return 0;
 }
 
@@ -1320,7 +1336,7 @@ int lamsa_aln_c(const char *ref_prefix, const char *read_prefix, int seed_info, 
     lamsa_aln_core(read_prefix, seed_result, s_msg, bwt, bns, pac, AP);
 
     fprintf(stderr, "[lamsa_aln] Mapping done!\n");
-    fprintf(stderr, "[lamsa_aln] Time Consupmtion: %.3f sec.\n", (float)(clock() -t )/CLOCKS_PER_SEC);
+    fprintf(stderr, "[lamsa_aln] Time consumption %.3f sec.\n", (float)(clock() -t )/CLOCKS_PER_SEC);
 
     seed_free_msg(s_msg);
     bwt_destroy(bwt); bns_destroy(bns); free(pac);
@@ -1368,7 +1384,7 @@ int lamsa_aln(int argc, char *argv[])
     char seed_result_f[1024]="";
 
     //while ((c =getopt(argc, argv, "t:m:M:O:E:S:r:V:g:s:l:i:p:d:o:NIA:")) >= 0)
-    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hH", long_opt, NULL)) >= 0)
+    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
     {
         switch (c)
         {
@@ -1397,6 +1413,8 @@ int lamsa_aln(int argc, char *argv[])
                       break;
             case 'h': return lamsa_aln_usage();
             case 'H': return lamsa_aln_de_usage();
+            case 'N': no_seed_aln = 1; break;
+            case 'I': seed_info = 1; break; 
             default: return lamsa_aln_usage();
         }
     }
