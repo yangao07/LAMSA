@@ -6,6 +6,7 @@
 #include "kstring.h"
 
 #define CHUNK_SIZE 10000000
+#define CHUNK_READ_N 10240
 
 #define READ_MAX_NUM 1000
 //aln_para
@@ -308,8 +309,8 @@ typedef struct {
 
 typedef struct {
     // read msg
-    char read_name[1024];
-    int read_len;
+    //char read_name[1024];
+    //int read_len;
 
     // seed msg
     int last_len;

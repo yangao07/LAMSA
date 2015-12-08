@@ -39,6 +39,7 @@ typedef struct {
 
 extern unsigned char nst_nt4_table[256];
 extern unsigned char com_nst_nt4_table[256];
+extern const char com_nst_nt256_table[256];
 
 #ifdef __cplusplus
 extern "C" {

@@ -9,6 +9,9 @@
 #include "bntseq.h"
 #include "bwt.h"
 #include "ksw.h"
+#include "kseq.h"
+
+//KSEQ_INIT(gzFile, gzread)
 
 bwt_seed_t **bwt_init_seed(int seed_n, int max_hit)
 {
@@ -195,8 +198,9 @@ void bwt_set_bound(bwt_seed_t *seed_v, line_node *line, int node_n, int seed_len
 }
 
 void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, int reg_beg, int reg_len,
-                 bwt_bound *left, bwt_bound *right, lamsa_aln_para AP, lamsa_aln_per_para APP, line_aln_res *la)
+                 bwt_bound *left, bwt_bound *right, lamsa_aln_para AP, kseq_t *seqs, line_aln_res *la)
 {
+    int read_len = seqs->seq.l;
     int extra_ext_len = 100;
     la->cur_res_n = 0;
 	la->res[0].chr = ref_id+1; la->res[0].nsrand = 1-is_rev;
@@ -204,7 +208,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     int left_eta_len, extra_beg, right_eta_len, extra_end, extra_reg_len;
     uint8_t *query;
     if (is_rev) {
-        left_eta_len = ((APP.read_len-(reg_beg+reg_len-1))>extra_ext_len) ? extra_ext_len:(APP.read_len-(reg_beg+reg_len-1));
+        left_eta_len = ((read_len-(reg_beg+reg_len-1))>extra_ext_len) ? extra_ext_len:(read_len-(reg_beg+reg_len-1));
         extra_end = reg_beg+reg_len+left_eta_len-1;
         right_eta_len = (reg_beg-1)>extra_ext_len?extra_ext_len:(reg_beg-1);
         extra_beg = reg_beg-right_eta_len;
@@ -217,7 +221,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     } else {
         left_eta_len = (reg_beg-1)>extra_ext_len?extra_ext_len:(reg_beg-1);
         extra_beg = reg_beg-left_eta_len;
-        right_eta_len = ((APP.read_len-(reg_beg+reg_len-1))>extra_ext_len) ? extra_ext_len:(APP.read_len-(reg_beg+reg_len-1));
+        right_eta_len = ((read_len-(reg_beg+reg_len-1))>extra_ext_len) ? extra_ext_len:(read_len-(reg_beg+reg_len-1));
         extra_end = reg_beg + reg_len + right_eta_len -1;
 
         extra_reg_len = reg_len + left_eta_len + right_eta_len;
@@ -238,7 +242,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     res_t *cur_res = la->res+la->cur_res_n;
 
     // push head 'S' (before left_extra)
-	if (is_rev) _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (APP.read_len-extra_end)<<4 | CSOFT_CLIP);
+	if (is_rev) _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (read_len-extra_end)<<4 | CSOFT_CLIP);
 	else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((extra_beg-1) << 4) | CSOFT_CLIP);
 
     // mid global-sw
@@ -286,20 +290,20 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
 
     // push tail 'S' (after right_extra)
 	if (is_rev)_push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((extra_beg-1) << 4) | CSOFT_CLIP);
-	else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (APP.read_len-extra_end)<<4 | CSOFT_CLIP);
+	else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), (read_len-extra_end)<<4 | CSOFT_CLIP);
 
 	if (is_rev) {
         if (*read_rbseq == NULL) {
-            *read_rbseq = (uint8_t*)calloc(APP.read_len, sizeof(uint8_t));
-            for (i = 0; i < APP.read_len; ++i) (*read_rbseq)[i] = (read_bseq[APP.read_len-1-i]<4)?3-read_bseq[APP.read_len-1-i]:4;
+            *read_rbseq = (uint8_t*)calloc(read_len, sizeof(uint8_t));
+            for (i = 0; i < read_len; ++i) (*read_rbseq)[i] = (read_bseq[read_len-1-i]<4)?3-read_bseq[read_len-1-i]:4;
         }
-		lamsa_res_aux(la, bns, pac, *read_rbseq, APP.read_len, AP, APP);
-	} else lamsa_res_aux(la, bns, pac, read_bseq, APP.read_len, AP, APP);
+		lamsa_res_aux(la, bns, pac, *read_rbseq, read_len, AP, seqs);
+	} else lamsa_res_aux(la, bns, pac, read_bseq, read_len, AP, seqs);
 
     free(query); free(target);
 }
 
-int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, reg_t reg, lamsa_aln_para AP, lamsa_aln_per_para APP, aln_res *re_res)
+int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, reg_t reg, lamsa_aln_para AP, kseq_t *seqs, aln_res *re_res)
 {
     int i, j, seed_len = AP.bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
@@ -367,7 +371,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
             if (re_res->l_n == re_res->l_m) aln_reloc_res(re_res, (re_res->l_n << 1), AP.res_mul_max);
 
             bwt_set_bound(*seed_v, line[i], node_n[i], seed_len, reg_len, &left_bound, &right_bound);
-            bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, APP, re_res->la+re_res->l_n);
+            bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, seqs, re_res->la+re_res->l_n);
             re_res->la[re_res->l_n].line_score = 0;
             re_res->l_n++;
         }
@@ -378,15 +382,15 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
     return 0;
 }
 
-void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, lamsa_aln_per_para APP, lamsa_aln_para AP)
+void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, lamsa_aln_para AP, kseq_t *seqs)
 {
-    aln_reg *re_reg = aln_init_reg(APP.read_len); 
+    aln_reg *re_reg = aln_init_reg(seqs->seq.l); 
     if (get_remain_reg(a_reg, re_reg, AP, AP.bwt_max_len) == 0) goto End;
 
     int i;
     re_res->l_n = 0;
     for (i = 0; i < re_reg->reg_n; ++i)
-        bwt_aln_core(bwt, bns, pac, read_bseq, read_rbseq, re_reg->reg[i], AP, APP, re_res);
+        bwt_aln_core(bwt, bns, pac, read_bseq, read_rbseq, re_reg->reg[i], AP, seqs, re_res);
 
 End:
     aln_free_reg(re_reg);

@@ -883,7 +883,7 @@ void branch_track_new(frag_dp_node **f_node, aln_msg *a_msg, int x, int y, node_
 //for multi-dp-lines
 //line, line_end: start at 1
 int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, 
-                            lamsa_aln_per_para APP, lamsa_aln_para AP,
+                            lamsa_aln_para AP, kseq_t *seqs,
                             int left_b, int right_b, 
                             reg_t trg_reg,
                             line_node **line, int *line_end,
@@ -959,13 +959,13 @@ L_START:
         L_NM(line,line_end,l_i) = NM;
         while (_right.x != head.x) {
             if (node_i < 0) { 
-                fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 1.\n", APP.read_name); exit(1); 
+                fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 1.\n", seqs->name.s); exit(1); 
 			}
             line[l_i][node_i--] = _right;
             _right = f_node[_right.x][_right.y].from;
         }
         if (node_i >= 0) { 
-            fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 2.\n", APP.read_name); exit(1); 
+            fprintf(stderr, "\n[frag mini dp multi] %s node_i BUG 2.\n", seqs->name.s); exit(1); 
 		}
         ++l_i;
     }
@@ -974,13 +974,13 @@ L_START:
 }
 
 int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
-                lamsa_aln_per_para APP, lamsa_aln_para AP, 
+                lamsa_aln_para AP, kseq_t *seqs,
                 int left, int right, 
                 reg_t trg_reg,
                 line_node **line, int *line_end, 
                 int line_n_max) 
 {
-    int l = frag_mini_dp_multi_line(f_node, a_msg, APP, AP, left, right, trg_reg, line, line_end, line_n_max);//, 0, 0);
+    int l = frag_mini_dp_multi_line(f_node, a_msg, AP, seqs, left, right, trg_reg, line, line_end, line_n_max);//, 0, 0);
     line_set_bound1(line, line_end, 0,  &l, left, right, AP.ske_max, AP.ovlp_rat);
     ///l = line_remove(line, line_end, 0, l);
     return l;
@@ -1024,7 +1024,7 @@ void frag_min_extend(frag_dp_node **f_node, aln_msg *a_msg,
 }
 
 int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg, 
-                      lamsa_aln_per_para APP, lamsa_aln_para AP,
+                      lamsa_aln_para AP, kseq_t *seqs,
                       line_node left, line_node right, 
                       line_node *line, int *de_score, int *de_NM,
                       int _head, int _tail)
@@ -1096,12 +1096,12 @@ int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
     //while (_right.x != left.x)
     while (_right.x != head.x) {
         if (node_i < 0) { 
-            fprintf(stderr, "\n[frag mini dp] %s node_i BUG 1.\n", APP.read_name); exit(1); 
+            fprintf(stderr, "\n[frag mini dp] %s node_i BUG 1.\n", seqs->name.s); exit(1); 
         }
         line[node_i--] = _right;
         _right = f_node[_right.x][_right.y].from;
     }
-    if (node_i >= 0) { fprintf(stderr, "\n[frag mini dp] %s node_i BUG 2.\n", APP.read_name); exit(1); }
+    if (node_i >= 0) { fprintf(stderr, "\n[frag mini dp] %s node_i BUG 2.\n", seqs->name.s); exit(1); }
     *de_score += (max_score-old_score);
     *de_NM += (max_NM-old_NM);
     return max_n;
@@ -1198,14 +1198,14 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
 }
 
 int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
-        lamsa_aln_per_para APP, lamsa_aln_para AP, 
+        lamsa_aln_per_para APP, lamsa_aln_para AP, kseq_t *seqs,
         line_node **line, int *line_end, int *line_m, 
         frag_dp_node ***f_node, line_node **_line, int *_line_end,
         int line_n_max)
 {
     int l_n = 0;
-    aln_reg *re_reg = aln_init_reg(APP.read_len);
-    if (get_remain_reg(a_reg, re_reg, AP, APP.read_len) == 0) goto End;
+    aln_reg *re_reg = aln_init_reg(seqs->seq.l);
+    if (get_remain_reg(a_reg, re_reg, AP, seqs->seq.l) == 0) goto End;
     int i, j, k;
     int left_id, right_id, left, right, l;
     for (i = 0; i < re_reg->reg_n; ++i) {
@@ -1229,7 +1229,7 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
         }
         if (right == -2) continue;
         // store line-info in _line
-        l = trg_dp_line(*f_node, a_msg, APP, AP, left, right, re_reg->reg[i], _line, _line_end, line_n_max);
+        l = trg_dp_line(*f_node, a_msg, AP, seqs, left, right, re_reg->reg[i], _line, _line_end, line_n_max);
         // copy from _line to line
         for (j = 0; j < l; ++j) {
             line_end[l_n+j] = _line_end[j];
@@ -1247,7 +1247,7 @@ End:
 
 //new tree-generating and pruning
 int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
-        lamsa_aln_per_para APP, lamsa_aln_para AP,
+        lamsa_aln_per_para APP, lamsa_aln_para AP, kseq_t *seqs,
         line_node **line, int *line_end, int *line_m,
         frag_dp_node ***f_node,
         line_node **_line, int line_n_max)
@@ -1321,7 +1321,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
             node_i=0;
             inter_n[l_i]=0;
             if (max_node.x < APP.seed_out-1) {
-                mini_len = frag_mini_dp_line(*f_node, a_msg, APP, AP, max_node, (line_node){APP.seed_out, 0}, _line[0], &line_score, &line_NM, 1, 0);
+                mini_len = frag_mini_dp_line(*f_node, a_msg, AP, seqs, max_node, (line_node){APP.seed_out, 0}, _line[0], &line_score, &line_NM, 1, 0);
                 for (k = mini_len-1; k >= 0; --k) {
                     line[l_i][node_i++] = _line[0][k];
                     (*f_node)[_line[0][k].x][_line[0][k].y].dp_flag = TRACKED_FLAG; 
@@ -1347,7 +1347,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
                 if (left.x < right.x - 1 )
                 {
                     //mini-dp with anchors
-                    mini_len = frag_mini_dp_line(*f_node, a_msg, APP, AP, left, right, _line[0], &line_score, &line_NM, 1, 1);
+                    mini_len = frag_mini_dp_line(*f_node, a_msg, AP, seqs, left, right, _line[0], &line_score, &line_NM, 1, 1);
                     for (k = mini_len-1; k >= 0; --k) {
                         line[l_i][node_i++] = _line[0][k];
                         (*f_node)[_line[0][k].x][_line[0][k].y].dp_flag = TRACKED_FLAG; 
