@@ -490,7 +490,12 @@ void pac2fa(const bntseq_t *bns, const uint8_t *pac,
 int32_t bns_get_rid(bntseq_t *bns, const char *chr)
 {
     int i;
-    for (i = bns->last_ri; i < bns->n_seqs; ++i) {
+    for (i = 0; i < bns->n_seqs; ++i) {
+        if (strcmp(chr, bns->anns[i].name) == 0) {
+            return i+1;
+        }
+    }
+    /*for (i = bns->last_ri; i < bns->n_seqs; ++i) {
         if (strcmp(chr, bns->anns[i].name) == 0) {
             bns->last_ri = i;
             return i+1;
@@ -501,6 +506,6 @@ int32_t bns_get_rid(bntseq_t *bns, const char *chr)
             bns->last_ri = i;
             return i+1;
         }
-    }
+    }*/
     err_fatal("Not in the genome: %s\n", chr);
 }

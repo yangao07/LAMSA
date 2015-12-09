@@ -324,7 +324,7 @@ int split_seed_info(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
     return 0;
 }
 
-aln_res *aln_init_res(int l_m, int read_len, int n, int XA_max)
+aln_res *aln_init_res(int l_m, int n, int XA_max)
 {
     int i, j, k;
     aln_res *a_res = (aln_res*)calloc(n, sizeof(aln_res));
@@ -332,7 +332,7 @@ aln_res *aln_init_res(int l_m, int read_len, int n, int XA_max)
         aln_res *p = a_res+k;
         p->l_m = l_m, p->l_n = 0;
         p->la = (line_aln_res*)malloc(l_m * sizeof(line_aln_res));
-        p->read_len = read_len;
+        //p->read_len = read_len;
         for (i = 0; i < l_m; ++i) {
             p->la[i].res_m = 10, p->la[i].cur_res_n = 0;
             p->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
@@ -349,6 +349,25 @@ aln_res *aln_init_res(int l_m, int read_len, int n, int XA_max)
         }
     }
     return a_res;
+}
+
+void aln_reset_res(aln_res *a_res, int n, int read_len)
+{
+    int i, j, k;
+    for (k = 0; k < n; ++k) {
+        aln_res *p = a_res+k;
+        p->l_n = 0;
+        p->read_len = read_len;
+        for (i = 0; i < p->l_m; ++i) {
+            p->la[i].cur_res_n = 0;
+            for (j = 0; j < p->la[i].res_m; ++j) {
+                p->la[i].res[j].cigar_len = 0;
+            }
+            p->la[i].tol_score = p->la[i].tol_NM = 0;
+            // XA_res
+            p->la[i].XA_n = 0;
+        }
+    }
 }
 
 void aln_reloc_res(aln_res *a_res, int line_n, int XA_m)
@@ -916,8 +935,9 @@ int lamsa_main_aln(thread_aux_t *aux)
             for (k = 0; k < (la_seqs->m_msg+j)->map_n; ++k)
                 set_aln_msg(a_msg, seed_out, k+1, j+1, (la_seqs->m_msg+j)->map[k], bns);
         }
-        // aln_res, aln_reg
-        la_seqs->a_res = aln_init_res(1, seqs->seq.l, 3, AP->res_mul_max); // aln_res, remain_res, bwt_remain_res
+        // aln_res
+        aln_reset_res(la_seqs->a_res, 3, seqs->seq.l);
+        // aln_reg
         aln_reg *a_reg = aln_init_reg(seqs->seq.l);
         int line_n = frag_line_BCC(a_msg, f_msg, *APP, *AP, seqs, line, line_end, &line_m, f_node, _line, line_n_max);
         
@@ -975,46 +995,44 @@ void bseq_reco(char *seq, int len)
     if (len & 1) seq[i] = (seq[i] >= 4)? seq[i] : 3-seq[i];
 }
 
+lamsa_seq_t *lamsa_seq_init(int chunk_read_n, int seed_m, int x)
+{
+    int i;
+    lamsa_seq_t *seqs = (lamsa_seq_t*)calloc(chunk_read_n, sizeof(lamsa_seq_t));
+    if (seqs == NULL) { fprintf(stderr, "[lamsa_seq_init] Not enough memory.\n"); exit(1); }
+    for (i = 0; i < chunk_read_n; ++i) {
+        seqs[i].a_res = aln_init_res(1, 3, x); // aln_res, remain_res, bwt_remain_res
+        seqs[i].APP = (lamsa_aln_per_para*)malloc(sizeof(lamsa_aln_per_para));
+        seqs[i].m_msg = map_init_msg(seed_m);
+    }
+    return seqs;
+}
+
 // => seqs(name, seq, (map_msg,APP) * seed_num), n_seqs
 // => seqs(aln_res) in thread
-lamsa_seq_t *lamsa_read_seq(kseq_t *read_seq_t, FILE *seed_mapfp, lamsa_aln_para AP, seed_msg *s_msg, int chunk_read_n, int *n_seqs)
+int lamsa_read_seq(lamsa_seq_t *la_seqs, kseq_t *read_seq_t, FILE *seed_mapfp, lamsa_aln_para AP, seed_msg *s_msg, int chunk_read_n)
 {
     kseq_t *s = read_seq_t;
-    lamsa_seq_t *seqs=NULL, *p=NULL; int n = 0, m = 0;
+    lamsa_seq_t *p=NULL; int n = 0;
     while (kseq_read(s+n) >= 0)
     {
-        if (n >= m) {
-            m = m? m<<1 : 256;
-            seqs = (lamsa_seq_t*)realloc(seqs, m * sizeof(lamsa_seq_t));
-            if (seqs == NULL) { fprintf(stderr, "[lamsa_read_seq] Not enough memory.\n"); exit(1); }
-        }
-        p = &seqs[n++];
-
-        // read_seq_t
-        //p->seq = (uint8_t*)calloc(p->len, sizeof(uint8_t));
-        //for (i = 0; i < p->len; ++i) p->seq[i] = nst_nt4_table[(int)(read_seq_t->seq.s[i])];
-        //p->rseq = NULL;
+        p = &la_seqs[n++];
 
         // APP, seed_mapfp
         ++(s_msg->read_count);
-        lamsa_aln_per_para *APP = (lamsa_aln_per_para*)malloc(sizeof(lamsa_aln_per_para)); //XXX malloc ONLY one time 
-        init_aln_per_para(APP, s_msg, s_msg->read_count);
+        init_aln_per_para(p->APP, s_msg, s_msg->read_count);
 
-        int seed_all = APP->seed_all;
-        map_msg *m_msg = map_init_msg(seed_all);
-
+        int seed_all = p->APP->seed_all;
         int map_n, seed_n = 0, seed_out = 0;
         while (seed_n < seed_all) {
-            if ((map_n = gem_map_read(seed_mapfp, m_msg+seed_n, AP.per_aln_m)) < 0) { fprintf(stderr, "[lamsa_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
+            if ((map_n = gem_map_read(seed_mapfp, p->m_msg+seed_n, AP.per_aln_m)) < 0) { fprintf(stderr, "[lamsa_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
             if (map_n > 0) seed_out++;
             seed_n++;
         }
-        APP->seed_out = seed_out;
-        p->APP = APP; p->m_msg = m_msg;
+        p->APP->seed_out = seed_out;
         if (n >= chunk_read_n) break;
     }
-    *n_seqs = n;
-    return seqs;
+    return n;
 }
 
 void lamsa_free_read_seq(lamsa_seq_t *seqs, int n_seqs)
@@ -1184,6 +1202,10 @@ void lamsa_aln_output(lamsa_aln_para AP, lamsa_seq_t *lamsa_seqs, kseq_t *seqs, 
     }
 }
 
+#ifdef __DEBUG__
+#define CHUNK_SIZE 1
+//#define CHUNK_READ_N 1
+#endif
 int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lamsa_aln_para *AP)
 {
     lamsa_seq_t *lamsa_seqs; int n_seqs, i;
@@ -1192,7 +1214,6 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
     if ((seed_mapfp = fopen(seed_result, "r")) == NULL) { fprintf(stderr, "\n[lamsa_aln_core] Can't open read file %s.\n", read_prefix); exit(1); }
     if ((readfp = gzopen(read_prefix, "r")) == NULL) { fprintf(stderr, "\n[lamsa_aln_core] Can't open seed-result file %s.\n", seed_result); exit(1); }
     kstream_t *fs = ks_init(readfp);
-    read_seq_t = kseq_init(readfp); 
     read_seq_t = (kseq_t*)calloc(CHUNK_READ_N, sizeof(kseq_t));
     for (i = 0; i < CHUNK_READ_N; ++i) read_seq_t[i].f = fs;
     s_msg->read_count = 0;
@@ -1206,20 +1227,18 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
         aux[i].AP = AP; aux[i].bwt = bwt; aux[i].pac = pac; aux[i].bns = bns;
         aux_dp_init(aux+i, s_msg, *AP);
     }
+    lamsa_seqs = lamsa_seq_init(CHUNK_READ_N, s_msg->seed_max, AP->res_mul_max);
     pthread_rwlock_init(&RWLOCK, NULL);
 
     // core loop
-#ifdef __DEBUG__
-#define CHUNK_SIZE 1
-#endif
-    while ((lamsa_seqs = lamsa_read_seq(read_seq_t, seed_mapfp, *AP, s_msg, CHUNK_READ_N, &n_seqs)) != 0) { // read a chunk of read and other input data
+    while ((n_seqs = lamsa_read_seq(lamsa_seqs, read_seq_t, seed_mapfp, *AP, s_msg, CHUNK_READ_N)) != 0) { // read a chunk of read and other input data
+        THREAD_READ_I = 0;
         if (AP->n_thread <= 1) {
             aux->n_seqs = n_seqs; 
             aux->w_seqs = read_seq_t;
             aux->lamsa_seqs = lamsa_seqs;
             lamsa_main_aln(aux);
         } else {
-            THREAD_READ_I = 0;
             pthread_t *tid; pthread_attr_t attr; 
             pthread_attr_init(&attr); pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
             tid = (pthread_t*)calloc(AP->n_thread, sizeof(pthread_t));
@@ -1235,14 +1254,13 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
         }
         // output align result 
         lamsa_aln_output(*AP, lamsa_seqs, read_seq_t, n_seqs, bns);
-        // free seqs
-        lamsa_free_read_seq(lamsa_seqs, n_seqs);
     }
+    // free seqs
+    lamsa_free_read_seq(lamsa_seqs, CHUNK_READ_N);
     pthread_rwlock_destroy(&RWLOCK);
-    for (i = 0; i < AP->n_thread; ++i) 
-        aux_dp_free(aux+i, s_msg, AP);
+    for (i = 0; i < AP->n_thread; ++i) aux_dp_free(aux+i, s_msg, AP);
     free(aux); gzclose(readfp); fclose(seed_mapfp); 
-    free(read_seq_t); //kseq_destroy(read_seq_t);
+    free(read_seq_t); free(fs);
     return 0;
 }
 
