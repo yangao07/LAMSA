@@ -8,8 +8,6 @@
 #include "frag_check.h"
 #endif
 
-#define LINE_SIZE 10000
-
 #ifdef _GEM_MAIN_
 
 void printcigar(FILE *outp, cigar32_t *cigar, int cigar_len)
@@ -43,7 +41,7 @@ void md2m(char *c, int len, int *m, int *mm)
 {
     *m=0; *mm=0;
     if (*c == 0) return;
-    int i; char *s;
+    int i; char *s, *t;
 
     for (i = 0; i < len; ++i) {
         if (c[i] >= 'A' && c[i] <= 'T')
@@ -52,13 +50,10 @@ void md2m(char *c, int len, int *m, int *mm)
             c[i] = ' ';
         }
     }
-    s = strtok(c, " ");
-    (*m) += atoi(s);
-    
+    s = strtok_r(c, " ", &t);
     while (s != NULL) {
-        s = strtok(NULL, " ");
-        if (s == NULL) break;
         (*m) += atoi(s);
+        s = strtok_r(NULL, " ", &t);
     }
 }
 
@@ -71,7 +66,6 @@ int get_d(int indel_n)
     }
     return i;
 }
-
 
 //9A50G11>2-1
 void md2cigar(char *md, map_t *map)
@@ -135,34 +129,6 @@ void map_free_msg(map_msg *m_msg, int n)
     free(m_msg);
 }
 
-uint32_t fgetline(FILE *fp, char **line, int *len, int *m)
-{
-	char ch; int i = 0;
-
-	if (fp != NULL) {
-		ch = fgetc(fp);
-		if (ch == EOF) return ch;
-		while (ch != '\n' && ch != EOF) {
-			if (i == *len) {
-				(*len) <<= 1;
-				(*line) = (char*)realloc(*line, (*len) * sizeof(char));
-				if (*line == NULL) {
-					fprintf(stderr, "[gem_parse] Error: not enough memory.\n"); exit(0);
-				}
-			}
-			(*line)[i++] = ch;
-			if (i == *m-1) {
-			   	(*line) = (char*)realloc(*line, (*m << 1) * sizeof(char));
-				(*m) <<= 1;
-			}
-			ch = fgetc(fp);
-		}
-		(*line)[i] = '\0';
-		return ch;
-	} else 
-		return EOF;
-}
-
 #ifdef _GEM_MAIN_
 int main(int argc, char* argv[])
 {
@@ -181,9 +147,7 @@ int main(int argc, char* argv[])
 	long long offset; char os[100];
 	int i;
 
-	while (fgetline(mapf, &gem_line, &line_len) != EOF) {
-		if (line_len > aln_len)
-			aln_msg = (char*)realloc(aln_msg, line_len * sizeof(char));
+	while (fgets(gem_line, line_len, mapf)) {
 		sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg);
 		if (strcmp(aln_msg, "-") == 0) {
 			fprintf(stdout, "-\n");
@@ -234,29 +198,38 @@ RET:
 }
 #endif
 
-int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
+int  gem_map_read(FILE *mapf, map_msg *m_msg, char *gem_line, int line_size)
+{
+	if (fgets(gem_line, line_size, mapf) == NULL) return -1;
+    
+    int i, ct=0;
+    gem_line[strlen(gem_line)-1] = 0;
+    for (i = 0; i < strlen(gem_line); ++i) {
+        if (gem_line[i] == '\t') {
+            if (ct == 3) break;
+            else ct++;
+        }
+    }
+    m_msg->map_str = strdup(gem_line+i+1);
+	return 0;
+}
+int gem_map_msg(map_msg *m_msg, int max_n)
 {
 	m_msg->map_n = 0;
-	int line_len = LINE_SIZE, aln_len = LINE_SIZE;
-	int gem_line_m = LINE_SIZE;
-	char *gem_line = (char*)malloc(gem_line_m * sizeof(char));
-	char *aln_msg = (char*)malloc(aln_len * sizeof(char));
-	char name[100]; int msg_len;
+    int i;
+    char *aln_msg = m_msg->map_str; int msg_len;
 	char *t; int t_i, _t_i;
 	char chr[10], strand, md[200];
 	long long offset; char os[100];
-	int i;
 
-	fgetline(mapf, &gem_line, &line_len, &gem_line_m);
-	if (line_len > aln_len)
-		aln_msg = (char*)realloc(aln_msg, line_len * sizeof(char));
-	sscanf(gem_line, "%[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", name, aln_msg);
+	//sscanf(gem_line, "%*[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", aln_msg);
 	if (strcmp(aln_msg, "-") == 0) {
 #ifdef __DEBUG__
 		fprintf(stderr, "-\n");
 #endif
 		goto RET;
 	}
+
 	msg_len = strlen(aln_msg);
 	t = strtok(aln_msg, ",");
 	t_i = strlen(t)+1;
@@ -300,7 +273,6 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, int max_n)
 		t_i += strlen(t)+1;
 	}
 RET:
-	free(gem_line);
-	free(aln_msg);
+    free(m_msg->map_str);
 	return m_msg->map_n;
 }

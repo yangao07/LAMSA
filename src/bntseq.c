@@ -507,5 +507,5 @@ int32_t bns_get_rid(bntseq_t *bns, const char *chr)
             return i+1;
         }
     }*/
-    err_fatal("Not in the genome: %s\n", chr);
+    err_fatal(__func__, "Not in the genome: %s", chr);
 }
