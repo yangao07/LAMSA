@@ -18,10 +18,8 @@
 #include "kstring.h"
 #include "gem_parse.h"
 
-//KSEQ_INIT(gzFile, gzread)
-
-extern char lamsa_pg[1024];
 #define LINE_SIZE 65536
+extern char lamsa_pg[1024];
 
 int lamsa_aln_usage(void)
 {
@@ -829,44 +827,6 @@ void init_aln_per_para(lamsa_aln_per_para *APP, seed_msg *s_msg, int read_n)
     APP->seed_all = s_msg->seed_all[read_n] - s_msg->seed_all[read_n-1];
 }
 
-void init_aln_para(lamsa_aln_para *AP)
-{
-    AP->n_thread = 1;
-
-    AP->seed_len = SEED_LEN;
-    AP->seed_step = SEED_INTERVAL;
-    //AP->seed_inv = SEED_INTERVAL;
-    //AP->match_dis = AP->seed_step/25; // 4% indel allowed
-    AP->per_aln_m = SEED_PER_LOCI;
-    AP->first_loci_thd = SEED_FIRST_ROUND_LOCI;
-
-    AP->SV_len_thd = SV_MAX_LEN;
-    AP->ske_max = MAX_SKEL;
-    AP->ovlp_rat = (float)OVLP_RAT;
-
-    AP->split_len = SPLIT_ALN_LEN;
-    AP->split_pen = SPLIT_ALN_PEN;
-    AP->res_mul_max = RES_MAX_N;
-
-    AP->hash_len = HASH_LEN;
-    AP->hash_key_len = HASH_KEY;
-    AP->hash_step = HASH_STEP;
-    AP->hash_size = (int)pow(NT_N, AP->hash_key_len);
-    
-    AP->bwt_seed_len = BWT_KMER;
-    AP->bwt_max_len = MAX_BWT_REG;
-
-    AP->supp_soft = 0;
-    AP->comm = 0;
-    AP->outp = stdout;
-
-    AP->frag_score_table = f_BCC_score_table;
-    AP->match = MAT_SCORE; AP->mis = MIS_PEN;
-    AP->gapo = OPEN_PEN; AP->gape = EXT_PEN;
-    AP->end_bonus = 5;
-    AP->zdrop = 100;
-}
-
 typedef struct {
     //char *name;          // read name
     //uint8_t *seq;         // 0/1/2/3/4:A/C/G/T/N 
@@ -1362,6 +1322,55 @@ int lamsa_aln_c(const char *ref_prefix, const char *read_prefix, int seed_info, 
     return 0;
 }
 
+void init_aln_para(lamsa_aln_para *AP)
+{
+    AP->n_thread = 1;
+
+    AP->seed_len = SEED_LEN;
+    AP->seed_step = SEED_INTERVAL;
+    //AP->seed_inv = SEED_INTERVAL;
+    //AP->match_dis = AP->seed_step/25; // 4% indel allowed
+    AP->per_aln_m = SEED_PER_LOCI;
+    AP->first_loci_thd = SEED_FIRST_ROUND_LOCI;
+
+    AP->SV_len_thd = SV_MAX_LEN;
+    AP->ske_max = MAX_SKEL;
+    AP->ovlp_rat = (float)OVLP_RAT;
+
+    AP->split_len = SPLIT_ALN_LEN;
+    AP->split_pen = SPLIT_ALN_PEN;
+    AP->res_mul_max = RES_MAX_N;
+
+    AP->hash_len = HASH_LEN;
+    AP->hash_key_len = HASH_KEY;
+    AP->hash_step = HASH_STEP;
+    AP->hash_size = (int)pow(NT_N, AP->hash_key_len);
+    
+    AP->bwt_seed_len = BWT_KMER;
+    AP->bwt_max_len = MAX_BWT_REG;
+
+    AP->supp_soft = 0;
+    AP->comm = 0;
+    AP->outp = stdout;
+
+    AP->frag_score_table = f_BCC_score_table;
+    AP->match = MAT_SCORE; AP->mis = MIS_PEN;
+    AP->gapo = OPEN_PEN; AP->gape = EXT_PEN;
+    AP->end_bonus = 5;
+    AP->zdrop = 100;
+}
+
+void lamsa_fill_mat(int mat, int mis, int8_t sc_mat[25])
+{
+    int i, j, k;
+    for (i = k = 0; i < 4; ++i) {
+        for (j = 0; j < 4; ++j)
+            sc_mat[k++] = i==j ? mat : -mis;
+        sc_mat[k++] = -1; // 'N'
+    }
+    for (j = 0; j < 5; ++j) sc_mat[k++] = -1; // 'N'
+}
+
 extern char *get_bin_dir(char *bin);
 
     //while ((c =getopt(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hH")) >= 0)
@@ -1439,6 +1448,7 @@ int lamsa_aln(int argc, char *argv[])
     }
     AP->seed_inv = AP->seed_step-AP->seed_len;
     AP->match_dis = AP->seed_step / 25; // 4% indel allowed
+    lamsa_fill_mat(AP->match, AP->mis, AP->sc_mat);
     if (argc - optind != 3)
         return lamsa_aln_usage();
 

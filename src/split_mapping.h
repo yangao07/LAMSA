@@ -75,7 +75,6 @@ typedef struct {
 #define HASH_DP_SCORE(init_score, node_N, CON_PEN) (init_score+node_N-CON_PEN)
 
 #define LAST_SHIFT(x, slen) ((x<<slen)>>slen)
-extern const int8_t sc_mat[25];
 extern const int8_t hash_nt4_table[5];
 
 int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,

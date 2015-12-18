@@ -359,6 +359,7 @@ typedef struct {
     // SW para
     int gapo, gape; // gap open penalty, gap extension penalty
     int match, mis;     // score matrix, match and mismatch
+    int8_t sc_mat[25];
     int end_bonus, zdrop;
 } lamsa_aln_para;        // for all reads
 //AP
