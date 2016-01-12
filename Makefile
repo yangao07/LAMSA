@@ -1,5 +1,5 @@
 CC      =	gcc
-CFLAGS  =	-g -Wall -O3 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function
+CFLAGS  =	-Wall -O3 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function
 DFLAGS  =	-g -Wall  
 LIB     =	-lm -lz -lpthread
 

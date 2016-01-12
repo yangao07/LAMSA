@@ -1222,8 +1222,10 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
     lamsa_free_read_seq(lamsa_seqs, CHUNK_READ_N);
     pthread_rwlock_destroy(&RWLOCK);
     for (i = 0; i < AP->n_thread; ++i) aux_dp_free(aux+i, s_msg, AP);
-    free(aux); gzclose(readfp); fclose(seed_mapfp); 
-    free(read_seq_t); free(fs); free(gem_line);
+    free(aux); fclose(seed_mapfp); free(gem_line);
+    for (i = 0; i < CHUNK_READ_N; ++i) {
+        free((read_seq_t+i)->name.s); free((read_seq_t+i)->comment.s); free((read_seq_t+i)->seq.s); free((read_seq_t+i)->qual.s);
+    } free(read_seq_t); ks_destroy(fs); gzclose(readfp); 
     return 0;
 }
 
@@ -1373,7 +1375,6 @@ void lamsa_fill_mat(int mat, int mis, int8_t sc_mat[25])
 
 extern char *get_bin_dir(char *bin);
 
-    //while ((c =getopt(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hH")) >= 0)
 const struct option long_opt [] = {
     { "thread", 1, NULL, 't' },
     { "seed-len", 1, NULL, 'l' },
@@ -1411,7 +1412,6 @@ int lamsa_aln(int argc, char *argv[])
     int no_seed_aln=0, seed_info=0, seed_program=0;
     char seed_result_f[1024]="";
 
-    //while ((c =getopt(argc, argv, "t:m:M:O:E:S:r:V:g:s:l:i:p:d:o:NIA:")) >= 0)
     while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
     {
         switch (c)
