@@ -909,7 +909,7 @@ int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		uint32_t **hash_num, uint64_t ***hash_node)
 {
     int hash_len = AP.hash_len, hash_key = AP.hash_key_len, hash_size = AP.hash_size; 
-	int hash_cigar_len=0, hash_cigar_m=100;
+	int hash_cigar_len=0, hash_cigar_m=CIGAR_LEN_M;
 	cigar32_t *hash_cigar = (cigar32_t*)malloc(hash_cigar_m * sizeof(cigar32_t));;
 	int32_t *hash_pos = (int32_t*)malloc(ref_len * sizeof(int32_t));
 	(*cigar_len) = 0;

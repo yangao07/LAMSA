@@ -1,15 +1,3 @@
-/*
- * frag_check.c
- *
- * function: transform raw frag.msg to detailed frag.msg
- * method:   extend-ssw
- *
- * Created by Yan Gao on 08/29/2013
- */
-/*
- * Convert the whole read seq to its rev-com seq when its aln-result is '-' srand.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -33,14 +21,13 @@ void frag_init_msg(frag_msg *f_msg, int frag_max)
 	f_msg->frag_max = frag_max; 
 	f_msg->frag_num = 0;
 	f_msg->per_seed_max = frag_max;
-	//f_msg->seed_num = 0;
 
 	f_msg->fa_msg = (frag_aln_msg*)malloc(frag_max*sizeof(frag_aln_msg));
 	int i;
 	for (i = 0; i < frag_max; ++i)
 	{
-		f_msg->fa_msg[i].cigar_max = 100;
-		f_msg->fa_msg[i].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
+		f_msg->fa_msg[i].cigar_max = CIGAR_LEN_M;
+		f_msg->fa_msg[i].cigar = (cigar32_t*)malloc(CIGAR_LEN_M * sizeof(cigar32_t));
 		f_msg->fa_msg[i].cigar_len = 0;
 
 		f_msg->fa_msg[i].seed_i = (int*)malloc(f_msg->per_seed_max*sizeof(int));
@@ -53,19 +40,12 @@ int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg)
 {
 	tf_msg->frag_max = ff_msg->frag_max;
 	tf_msg->frag_num = 0;
-	//tf_msg->last_len = ff_msg->last_len;
-	//tf_msg->seed_num = 0;
-	//tf_msg->seed_all = ff_msg->seed_all;
 	tf_msg->per_seed_max = ff_msg->per_seed_max;
-	//tf_msg->fa_msg = (frag_aln_msg*)malloc(tf_msg->frag_max * sizeof(frag_aln_msg));
 	int i;
 	for (i = 0; i < tf_msg->frag_max; ++i) {
 		tf_msg->fa_msg[i].cigar_max = 100;
-		//tf_msg->fa_msg[i].cigar = (ucigar32_t*)malloc(100 * sizeof(ucigar32_t));
 		tf_msg->fa_msg[i].cigar_len = 0;
 
-		//tf_msg->fa_msg[i].seed_i = (int*)malloc(tf_msg->per_seed_max*sizeof(int));
-		//tf_msg->fa_msg[i].seed_aln_i = (int*)malloc(tf_msg->per_seed_max*sizeof(int));
 		tf_msg->fa_msg[i].seed_num = 0;
 	}
 	return 0;
@@ -296,7 +276,7 @@ void _invert_cigar(cigar32_t **cigar, int cigar_n) {
     }
 }
 
-void _push_cigar0(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
+static inline int _push_cigar0(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
     int i;
     i = *cigar_n;
     if (((i-1) >=0) && (((*cigar)[i-1] & 0xf) == (_cigar & 0xf)))
@@ -310,16 +290,17 @@ void _push_cigar0(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _ciga
         (*cigar)[i] = _cigar;
         ++(*cigar_n);
     }
+    return 0;
 }
 
-void _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
-	if ((_cigar >> 4) == 0) return;
-	_push_cigar0(cigar, cigar_n, cigar_m, _cigar);
+static inline int _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
+	if ((_cigar >> 4) == 0) return 0;
+	return _push_cigar0(cigar, cigar_n, cigar_m, _cigar);
 }
 
-void _push_cigar(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *_cigar, int _cigar_n)
+static inline int _push_cigar(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *_cigar, int _cigar_n)
 {
-    if (_cigar_n == 0) return;
+    if (_cigar_n == 0) return 0;
 	int i,j;
 	i = *cigar_n;
 
@@ -343,18 +324,21 @@ void _push_cigar(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *_ciga
 		(*cigar)[i] = _cigar[j];
 	}
 	*cigar_n = i;
+    return 0;
 }
 
-void _push_cigar_e1(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t _cigar) {
+static inline int _push_cigar_e1(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t _cigar) {
     _push_cigar1(cigar, cigar_n, cigar_m, _cigar);
     if (refend) *refend += refInCigar(&_cigar, 1);
     if (readend) *readend += readInCigar(&_cigar, 1);
+    return 0;
 }
 
-void _push_cigar_e(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t *_cigar, int _cigar_n) {
+static inline int _push_cigar_e(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t *_cigar, int _cigar_n) {
     _push_cigar(cigar, cigar_n, cigar_m, _cigar, _cigar_n);
     if (refend) *refend += refInCigar(_cigar, _cigar_n);
     if (readend) *readend += readInCigar(_cigar, _cigar_n);
+    return 0;
 }
 
 //chr/nsrand
@@ -469,7 +453,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
                 lamsa_aln_per_para APP, lamsa_aln_para AP,
 				line_aln_res *la)
 {
-    frag_aln_msg fa_msg = f_msg->fa_msg[f_i];
+    frag_aln_msg *fa_msg = f_msg->fa_msg+f_i;
 	int i, seed_i, seed_aln_i, last_i, last_aln_i;
 	int len1, len2; /*read, ref*/
 	int b, min_b, cigar_len;
@@ -478,31 +462,31 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 	cigar_len = 0;
 	
 	//get the first node
-	if (fa_msg.srand == 1) {
-		i = fa_msg.seed_num-1;
-		last_i = fa_msg.seed_i[i];
-		last_aln_i = fa_msg.seed_aln_i[i];
-        fa_msg.cigar_read_start = (a_msg[last_i].read_id-1) * AP.seed_step + 1;
-        fa_msg.cigar_read_end = fa_msg.cigar_read_start - 1 + AP.seed_len;
+	if (fa_msg->srand == 1) {
+		i = fa_msg->seed_num-1;
+		last_i = fa_msg->seed_i[i];
+		last_aln_i = fa_msg->seed_aln_i[i];
+        fa_msg->cigar_read_start = (a_msg[last_i].read_id-1) * AP.seed_step + 1;
+        fa_msg->cigar_read_end = fa_msg->cigar_read_start - 1 + AP.seed_len;
 	} else {	//'-' srand 
-		last_i = fa_msg.seed_i[0];
-		last_aln_i = fa_msg.seed_aln_i[0];
-        fa_msg.cigar_read_start = APP.last_len + (a_msg[last_i].read_id-1) * AP.seed_step + 1; 
-        fa_msg.cigar_read_end = fa_msg.cigar_read_start - 1 + AP.seed_len;
+		last_i = fa_msg->seed_i[0];
+		last_aln_i = fa_msg->seed_aln_i[0];
+        fa_msg->cigar_read_start = APP.last_len + (a_msg[last_i].read_id-1) * AP.seed_step + 1; 
+        fa_msg->cigar_read_end = fa_msg->cigar_read_start - 1 + AP.seed_len;
 	}
 
 	//copy the first seed's cigar to frag
 	{
-		_push_cigar(&(fa_msg.cigar), &(fa_msg.cigar_len), &(fa_msg.cigar_max), a_msg[last_i].at[last_aln_i].cigar, a_msg[last_i].at[last_aln_i].cigar_len);
+		_push_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), a_msg[last_i].at[last_aln_i].cigar, a_msg[last_i].at[last_aln_i].cigar_len);
 		//start/end: 1-base
-		fa_msg.cigar_ref_start = a_msg[last_i].at[last_aln_i].offset;
-		fa_msg.cigar_ref_end = a_msg[last_i].at[last_aln_i].offset + AP.seed_len -1 + a_msg[last_i].at[last_aln_i].len_dif;
+		fa_msg->cigar_ref_start = a_msg[last_i].at[last_aln_i].offset;
+		fa_msg->cigar_ref_end = a_msg[last_i].at[last_aln_i].offset + AP.seed_len -1 + a_msg[last_i].at[last_aln_i].len_dif;
 	}
-	if (fa_msg.srand == 1)
+	if (fa_msg->srand == 1)
 	{
 		for (--i; i >= 0; --i) {
-			seed_i = fa_msg.seed_i[i];
-			seed_aln_i = fa_msg.seed_aln_i[i];
+			seed_i = fa_msg->seed_i[i];
+			seed_aln_i = fa_msg->seed_aln_i[i];
 			//get ref seq and seed-interval seq
 			if ((len2 = get_ref_intv(bseq2, ref_max_blen, bns, pac, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, AP)) < 0) { fprintf(stderr, "\n[frag extend] frag path error : (%d,%d) -> %d %lld %d %lld\n", last_i, last_aln_i, a_msg[last_i].read_id, (long long)a_msg[last_i].at[last_aln_i].offset, a_msg[seed_i].read_id, (long long)a_msg[seed_i].at[seed_aln_i].offset); return -1;}
 			len1 = get_read_intv(bseq1, read_bseq, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, &b, AP, APP);
@@ -511,9 +495,9 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			cigar_len = 0;
 			cigar32_t *cigar=0;
 			ksw_global(len1, bseq1, len2, *bseq2, 5, AP.sc_mat, AP.gapo, AP.gape, b, &cigar_len, &cigar);
-			merge_cigar(&(fa_msg.cigar), &(fa_msg.cigar_len), &(fa_msg.cigar_max), &(fa_msg.cigar_ref_end), &(fa_msg.cigar_read_end), fa_msg.chr,
+			merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr,
 					     cigar, cigar_len, len2, len1, bns, pac, read_bseq, AP);
-			merge_cigar(&(fa_msg.cigar), &(fa_msg.cigar_len), &(fa_msg.cigar_max), &(fa_msg.cigar_ref_end), &(fa_msg.cigar_read_end), fa_msg.chr, 
+			merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr, 
 					     a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len, AP.seed_len+a_msg[seed_i].at[seed_aln_i].len_dif, AP.seed_len, bns, pac, read_bseq, AP);//merge seed to frag
 
 			last_i = seed_i;
@@ -521,10 +505,10 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			free(cigar);
 		}
 	} else {
-		for (i = 1; i < fa_msg.seed_num; ++i)
+		for (i = 1; i < fa_msg->seed_num; ++i)
 		{
-			seed_i = fa_msg.seed_i[i];
-			seed_aln_i = fa_msg.seed_aln_i[i];
+			seed_i = fa_msg->seed_i[i];
+			seed_aln_i = fa_msg->seed_aln_i[i];
 			//get ref seq and seed-interval seq
 			if ((len2 = get_ref_intv(bseq2, ref_max_blen, bns, pac, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, AP)) < 0) { fprintf(stderr, "\n[frag extend] frag path error : (%d,%d) -> %d %lld %d %lld\n", last_i, last_aln_i, a_msg[last_i].read_id, (long long)a_msg[last_i].at[last_aln_i].offset, a_msg[seed_i].read_id, (long long)a_msg[seed_i].at[seed_aln_i].offset); return -1;}
 			len1 = get_read_intv(bseq1, read_bseq, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, &b, AP, APP);
@@ -533,9 +517,9 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			cigar_len = 0;
 			cigar32_t *cigar=0;
 			ksw_global(len1, bseq1, len2, *bseq2, 5, AP.sc_mat, AP.gapo, AP.gape, b, &cigar_len, &cigar);
-            merge_cigar(&(fa_msg.cigar), &(fa_msg.cigar_len), &(fa_msg.cigar_max), &(fa_msg.cigar_ref_end), &(fa_msg.cigar_read_end), fa_msg.chr,
+            merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr,
                          cigar, cigar_len, len2, len1, bns, pac, read_bseq, AP);
-            merge_cigar(&(fa_msg.cigar), &(fa_msg.cigar_len), &(fa_msg.cigar_max), &(fa_msg.cigar_ref_end), &(fa_msg.cigar_read_end), fa_msg.chr,
+            merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr,
                         a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len, AP.seed_len+a_msg[seed_i].at[seed_aln_i].len_dif, AP.seed_len, bns, pac, read_bseq, AP);//merge seed to frag 
 
 			last_i = seed_i;
@@ -543,7 +527,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			free(cigar);
 		}
 	}
-    merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), fa_msg.chr, fa_msg.cigar, fa_msg.cigar_len, fa_msg.cigar_ref_end-fa_msg.cigar_ref_start+1, fa_msg.cigar_read_end-fa_msg.cigar_read_start+1, bns, pac, read_bseq, AP);
+    merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), fa_msg->chr, fa_msg->cigar, fa_msg->cigar_len, fa_msg->cigar_ref_end-fa_msg->cigar_ref_start+1, fa_msg->cigar_read_end-fa_msg->cigar_read_start+1, bns, pac, read_bseq, AP);
 	return 0;
 }
 
@@ -600,12 +584,12 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 
 	//check SV-type
 	{
-		int64_t pos = at1.offset+AP.seed_len-1+at1.len_dif;
 		int64_t exp = at1.offset + at1.len_dif + (a_msg[s2_i].read_id - a_msg[s1_i].read_id) * AP.seed_step;	
 		int64_t act = at2.offset;
 		int dis = act-exp;
 
 #ifdef __DEBUG__
+		int64_t pos = at1.offset+AP.seed_len-1+at1.len_dif;
         if (abs(dis) > AP.match_dis) 
 			fprintf(stderr, "%d\t%lld\t%d\t%s\n", at1.chr, (long long)pos, abs(dis), dis>0?"DEL":"INS");
 #endif

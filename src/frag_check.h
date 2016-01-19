@@ -80,9 +80,9 @@ typedef struct {
     float cov_f;
 } aln_res;
 
-void _push_cigar(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t *_cigar, int _cigar_len);
-void _push_cigar1(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t _cigar);
-void _push_cigar0(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t _cigar);
+static inline int _push_cigar(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t *_cigar, int _cigar_len);
+static inline int _push_cigar1(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t _cigar);
+static inline int _push_cigar0(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t _cigar);
 void _invert_cigar(cigar32_t **cigar, int cigar_n);
 void frag_init_msg(frag_msg *f_msg, int frag_max);
 void frag_free_msg(frag_msg *f_msg, int line_num);

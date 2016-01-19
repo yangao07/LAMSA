@@ -104,6 +104,7 @@
 #define SOAP2_DP_DIR "./soap2-dp"
 
 #define MAPQ_MAX 254
+#define CIGAR_LEN_M 1000
 
 /* CIGAR operations */
 /* from samtools-0.1.19 */

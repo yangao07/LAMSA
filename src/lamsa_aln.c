@@ -336,8 +336,8 @@ aln_res *aln_init_res(int l_m, int n, int XA_max)
             p->la[i].res_m = 10, p->la[i].cur_res_n = 0;
             p->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
             for (j = 0; j < 10; ++j) {
-                p->la[i].res[j].c_m = 100;
-                p->la[i].res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
+                p->la[i].res[j].c_m = CIGAR_LEN_M;
+                p->la[i].res[j].cigar = (cigar32_t*)malloc(CIGAR_LEN_M * sizeof(cigar32_t));
                 p->la[i].res[j].cigar_len = 0;
             }
             p->la[i].tol_score = p->la[i].tol_NM = 0;
@@ -379,8 +379,8 @@ void aln_reloc_res(aln_res *a_res, int line_n, int XA_m)
         a_res->la[i].res_m = 10, a_res->la[i].cur_res_n = 0;
         a_res->la[i].res = (res_t*)malloc(10 * sizeof(res_t));
         for (j = 0; j < 10; ++j) {
-            a_res->la[i].res[j].c_m = 100;
-            a_res->la[i].res[j].cigar = (cigar32_t*)malloc(100 * sizeof(cigar32_t));
+            a_res->la[i].res[j].c_m = CIGAR_LEN_M;
+            a_res->la[i].res[j].cigar = (cigar32_t*)malloc(CIGAR_LEN_M * sizeof(cigar32_t));
             a_res->la[i].res[j].cigar_len = 0;
         }
         a_res->la[i].tol_score = a_res->la[i].tol_NM = 0;
@@ -906,7 +906,7 @@ int lamsa_main_aln(thread_aux_t *aux)
         
         // char -> 0123
         uint8_t *bseq = (uint8_t*)malloc(seqs->seq.l * sizeof(uint8_t));
-        for (j = 0; j < seqs->seq.l; ++j) bseq[j] = nst_nt4_table[(int)(seqs->seq.s[j])];
+        for (j = 0; j < (int)seqs->seq.l; ++j) bseq[j] = nst_nt4_table[(int)(seqs->seq.s[j])];
         uint8_t *rbseq=NULL;
         if (line_n > 0) {
             frag_check(a_msg, f_msg, la_seqs->a_res, bns, pac, bseq, &rbseq, *APP, *AP, seqs, line_n, &hash_num, &hash_node);
@@ -1166,7 +1166,7 @@ void lamsa_aln_output(lamsa_aln_para AP, lamsa_seq_t *lamsa_seqs, kseq_t *seqs, 
 
 #ifdef __DEBUG__
 #define CHUNK_SIZE 1
-//#define CHUNK_READ_N 1
+#define CHUNK_READ_N 1
 #endif
 int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lamsa_aln_para *AP)
 {

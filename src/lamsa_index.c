@@ -1,10 +1,3 @@
-/*
- * bulid_ref.c
- *
- * bulid index for reference sequence
- *
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -60,7 +60,7 @@ void md2m(char *c, int len, int *m, int *mm)
 int get_d(int indel_n)
 {
     int i = 1;
-    while (indel_n > 10) {
+    while (indel_n >= 10) {
         i++;
         indel_n /= 10;
     }
@@ -84,7 +84,7 @@ void md2cigar(char *md, map_t *map)
             indel_n = atoi(indel);
 			_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
 			map->NM += indel_n;
-            i += get_d(indel_n) + 2;
+            i += (get_d(indel_n) + 2);
 		} else {
 			c_i = i;
 			for (; md[i] && md[i]!='>'; ++i) {
