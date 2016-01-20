@@ -556,41 +556,40 @@ int line_set_bound1(line_node **line, int *line_end,
     return 0;
 }
 
-
-//for best coverage and connect
-//add "overlap ins"
 void get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, lamsa_aln_para AP)
 {
     if (pre == -1 || i == -1) { 
         *flag = F_MATCH; 
         return;
-        //return 0; 
     }	//for bound node
     if (pre == i) {
         if (pre_a == j) *flag = F_MATCH; 
         else *flag = F_UNCONNECT;
         return;
-        //return 0;
     }
     if (a_msg[i].at[j].chr != a_msg[pre].at[pre_a].chr || a_msg[i].at[j].nsrand != a_msg[pre].at[pre_a].nsrand)	//different chr or different srnad
     {
         *flag = F_CHR_DIF; 
         return;
-        //return 0;//PRICE_DIF_CHR;
     }
 
-    int seed_len = AP.seed_len; int seed_inv = AP.seed_inv;
-    int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * (seed_len+seed_inv);	
+    int seed_len = AP.seed_len; int seed_step = AP.seed_step;
+    if ((abs(a_msg[pre].read_id-a_msg[i].read_id)-1) * seed_step < seed_len) { // for overlapped seeds
+        *flag = F_UNCONNECT; return;
+    }
+
+    int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * seed_step;	
     int64_t act = a_msg[i].at[j].offset;
+
     int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act)) - (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id-a_msg[i].read_id) < 0)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
 
-    int mat_dis = AP.match_dis;
+    int mat_dis =  AP.match_dis * ((AP.match_dis_type == 0) ? 1 : abs(a_msg[pre].read_id-a_msg[i].read_id));
     if (dis <= mat_dis && dis >= -mat_dis) {
         if (abs(a_msg[pre].read_id - a_msg[i].read_id) == 1) *flag = F_MATCH;
         else if (abs(a_msg[pre].read_id - a_msg[i].read_id) < 10) *flag = F_MISMATCH; 
         else *flag = F_LONG_MISMATCH;
     } else if (dis > mat_dis && dis < AP.SV_len_thd) *flag = F_DELETE;
-    else if ((dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*(seed_len+seed_inv)-seed_len))) // nonoverlaped ins
+    else if ((dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*seed_step-seed_len))) // nonoverlaped ins
           || (dis < -(AP.split_len/2) && dis >= -AP.SV_len_thd)) { // overlaped ins/dup
         *flag = F_INSERT; 
     } else { 
@@ -937,7 +936,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         int s_i = f_node[_right.x][_right.y].seed_i, a_i = f_node[_right.x][_right.y].aln_i;
         for (i = 0; i < trg_reg.beg_n; i++) {
             if (a_msg[s_i].at[a_i].chr == trg_reg.ref_beg[i].chr
-                && abs((a_msg[s_i].at[a_i].offset-trg_reg.ref_beg[i].ref_pos) - (s_i-left_b)*(AP.seed_step)) < AP.SV_len_thd) {
+                && labs((a_msg[s_i].at[a_i].offset-trg_reg.ref_beg[i].ref_pos) - (s_i-left_b)*AP.seed_step) < AP.SV_len_thd) {
                 // connectable with main-line
                 if (score > 1) score += score/2;
                 else score++;
@@ -946,7 +945,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         }
         for (i = 0; i < trg_reg.end_n; i++) {
             if (a_msg[s_i].at[a_i].chr == trg_reg.ref_end[i].chr
-                && abs((a_msg[s_i].at[a_i].offset-trg_reg.ref_end[i].ref_pos) - (s_i-left_b)*(AP.seed_step)) < AP.SV_len_thd) {
+                && labs((a_msg[s_i].at[a_i].offset-trg_reg.ref_end[i].ref_pos) - (s_i-left_b)*AP.seed_step) < AP.SV_len_thd) {
                 // connectable with main-line
                 if (score > 1) score += score/2;
                 else score++;
@@ -1210,7 +1209,7 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
     int left_id, right_id, left, right, l;
     for (i = 0; i < re_reg->reg_n; ++i) {
         // get region boundary (left, right)
-        left_id = (re_reg->reg[i].beg +  AP.seed_inv - 1) / AP.seed_step+1; 
+        left_id = (re_reg->reg[i].beg + AP.seed_inv - 1) / AP.seed_step+1; 
         right_id = (re_reg->reg[i].end - 1) / AP.seed_step+1;
         if (right_id > APP.seed_all) right_id -= 1;
         left = right = -2;

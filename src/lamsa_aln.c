@@ -31,7 +31,7 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -t --thread    [INT]    Number of threads. [1]\n");
     //fprintf(stderr, "         -s [INT]      The seeding program, <gem(0)>, <bwa(1)> or <soap2-dp(2)>. [0]\n");
 	fprintf(stderr, "    -l --seed-len  [INT]    Length of seeding fragments. [%d]\n", SEED_LEN);
-	fprintf(stderr, "    -i --seed-inv  [INT]    Distance between neighboring seeding fragments. [%d]\n", SEED_INTERVAL);
+	fprintf(stderr, "    -i --seed-inv  [INT]    Distance between neighboring seeding fragments. [%d]\n", SEED_STEP);
 	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of seeding fragments' hits. [%d]\n", SEED_PER_LOCI);
     fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. [%d]\n", SV_MAX_LEN);
     fprintf(stderr, "    -v --ovlp-rat  [FLOAT]  Minimum overlapping ratio to cluster two skeletons or alignment records. (0~1) [%.1f]\n", OVLP_RAT);
@@ -40,13 +40,24 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. [%d]\n\n", BWT_KMER);
 	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
     
-
     fprintf(stderr, "Scoring options:\n\n");
 
     fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [%d]\n", MAT_SCORE);
     fprintf(stderr, "    -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [%d]\n", MIS_PEN);
     fprintf(stderr, "    -O --open-pen  [INT]    Gap open penalty for SW-alignment. [%d]\n", OPEN_PEN);
     fprintf(stderr, "    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. [%d]\n\n", EXT_PEN);
+
+
+    fprintf(stderr, "Read options:\n\n");
+
+    fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
+    fprintf(stderr, "    -e --id-rate   [FLOAT]  Maximum error rate of indels within reads. [%.2f]\n", ID_RATE);
+    
+    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden. [0]\n");
+    fprintf(stderr, "                            Illumina moleculo(0): default setting.\n");
+    fprintf(stderr, "                            PacBio(1): -i10 -l30 -m4 -M5 -O2 -E2 -e 0.3 \n");
+    //fprintf(stderr, "                            Oxford Nanopore(2). [%s]\n", MOL_STR);
+
 
     fprintf(stderr, "Output options:\n\n");
 
@@ -78,7 +89,7 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "                            series of -l bp long fragments, and employs NGS aligner to generate the\n");
     fprintf(stderr, "                            approximate matches of the fragments. [50]\n");
 	fprintf(stderr, "    -i --seed-inv  [INT]    Distance between neighboring seeding fragments, LAMSA extracts seeding\n");
-    fprintf(stderr, "                            fragments starting at every -i bp of the read. [%d]\n", SEED_INTERVAL);
+    fprintf(stderr, "                            fragments starting at every -i bp of the read. [%d]\n", SEED_STEP);
 	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of hits. If a seeding fragment has more than -p\n");
     fprintf(stderr, "                            approximate matches, LAMSA would consider the seed is too repetitive, and\n");
     fprintf(stderr, "                            discard all the matches. [%d]\n", SEED_PER_LOCI);
@@ -99,7 +110,18 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. For the unaligned read part shorter than -R bp, LAMSA\n");
     fprintf(stderr, "                            will extract all its -k bp tokens and query their exact match as hits. [%d]]\n\n", BWT_KMER);
 	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
+
+    fprintf(stderr, "Read options:\n\n");
+
+    fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
+    fprintf(stderr, "    -e --id-rate   [FLOAT]  Maximum error rate of indels within reads. [%.2f]\n", ID_RATE);
     
+    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple paramethers unless overriden [mol]\n");
+    fprintf(stderr, "                            Illumina moleculo(mol): default setting.\n");
+    fprintf(stderr, "                            PacBio(pacbio): -i10 -l30 -m4 -M5 -O2 -E2 -e 0.3 \n");
+    //fprintf(stderr, "                            Oxford Nanopore(nano). [%s]\n", MOL_STR);
+
+
     fprintf(stderr, "Scoring options:\n\n");
 
     fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [%d]\n", MAT_SCORE);
@@ -203,11 +225,11 @@ int split_seed(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
 
     fprintf(stderr, "[lamsa_aln] Spliting seed ... ");
 
-    int seed_len=AP.seed_len, seed_inv=AP.seed_inv;
+    int seed_len=AP.seed_len, seed_step=AP.seed_step;
     m_read = s_msg->read_m;
     while (kseq_read(seq) >= 0)
     {
-        seed_all = (1+ (seq->seq.l - seed_len) / (seed_len + seed_inv));
+        seed_all = (1+ (seq->seq.l - seed_len) / seed_step);
         seed_seq[seed_len] = '\n';
         if (seed_all > s_msg->seed_max) s_msg->seed_max = seed_all;
         if ((int)seq->seq.l > s_msg->read_max_len) s_msg->read_max_len = seq->seq.l;
@@ -235,14 +257,14 @@ int split_seed(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
         }
         ++s_msg->read_all;
         s_msg->seed_all[s_msg->read_all] = s_msg->seed_all[s_msg->read_all-1] + seed_all;
-        s_msg->last_len[s_msg->read_all] = seq->seq.l - seed_all * seed_len - (seed_all-1) * seed_inv;
+        s_msg->last_len[s_msg->read_all] = seq->seq.l - seed_len - (seed_all-1) * seed_step;
         s_msg->read_len[s_msg->read_all] = seq->seq.l;
         s_msg->read_m = m_read;
 
         for (i = 0; i < seed_all; ++i)
         {
-            sprintf(seed_head, ">%s_%d:%d\n", seq->name.s, i, i*(seed_len+seed_inv));
-            strncpy(seed_seq, seq->seq.s+i*(seed_len+seed_inv), seed_len);
+            sprintf(seed_head, ">%s_%d:%d\n", seq->name.s, i, i*seed_step);
+            strncpy(seed_seq, seq->seq.s+i*seed_step, seed_len);
             seed_seq[seed_len+1] = '\0';
             fputs(seed_head, outfp);
             fputs(seed_seq, outfp);
@@ -265,7 +287,7 @@ int split_seed_info(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
     char read_name[1024];
     FILE *infofp;
     int m_read, seed_all, last_len, len, n;
-    int seed_len=AP.seed_len, seed_inv=AP.seed_inv;
+    int seed_len=AP.seed_len, seed_step=AP.seed_step;
     void *new_p;
 
     strcpy(seed_info, prefix); strcat(seed_info, ".seed.info");
@@ -311,9 +333,9 @@ int split_seed_info(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
         s_msg->last_len[s_msg->read_all] = last_len;
         s_msg->read_len[s_msg->read_all] = len;
         s_msg->read_m = m_read;
-        if (last_len != len - seed_all * seed_len - (seed_all-1)*seed_inv)
+        if (last_len != len - seed_len - (seed_all-1)*seed_step)
         {
-            fprintf(stderr, "\n%s %d %d %d %d %d", read_name, seed_all, last_len, len, seed_all, seed_inv);
+            fprintf(stderr, "\n%s %d %d %d %d %d", read_name, seed_all, last_len, len, seed_all, seed_step);
             fprintf(stderr, "\n[split seed] INFO file error.[3]\n"); exit(1);
         }
     }
@@ -1229,10 +1251,12 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
     return 0;
 }
 
-int lamsa_gem(const char *ref_prefix, const char *read_prefix, char *bin_dir, int per_loci, int n_thread)
+int lamsa_gem(const char *ref_prefix, const char *read_prefix, char *bin_dir, lamsa_aln_para *AP)
 {
+    int per_loci = AP->per_aln_m, n_thread = AP->n_thread;
+    float mis_rate = AP->mis_rate, id_rate = AP->id_rate, min_match_rate = AP->mat_rate;
     char cmd[1024];
-    sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %d %d", bin_dir, ref_prefix, read_prefix, per_loci, n_thread);
+    sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %f %f %f %d %d", bin_dir, ref_prefix, read_prefix, mis_rate, id_rate, min_match_rate, per_loci, n_thread);
     fprintf(stderr, "[lamsa_aln] Executing gem-mapper ... \n");
     fprintf(stderr, "[lamsa_aln] Time consumption of gem-mapper:");
     if (system(cmd) != 0) { fprintf(stderr, "[lamsa_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
@@ -1305,7 +1329,7 @@ int lamsa_aln_c(const char *ref_prefix, const char *read_prefix, int seed_info, 
     //excute soap2-dp program
     if (!no_seed_aln) 
     {
-        if (seed_program == 0) lamsa_gem(ref_prefix, read_prefix, bin_dir, AP->per_aln_m, AP->n_thread);
+        if (seed_program == 0) lamsa_gem(ref_prefix, read_prefix, bin_dir, AP);
         else if (seed_program == 1) lamsa_bwa(ref_prefix, read_prefix, bin_dir);
         else if (seed_program == 2) lamsa_soap2dp(ref_prefix, read_prefix, bin_dir);
         else { fprintf(stderr, "[lamsa_aln] Unknown seeding program option.\n"); return lamsa_aln_usage(); }
@@ -1328,10 +1352,9 @@ void init_aln_para(lamsa_aln_para *AP)
 {
     AP->n_thread = 1;
 
-    AP->seed_len = SEED_LEN;
-    AP->seed_step = SEED_INTERVAL;
-    //AP->seed_inv = SEED_INTERVAL;
-    //AP->match_dis = AP->seed_step/25; // 4% indel allowed
+    AP->seed_len = -1;//SEED_LEN;   // read_type
+    AP->seed_step = -1;//SEED_STEP; // read_type
+    //AP->match_distype = 0; //     // read_type
     AP->per_aln_m = SEED_PER_LOCI;
     AP->first_loci_thd = SEED_FIRST_ROUND_LOCI;
 
@@ -1356,8 +1379,14 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->outp = stdout;
 
     AP->frag_score_table = f_BCC_score_table;
-    AP->match = MAT_SCORE; AP->mis = MIS_PEN;
-    AP->gapo = OPEN_PEN; AP->gape = EXT_PEN;
+    AP->match = -1; //MAT_SCORE; // read_type
+    AP->mis = -1;//MIS_PEN;      // read_type
+    AP->gapo = -1;//OPEN_PEN;    // read_type
+    AP->gape = -1;//EXT_PEN;     // read_type
+    AP->mis_rate = -1;//MIS_RATE;// read_type
+    AP->id_rate = -1; //ID_RATE; // read_type
+    AP->mat_rate = -1;//MAT_RATE;// read_type
+
     AP->end_bonus = 5;
     AP->zdrop = 100;
 }
@@ -1373,6 +1402,34 @@ void lamsa_fill_mat(int mat, int mis, int8_t sc_mat[25])
     for (j = 0; j < 5; ++j) sc_mat[k++] = -1; // 'N'
 }
 
+void lamsa_set_readtype(lamsa_aln_para *AP, int read_type)
+{
+    AP->match_dis_type = read_type;
+    if (read_type == 0) { // Illumina Moleculo
+        if (AP->seed_step < 0) AP->seed_step = SEED_STEP;
+        if (AP->seed_len < 0) AP->seed_len = SEED_LEN;
+        if (AP->match < 0) AP->match = MAT_SCORE;
+        if (AP->mis < 0) AP->mis = MIS_PEN;
+        if (AP->gapo < 0) AP->gapo = OPEN_PEN;
+        if (AP->gape < 0) AP->gape = EXT_PEN;
+        if (AP->mis_rate < 0) AP->mis_rate = MIS_RATE;
+        if (AP->id_rate < 0) AP->id_rate = ID_RATE;
+        if (AP->mat_rate < 0) AP->mat_rate = MAT_RATE;
+        AP->match_dis = MATCH_DIS;
+    } else if (read_type == 1) { // PacBio
+        if (AP->seed_step < 0) AP->seed_step = PB_SEED_STEP;
+        if (AP->seed_len < 0) AP->seed_len = PB_SEED_LEN;
+        if (AP->match < 0) AP->match = PB_MAT_SCORE;
+        if (AP->mis < 0) AP->mis = PB_MIS_PEN;
+        if (AP->gapo < 0) AP->gapo = PB_OPEN_PEN;
+        if (AP->gape < 0) AP->gape = PB_EXT_PEN;
+        if (AP->mis_rate < 0) AP->mis_rate = MIS_RATE;
+        if (AP->id_rate < 0) AP->id_rate = PB_ID_RATE;
+        if (AP->mat_rate < 0) AP->mat_rate = PB_MAT_RATE;
+        AP->match_dis = AP->seed_step * AP->id_rate * 0.33;
+    }
+}
+
 extern char *get_bin_dir(char *bin);
 
 const struct option long_opt [] = {
@@ -1385,6 +1442,10 @@ const struct option long_opt [] = {
     { "max-skel", 1, NULL, 's' },
     { "max-reg", 1, NULL, 'R' },
     { "bwt-kmer", 1, NULL, 'k' },
+
+    { "mis-rate", 1, NULL, 'x' },
+    { "id-rate", 1, NULL, 'e' },
+    { "read-type", 1, NULL, 'T' },
 
     { "match-sc", 1, NULL, 'm' },
     { "mis-pen", 1, NULL, 'M' },
@@ -1409,10 +1470,10 @@ int lamsa_aln(int argc, char *argv[])
     // parameters
     lamsa_aln_para *AP = (lamsa_aln_para*)calloc(1, sizeof(lamsa_aln_para));
     init_aln_para(AP);
-    int no_seed_aln=0, seed_info=0, seed_program=0;
+    int no_seed_aln=0, seed_info=0, seed_program=0, read_type=0; //mol:0, pacbio:1
     char seed_result_f[1024]="";
 
-    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
+    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:x:e:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
     {
         switch (c)
         {
@@ -1432,6 +1493,10 @@ int lamsa_aln(int argc, char *argv[])
             case 'O': AP->gapo = atoi(optarg); break;
             case 'E': AP->gape = atoi(optarg); break;
 
+            case 'x': AP->mis_rate = atof(optarg); break;
+            case 'e': AP->id_rate = atof(optarg); break;
+            case 'X': AP->read_type = atoi(optarg); break;
+
             case 'r': AP->res_mul_max = atoi(optarg); break;
             case 'g': AP->split_len = atoi(optarg);
             case 'S': AP->supp_soft = 1; break;
@@ -1446,8 +1511,9 @@ int lamsa_aln(int argc, char *argv[])
             default: return lamsa_aln_usage();
         }
     }
+    lamsa_set_readtype(AP, read_type);
+
     AP->seed_inv = AP->seed_step-AP->seed_len;
-    AP->match_dis = AP->seed_step / 25; // 4% indel allowed
     lamsa_fill_mat(AP->match, AP->mis, AP->sc_mat);
     if (argc - optind != 3)
         return lamsa_aln_usage();

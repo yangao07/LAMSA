@@ -9,9 +9,10 @@
 #define CHUNK_READ_N 5120
 
 #define READ_MAX_NUM 1000
-//aln_para
+
+//default aln_para
 #define SEED_LEN 50
-#define SEED_INTERVAL 100
+#define SEED_STEP 100
 #define SEED_PER_LOCI 200
 #define SV_MAX_LEN 10000
 #define OVLP_RAT 0.7
@@ -19,10 +20,27 @@
 #define MAX_BWT_REG 300
 #define BWT_KMER 19
 
+#define ID_RATE 0.04
+#define MIS_RATE 0.04
+#define MATCH_DIS 5
+#define MAT_RATE 0.80
+
 #define MAT_SCORE 1
 #define MIS_PEN 3
 #define OPEN_PEN 5
 #define EXT_PEN 2
+// PacBio aln para
+#define PB_SEED_LEN 30
+#define PB_SEED_STEP 10
+
+#define PB_ID_RATE 0.3
+#define PB_MAT_RATE 0.6
+
+#define PB_MAT_SCORE 4
+#define PB_MIS_PEN 5
+#define PB_OPEN_PEN 2
+#define PB_EXT_PEN 2
+
 
 #define RES_MAX_N 10
 #define SPLIT_ALN_LEN 100
@@ -145,15 +163,11 @@ typedef struct {
     int read_count;     //current read count
     int read_all;		//total number of reads
 	int read_m; 
-	//char **read_name;
-    int *seed_all;	//count of seeds per read    index from 1
-    int *read_len;	//length of read
-    //int *read_level;//level of read length
-	int *last_len;	//last_len                  index from 1
-    int seed_max;   //max number of seeds in all reads
-    int read_max_len;    //max length of read
-    //int *seed_len;
-    //int *seed_inv;
+    int *seed_all;	    //count of seeds per read    index from 1
+    int *read_len;	    //length of read
+	int *last_len;	    //last_len                  index from 1
+    int seed_max;       //max number of seeds in all reads
+    int read_max_len;   //max length of read
 } seed_msg;
 
 typedef struct {
@@ -221,7 +235,7 @@ typedef struct {
 typedef struct {
     int8_t is_rev;
     int chr;
-    uint64_t ref_pos;
+    int64_t ref_pos;
 } reg_b;
 
 typedef struct {
@@ -323,7 +337,7 @@ typedef struct {
 typedef struct {
     int n_thread;   // for mulit-threads
 
-    int seed_len, seed_inv, seed_step; // length, interval of seeds
+    int seed_len, seed_step, seed_inv; // length, dis of adjacent seeds' start pos
     int per_aln_m;  // max number of seeds' aln-results
     int first_loci_thd; 
 
@@ -342,6 +356,7 @@ typedef struct {
     uint8_t supp_soft, comm; // soft for supp; comment
     FILE *outp;
 
+    int match_dis_type; // 0:low error rate(Mol), 1: high error rate(PacBio)
     int match_dis; int del_thd; int ins_thd; 
 
     int *frag_score_table;
@@ -362,6 +377,9 @@ typedef struct {
     int match, mis;     // score matrix, match and mismatch
     int8_t sc_mat[25];
     int end_bonus, zdrop;
+    // read option
+    float mis_rate, id_rate, mat_rate;
+    int read_type;
 } lamsa_aln_para;        // for all reads
 //AP
 

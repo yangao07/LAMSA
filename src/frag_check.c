@@ -114,45 +114,20 @@ int get_read_intv(uint8_t *seq2, uint8_t *read_bseq,
 				  int *band_width, 
 				  lamsa_aln_para AP, lamsa_aln_per_para APP)
 {
-	int32_t i;
-	int j;
-
+	int32_t i; int j;
 	//set band-width
 	*band_width = 2 * (((a_msg[seed2_i].read_id - a_msg[seed1_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
-	
-	
 	//convert char seq to int seq
-
-	if (a_msg[seed1_i].at[seed1_aln_i].nsrand == 1)
-	{
+	if (a_msg[seed1_i].at[seed1_aln_i].nsrand == 1) {
 		*band_width = 2 * (((a_msg[seed2_i].read_id - a_msg[seed1_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
-		for (j=0, i = a_msg[seed1_i].read_id * AP.seed_step - AP.seed_inv; i < (a_msg[seed2_i].read_id-1) * AP.seed_step; ++j, ++i)
+		for (j=0, i = (a_msg[seed1_i].read_id) * AP.seed_step-AP.seed_inv; i < (a_msg[seed2_i].read_id-1) * AP.seed_step; ++j, ++i)
+			seq2[j] = read_bseq[i];
+	} else {
+		*band_width = 2 * (((a_msg[seed2_i].read_id - a_msg[seed1_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
+        for (j=0, i = APP.last_len+(a_msg[seed1_i].read_id)*AP.seed_step-AP.seed_inv; i < APP.last_len+(a_msg[seed2_i].read_id-1)*AP.seed_step; ++j, ++i)
 			seq2[j] = read_bseq[i];
 	}
-	else
-	{
-		//printf("read: %d, %d ", a_msg[seed1_i].read_id,a_msg[seed1_i].read_id * 2 * seed_len);
-		*band_width = 2 * (((a_msg[seed2_i].read_id - a_msg[seed1_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
-        for (j=0, i = APP.last_len+a_msg[seed1_i].read_id*AP.seed_step-AP.seed_inv; i < APP.last_len+(a_msg[seed2_i].read_id-1)*AP.seed_step; ++j, ++i)
-		//for (j=0, i = a_msg[seed1_i].read_id * AP.seed_step; i < (a_msg[seed2_i].read_id * 2 - 1) * seed_len; ++j, ++i)
-		{
-			seq2[j] = read_bseq[i];
-			//printf("%c", read_seq[i-100]);
-		}
-	}
-	/*else 
-	{
-		*band_width = 2 * (((a_msg[seed1_i].read_id - a_msg[seed2_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
-		read_len = (((a_msg[seed1_i].read_id - a_msg[seed2_i].read_id) << 1) - 1) * seed_len;
-		for (j=0; j < read_len; ++j)
-			seq2[read_len-j-1] = com_nst_nt4_table[(int)read_seq[((a_msg[seed2_i].read_id << 1) - 1) * seed_len + j]];
-	}*/
-	
-	//fprintf(stdout, "read:\t%d\t%d\t", j, s);
-	//for (i = 0; i < j; i++)
-	//	fprintf(stdout, "%d",(int)seq2[i]);
-	//fprintf(stdout, "\n");
-	return (j);
+    return j;
 }
 
 void printcigar(FILE *outp, cigar32_t *cigar, int cigar_len)
@@ -218,127 +193,6 @@ void _deQueue_cigar(cigar32_t **cigar, int *cigar_n, int de_n) {
     for (i = de_n; i < *cigar_n; ++i)
         (*cigar)[i - de_n] = (*cigar)[i];
     (*cigar_n) -= de_n;
-}
-
-//pop_mode: 0 pop_n -> cigar_n
-//          1 pop_n -> base n
-void _pop_cigar(cigar32_t **cigar, int *cigar_n, int pop_mode, int pop_n) {
-    if (pop_mode == 0)
-    {
-        (*cigar_n) -= pop_n;
-        if (*cigar_n < 0) *cigar_n = 0;
-    }
-    else if (pop_mode == 1)
-    {
-        int i;
-        int pop_l = pop_n;
-
-        i = *cigar_n - 1;
-        while (pop_l != 0)
-        {
-            if ((((*cigar)[i]) & 0xf) == CMATCH || (((*cigar)[i]) & 0xf) == CINS)
-            {
-                if ((((*cigar)[i]) >> 4) < pop_l)
-                {
-                    pop_l -= (((*cigar)[i]) >> 4);
-                    (*cigar_n) -= 1;
-                }
-                else if ((((*cigar)[i]) >> 4) == pop_l)
-                {
-                    (*cigar_n) -= 1;
-                    return;
-                }
-                else
-                {
-                    long long op = (*cigar)[i] & 0xf;
-                    (*cigar)[i] -= ((pop_l << 4) | op);
-                    return;
-                }
-            } 
-            //else if ((((*cigar)[i]) & 0xf) == CINS)
-            //else if ((((*cigar)[i]) & 0xf) == CDEL)
-            --i;
-            if (i < 0) { fprintf(stderr, "\n[pop_cigar] Cigar error,\n"); exit(1); }
-        }
-    } else {
-        fprintf(stderr, "\n[pop_cigar] Unknown pop mode. (%d)\n", pop_mode); exit(1);
-    }
-}
-
-void _invert_cigar(cigar32_t **cigar, int cigar_n) {
-    if (cigar_n <= 1) return;
-    int i;
-    cigar32_t tmp;
-    for (i = 0; i < cigar_n/2; ++i) {
-        tmp = (*cigar)[i];
-        (*cigar)[i] = (*cigar)[cigar_n - i - 1];
-        (*cigar)[cigar_n - i - 1] = tmp;
-    }
-}
-
-static inline int _push_cigar0(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
-    int i;
-    i = *cigar_n;
-    if (((i-1) >=0) && (((*cigar)[i-1] & 0xf) == (_cigar & 0xf)))
-        (*cigar)[i-1] += ((_cigar >> 4) << 4);
-    else {
-        if (i == *cigar_m) {
-            (*cigar_m) = (*cigar_m) ? (*cigar_m)<<1 : 4;
-			(*cigar) = (cigar32_t*)realloc(*cigar, (*cigar_m) * sizeof (cigar32_t));
-			if ((*cigar) == NULL)	{fprintf(stderr, "\n[frag_check] Memory is not enougy.\n");exit(1);}
-        }
-        (*cigar)[i] = _cigar;
-        ++(*cigar_n);
-    }
-    return 0;
-}
-
-static inline int _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
-	if ((_cigar >> 4) == 0) return 0;
-	return _push_cigar0(cigar, cigar_n, cigar_m, _cigar);
-}
-
-static inline int _push_cigar(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *_cigar, int _cigar_n)
-{
-    if (_cigar_n == 0) return 0;
-	int i,j;
-	i = *cigar_n;
-
-    if ((i-1) >= 0) {
-        if(((*cigar)[i-1] & 0xf) == (_cigar[0] & 0xf)) {
-            (*cigar)[i-1] += ((_cigar[0] >> 4) << 4);
-            j = 1;
-        } else if ((((*cigar)[i-1] & 0xf) == CINS && (_cigar[0] & 0xf) == CSOFT_CLIP)   // xI+yS -> (x+y)S 
-                ||(((*cigar)[i-1] & 0xf) == CSOFT_CLIP && (_cigar[0] & 0xf) == CINS)){ // xS+yI -> (x+y)S 
-            (*cigar)[i-1] = ((((*cigar)[i-1]>>4) + (_cigar[0]>>4)) << 4) | CSOFT_CLIP;
-            j = 1;
-        } else j = 0;
-    } else j = 0;
-
-    for (; j < _cigar_n; ++i,++j) {
-        if (i == *cigar_m) {
-            (*cigar_m) = (*cigar_m) ? (*cigar_m)<<1 : 4;
-            (*cigar) = (cigar32_t*)realloc(*cigar, (*cigar_m) * sizeof (cigar32_t));
-			if ((*cigar) == NULL)	{fprintf(stderr, "\n[frag_check] Memory is not enougy.\n");exit(1);}
-		}
-		(*cigar)[i] = _cigar[j];
-	}
-	*cigar_n = i;
-    return 0;
-}
-
-static inline int _push_cigar_e1(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t _cigar) {
-    _push_cigar1(cigar, cigar_n, cigar_m, _cigar);
-    if (refend) *refend += refInCigar(&_cigar, 1);
-    if (readend) *readend += readInCigar(&_cigar, 1);
-    return 0;
-}
-
-static inline int _push_cigar_e(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t *_cigar, int _cigar_n) {
-    _push_cigar(cigar, cigar_n, cigar_m, _cigar, _cigar_n);
-    if (refend) *refend += refInCigar(_cigar, _cigar_n);
-    if (readend) *readend += readInCigar(_cigar, _cigar_n);
-    return 0;
 }
 
 //chr/nsrand
@@ -588,12 +442,13 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 		int64_t act = at2.offset;
 		int dis = act-exp;
 
+        int match_dis = AP.match_dis * (AP.match_dis_type==0? 1 : (a_msg[s2_i].read_id-a_msg[s1_i].read_id));
 #ifdef __DEBUG__
 		int64_t pos = at1.offset+AP.seed_len-1+at1.len_dif;
-        if (abs(dis) > AP.match_dis) 
+        if (abs(dis) > match_dis) 
 			fprintf(stderr, "%d\t%lld\t%d\t%s\n", at1.chr, (long long)pos, abs(dis), dis>0?"DEL":"INS");
 #endif
-		if (dis > AP.match_dis) {	//DEL
+		if (dis > match_dis) {	//DEL
             s_tlen = s_qlen + dis;
             s_tseq = (uint8_t*)malloc(s_tlen * sizeof(uint8_t));
             ref_offset = at1.offset + AP.seed_len + at1.len_dif;
@@ -605,7 +460,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
             } else {
                 res = split_indel_map(&s_cigar, &s_clen, &s_cm, s_qseq, s_qlen, s_tseq, s_tlen, 0, AP,  hash_num, hash_node);
             }
-        } else if (dis < -AP.match_dis) { 
+        } else if (dis < -match_dis) { 
             s_tlen = s_qlen + dis;
             if (s_tlen < 2 * AP.hash_step) {
             //if (s_tlen < 0) { // overlapped ins
