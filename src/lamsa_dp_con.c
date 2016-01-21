@@ -574,7 +574,7 @@ void get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, 
     }
 
     int seed_len = AP.seed_len; int seed_step = AP.seed_step;
-    if ((abs(a_msg[pre].read_id-a_msg[i].read_id)-1) * seed_step < seed_len) { // for overlapped seeds
+    if (abs(a_msg[pre].read_id-a_msg[i].read_id) * seed_step < seed_len) { // for overlapped seeds
         *flag = F_UNCONNECT; return;
     }
 
@@ -583,7 +583,7 @@ void get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, 
 
     int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act)) - (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id-a_msg[i].read_id) < 0)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
 
-    int mat_dis =  AP.match_dis * ((AP.match_dis_type == 0) ? 1 : abs(a_msg[pre].read_id-a_msg[i].read_id));
+    int mat_dis =  AP.match_dis * ((AP.match_dis_type == 0) ? 1 : abs(a_msg[pre].read_id-a_msg[i].read_id)); // low-error-rate OR high-error-rate
     if (dis <= mat_dis && dis >= -mat_dis) {
         if (abs(a_msg[pre].read_id - a_msg[i].read_id) == 1) *flag = F_MATCH;
         else if (abs(a_msg[pre].read_id - a_msg[i].read_id) < 10) *flag = F_MISMATCH; 

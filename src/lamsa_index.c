@@ -6,7 +6,6 @@
 #include <getopt.h>
 #include <zlib.h>
 #include "bntseq.h"
-//#include "bntseq_new.h"
 #include "bwt.h"
 #include "utils.h"
 #include "lamsa_index.h"
