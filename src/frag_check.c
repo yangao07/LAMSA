@@ -442,7 +442,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 		int64_t act = at2.offset;
 		int dis = act-exp;
 
-        int match_dis = AP.match_dis * (AP.match_dis_type==0? 1 : (a_msg[s2_i].read_id-a_msg[s1_i].read_id));
+        int match_dis = AP.match_dis * ((AP.match_dis_type==0)? 1 : (a_msg[s2_i].read_id-a_msg[s1_i].read_id));
 #ifdef __DEBUG__
 		int64_t pos = at1.offset+AP.seed_len-1+at1.len_dif;
         if (abs(dis) > match_dis) 

@@ -11,12 +11,12 @@
 CMD_PATH=`dirname $0`
 GEM_DIR=$CMD_PATH
 
-if [ $# -ne 7 ]
-then
-	echo -e usage:
-	echo -e $0 ref.fa read.fa mis_rate edit_distance min_match_bases max_matches_per_read thread_n
-	exit 1
-fi
+#if [ $# -ne 7 ]
+#then
+#	echo -e usage:
+#	echo -e $0 ref.fa read.fa mis_rate edit_distance min_match_bases max_matches_per_read thread_n
+#	exit 1
+#fi
 
 ref=${1}.gem
 read_f=$2

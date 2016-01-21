@@ -116,7 +116,7 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
     fprintf(stderr, "    -e --id-rate   [FLOAT]  Maximum error rate of indels within reads. [%.2f]\n", ID_RATE);
     
-    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple paramethers unless overriden [mol]\n");
+    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden [mol]\n");
     fprintf(stderr, "                            Illumina moleculo(mol): default setting.\n");
     fprintf(stderr, "                            PacBio(pacbio): -i10 -l30 -m4 -M5 -O2 -E2 -e 0.3 \n");
     //fprintf(stderr, "                            Oxford Nanopore(nano). [%s]\n", MOL_STR);
@@ -1386,6 +1386,7 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->mis_rate = -1;//MIS_RATE;// read_type
     AP->id_rate = -1; //ID_RATE; // read_type
     AP->mat_rate = -1;//MAT_RATE;// read_type
+    AP->read_type = 0; // low-error-rate
 
     AP->end_bonus = 5;
     AP->zdrop = 100;
@@ -1402,10 +1403,10 @@ void lamsa_fill_mat(int mat, int mis, int8_t sc_mat[25])
     for (j = 0; j < 5; ++j) sc_mat[k++] = -1; // 'N'
 }
 
-void lamsa_set_readtype(lamsa_aln_para *AP, int read_type)
+void lamsa_set_readtype(lamsa_aln_para *AP)
 {
-    AP->match_dis_type = read_type;
-    if (read_type == 0) { // Illumina Moleculo
+    AP->match_dis_type = AP->read_type;
+    if (AP->read_type == 0) { // Illumina Moleculo
         if (AP->seed_step < 0) AP->seed_step = SEED_STEP;
         if (AP->seed_len < 0) AP->seed_len = SEED_LEN;
         if (AP->match < 0) AP->match = MAT_SCORE;
@@ -1416,7 +1417,7 @@ void lamsa_set_readtype(lamsa_aln_para *AP, int read_type)
         if (AP->id_rate < 0) AP->id_rate = ID_RATE;
         if (AP->mat_rate < 0) AP->mat_rate = MAT_RATE;
         AP->match_dis = MATCH_DIS;
-    } else if (read_type == 1) { // PacBio
+    } else if (AP->read_type == 1) { // PacBio
         if (AP->seed_step < 0) AP->seed_step = PB_SEED_STEP;
         if (AP->seed_len < 0) AP->seed_len = PB_SEED_LEN;
         if (AP->match < 0) AP->match = PB_MAT_SCORE;
@@ -1426,7 +1427,7 @@ void lamsa_set_readtype(lamsa_aln_para *AP, int read_type)
         if (AP->mis_rate < 0) AP->mis_rate = MIS_RATE;
         if (AP->id_rate < 0) AP->id_rate = PB_ID_RATE;
         if (AP->mat_rate < 0) AP->mat_rate = PB_MAT_RATE;
-        AP->match_dis = AP->seed_step * AP->id_rate * 0.33;
+        AP->match_dis = AP->seed_step * AP->id_rate / 3.0;
     }
 }
 
@@ -1470,7 +1471,7 @@ int lamsa_aln(int argc, char *argv[])
     // parameters
     lamsa_aln_para *AP = (lamsa_aln_para*)calloc(1, sizeof(lamsa_aln_para));
     init_aln_para(AP);
-    int no_seed_aln=0, seed_info=0, seed_program=0, read_type=0; //mol:0, pacbio:1
+    int no_seed_aln=0, seed_info=0, seed_program=0; 
     char seed_result_f[1024]="";
 
     while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:x:e:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
@@ -1495,7 +1496,7 @@ int lamsa_aln(int argc, char *argv[])
 
             case 'x': AP->mis_rate = atof(optarg); break;
             case 'e': AP->id_rate = atof(optarg); break;
-            case 'X': AP->read_type = atoi(optarg); break;
+            case 'T': AP->read_type = atoi(optarg); break;//mol:0, pacbio:1
 
             case 'r': AP->res_mul_max = atoi(optarg); break;
             case 'g': AP->split_len = atoi(optarg);
@@ -1511,7 +1512,7 @@ int lamsa_aln(int argc, char *argv[])
             default: return lamsa_aln_usage();
         }
     }
-    lamsa_set_readtype(AP, read_type);
+    lamsa_set_readtype(AP);
 
     AP->seed_inv = AP->seed_step-AP->seed_len;
     lamsa_fill_mat(AP->match, AP->mis, AP->sc_mat);
