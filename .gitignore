@@ -22,4 +22,8 @@ data/*
 test/*
 
 #output
-output/*
+out/*
+
+#sh
+*.sh
+*.awk

@@ -31,7 +31,7 @@ thread_n=$7
 
 map_out=${2}.gem
 #echo "$GEM_DIR/gem-mapper -I $ref -i $read_f -o $map_out -m $mismatch -e $edit_distance --min-matched-bases $min_match_bases --max-big-indel-length $indel_length -d $max_matches -D $min_strata -T $thread_n --fast-mapping 2> $map_out.log"
-time $GEM_DIR/gem-mapper -I $ref -i $read_f -o $map_out -m $mismatch -e $edit_distance --min-matched-bases $min_match_bases --max-big-indel-length $indel_length -d $max_matches -D $min_strata -T $thread_n --fast-mapping 2> $map_out.log
+{ time $GEM_DIR/gem-mapper -I $ref -i $read_f -o $map_out -m $mismatch -e $edit_distance --min-matched-bases $min_match_bases --max-big-indel-length $indel_length -d $max_matches -D $min_strata -T $thread_n --fast-mapping 2> $map_out.log ; } 2>> $map_out.log
 if [[ $? -ne 0 ]];then
 	exit 1
 fi
