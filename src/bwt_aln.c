@@ -94,7 +94,7 @@ Next:;
 }
 
 // return: res_mul_max
-int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para AP, int seed_n, line_node **line, int *node_n)
+int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para *AP, int seed_n, line_node **line, int *node_n)
 {
     int l_n = 0; 
     int i, j, k, reg_hit;
@@ -104,7 +104,7 @@ int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para AP, int seed_n,
     extern int heap_add_node(node_score *ns, line_node node, int score, int NM);
     extern void node_free_score(node_score *ns);
 
-    node_score *ns = node_init_score(AP.res_mul_max);
+    node_score *ns = node_init_score(AP->res_mul_max);
 
     ns->node_n = 0;
     for (i = seed_n-1; i >= 0; --i) {
@@ -114,7 +114,7 @@ int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para AP, int seed_n,
             reg_hit=0;
             for (k = 0; k < reg.beg_n; ++k) {
                 if ((*seed_v)[i].loc[j].ref_id == reg.ref_beg[k].chr-1 && (*seed_v)[i].loc[j].is_rev == reg.ref_beg[k].is_rev
-                        && abs((*seed_v)[i].loc[j].ref_pos-reg.ref_beg[k].ref_pos) < AP.SV_len_thd) {
+                        && abs((*seed_v)[i].loc[j].ref_pos-reg.ref_beg[k].ref_pos) < AP->SV_len_thd) {
                     reg_hit = 1;
                     break;
                 }
@@ -122,7 +122,7 @@ int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para AP, int seed_n,
             if (reg_hit == 0) {
                 for (k = 0; k < reg.end_n; ++k) {
                     if ((*seed_v)[i].loc[j].ref_id == reg.ref_end[k].chr-1 && (*seed_v)[i].loc[j].is_rev == reg.ref_end[k].is_rev
-                            && abs((*seed_v)[i].loc[j].ref_pos-reg.ref_end[k].ref_pos) < AP.SV_len_thd) {
+                            && abs((*seed_v)[i].loc[j].ref_pos-reg.ref_end[k].ref_pos) < AP->SV_len_thd) {
                         reg_hit = 1;
                         break;
                     }
@@ -174,7 +174,7 @@ int bwt_backtrack(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para AP, int seed_n,
     return l_n;
 }
 
-int bwt_cluster_seed(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para AP, int seed_n, line_node **line, int *node_n)
+int bwt_cluster_seed(bwt_seed_t **seed_v, reg_t reg, lamsa_aln_para *AP, int seed_n, line_node **line, int *node_n)
 {
     bwt_init_dp(seed_v, seed_n); bwt_update_dp(seed_v, seed_n);
     return bwt_backtrack(seed_v, reg, AP, seed_n, line, node_n);
@@ -198,7 +198,7 @@ void bwt_set_bound(bwt_seed_t *seed_v, line_node *line, int node_n, int seed_len
 }
 
 void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, int reg_beg, int reg_len,
-                 bwt_bound *left, bwt_bound *right, lamsa_aln_para AP, kseq_t *seqs, line_aln_res *la)
+                 bwt_bound *left, bwt_bound *right, lamsa_aln_para *AP, kseq_t *seqs, line_aln_res *la)
 {
     int read_len = seqs->seq.l;
     int extra_ext_len = 100;
@@ -231,8 +231,8 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
             query[i] = read_bseq[extra_beg-1+i];
     }
 
-    uint64_t ref_start = (left->ref_pos - (left->read_pos-1+left_eta_len) - AP.bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos-1+left_eta_len) - AP.bwt_seed_len);
-    int ref_len = (int)(right->ref_pos + reg_len-right->read_pos+right_eta_len + AP.bwt_seed_len - ref_start + 1);
+    uint64_t ref_start = (left->ref_pos - (left->read_pos-1+left_eta_len) - AP->bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos-1+left_eta_len) - AP->bwt_seed_len);
+    int ref_len = (int)(right->ref_pos + reg_len-right->read_pos+right_eta_len + AP->bwt_seed_len - ref_start + 1);
     uint8_t *target = (uint8_t*)malloc(ref_len * sizeof(uint8_t));
     pac2fa_core(bns, pac, ref_id+1, ref_start-1, &ref_len, target);
 
@@ -246,7 +246,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
 	else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((extra_beg-1) << 4) | CSOFT_CLIP);
 
     // mid global-sw
-    ksw_global(qlen, query+(left->read_pos-1+left_eta_len), tlen, target+left->ref_pos-ref_start, 5, AP.sc_mat, AP.gapo, AP.gape, abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
+    ksw_global2(qlen, query+(left->read_pos-1+left_eta_len), tlen, target+left->ref_pos-ref_start, 5, AP->sc_mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape,  abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
 
     cigar32_t *cigar=NULL; int cigar_n, cigar_m;
     if (left->read_pos > 1 || left_eta_len > 0) { // left extend
@@ -258,7 +258,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
         _t = (uint8_t*)malloc(tlen * sizeof(uint8_t));
         for (i = 0; i < tlen; ++i) _t[i] = target[tlen-1-i];
         // ksw_extend
-        ksw_extend_core(qlen, _q, tlen, _t, 5, AP.sc_mat, abs(qlen-tlen)+3, AP.bwt_seed_len*AP.match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        ksw_extend_core(qlen, _q, tlen, _t, 5, AP->sc_mat, abs(qlen-tlen)+3, AP->bwt_seed_len*AP->match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
             left->read_pos -= _qle;
             left->ref_pos -= _tle;
@@ -278,7 +278,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     if (right->read_pos < reg_len || right_eta_len > 0) { // right extend
         qlen = reg_len - right->read_pos + right_eta_len;
         tlen = ref_start+ref_len-1-right->ref_pos;
-        ksw_extend_core(qlen, query+right->read_pos+left_eta_len, tlen, target+ref_len-tlen, 5, AP.sc_mat, abs(qlen-tlen)+3, AP.bwt_seed_len*AP.match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        ksw_extend_core(qlen, query+right->read_pos+left_eta_len, tlen, target+ref_len-tlen, 5, AP->sc_mat, abs(qlen-tlen)+3, AP->bwt_seed_len*AP->match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
             _push_cigar(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), cigar, cigar_n);
             right->read_pos += _qle;
@@ -303,9 +303,9 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     free(query); free(target);
 }
 
-int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, reg_t reg, lamsa_aln_para AP, kseq_t *seqs, aln_res *re_res)
+int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, reg_t reg, lamsa_aln_para *AP, kseq_t *seqs, aln_res *re_res)
 {
-    int i, j, seed_len = AP.bwt_seed_len, is_rev, ref_id;
+    int i, j, seed_len = AP->bwt_seed_len, is_rev, ref_id;
     uint8_t *bwt_seed = (uint8_t*)malloc(seed_len * sizeof(uint8_t));
 	int max_hit = 100;
     int reg_beg = reg.beg, reg_len = reg.end-reg_beg+1;
@@ -337,7 +337,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
                 reg_hit = 0;
                 for (j = 0; j < reg.beg_n; ++j) {
                     if (ref_id == reg.ref_beg[j].chr-1 && is_rev == reg.ref_beg[j].is_rev
-                     && abs(abs_pos-reg.ref_beg[j].ref_pos) < AP.SV_len_thd) {
+                     && abs(abs_pos-reg.ref_beg[j].ref_pos) < AP->SV_len_thd) {
                         reg_hit = 1;
                         break;
                     }
@@ -345,7 +345,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
                 if (reg_hit == 0) {
                     for (j = 0; j < reg.end_n; ++j) {
                         if (ref_id == reg.ref_end[j].chr-1 && is_rev == reg.ref_end[j].is_rev
-                                && abs(abs_pos-reg.ref_end[j].ref_pos) < AP.SV_len_thd) {
+                                && abs(abs_pos-reg.ref_end[j].ref_pos) < AP->SV_len_thd) {
                             reg_hit = 1;
                             break;
                         }
@@ -359,16 +359,16 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
         }
     }
     // cluster seeds, find optimal res_mul_max cluster
-    line_node **line = (line_node**)malloc(AP.res_mul_max * sizeof(line_node*));
-    for (i = 0; i < AP.res_mul_max; ++i) line[i] = (line_node*)malloc((reg_len-seed_len+1) * sizeof(line_node));
-    int *node_n = (int*)malloc(AP.res_mul_max * sizeof(int)); int l_n;
+    line_node **line = (line_node**)malloc(AP->res_mul_max * sizeof(line_node*));
+    for (i = 0; i < AP->res_mul_max; ++i) line[i] = (line_node*)malloc((reg_len-seed_len+1) * sizeof(line_node));
+    int *node_n = (int*)malloc(AP->res_mul_max * sizeof(int)); int l_n;
 
     bwt_bound left_bound, right_bound;
     // use DP, Spanning-tree and Pruning
     extern void aln_reloc_res(aln_res *a_res, int line_n, int XA_m);
     if ((l_n = bwt_cluster_seed(seed_v, reg, AP, reg_len-seed_len+1, line, node_n)) > 0) {
         for (i = 0; i < l_n; ++i) {
-            if (re_res->l_n == re_res->l_m) aln_reloc_res(re_res, (re_res->l_n << 1), AP.res_mul_max);
+            if (re_res->l_n == re_res->l_m) aln_reloc_res(re_res, (re_res->l_n << 1), AP->res_mul_max);
 
             bwt_set_bound(*seed_v, line[i], node_n[i], seed_len, reg_len, &left_bound, &right_bound);
             bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, seqs, re_res->la+re_res->l_n);
@@ -378,14 +378,14 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
     }
     // free
     free(bwt_seed); bwt_free_seed(seed_v, reg_len-seed_len+1);
-    for (i = 0; i < AP.res_mul_max; ++i) free(line[i]); free(line); free(node_n);
+    for (i = 0; i < AP->res_mul_max; ++i) free(line[i]); free(line); free(node_n);
     return 0;
 }
 
-void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, lamsa_aln_para AP, kseq_t *seqs)
+void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, lamsa_aln_para *AP, kseq_t *seqs)
 {
     aln_reg *re_reg = aln_init_reg(seqs->seq.l); 
-    if (get_remain_reg(a_reg, re_reg, AP, AP.bwt_max_len) == 0) goto End;
+    if (get_remain_reg(a_reg, re_reg, AP, AP->bwt_max_len) == 0) goto End;
 
     int i;
     re_res->l_n = 0;

@@ -20,26 +20,36 @@
 #define MAX_BWT_REG 300
 #define BWT_KMER 19
 
+#define ED_RATE 0.04
 #define ID_RATE 0.04
 #define MIS_RATE 0.04
 #define MATCH_DIS 5
+#define MISMATCH_THD 10
 #define MAT_RATE 0.80
 
 #define MAT_SCORE 1
 #define MIS_PEN 3
 #define OPEN_PEN 5
 #define EXT_PEN 2
-// PacBio aln para
+#define END_BONUS 5
+
+// PacBio(15%,1:12:2) aln para
 #define PB_SEED_LEN 30
 #define PB_SEED_STEP 10
 
-#define PB_ID_RATE 0.3
-#define PB_MAT_RATE 0.6
+#define PB_ED_RATE 0.2
+#define PB_ID_RATE 0.2
+#define PB_MAT_RATE 0.75
+#define PB_MIS_RATE 0.04
+#define PB_MISMATCH_THD 10
 
 #define PB_MAT_SCORE 4
 #define PB_MIS_PEN 5
-#define PB_OPEN_PEN 2
-#define PB_EXT_PEN 2
+#define PB_INS_OPEN_PEN 2
+#define PB_INS_EXT_PEN 2
+#define PB_DEL_OPEN_PEN 2
+#define PB_DEL_EXT_PEN 2
+#define PB_END_BONUS 0
 
 
 #define RES_MAX_N 10
@@ -332,7 +342,6 @@ typedef struct {
     int seed_all;   //number of all the seeds
     int seed_out;   //number of seeds that are filtered out for next step
 } lamsa_aln_per_para;    // specially for every read
-//APP
 
 typedef struct {
     int n_thread;   // for mulit-threads
@@ -356,8 +365,8 @@ typedef struct {
     uint8_t supp_soft, comm; // soft for supp; comment
     FILE *outp;
 
-    int match_dis_type; // 0:low error rate(Mol), 1: high error rate(PacBio)
-    int match_dis; int del_thd; int ins_thd; 
+    int match_dis, mismatch_thd;
+    int del_thd; int ins_thd; 
 
     int *frag_score_table;
         /*frag_score_table[10] = {
@@ -373,20 +382,23 @@ typedef struct {
              -6,    F_UNMATCH
         };*/
     // SW para
-    int gapo, gape; // gap open penalty, gap extension penalty
+    int ins_gapo, ins_gape, del_gapo, del_gape; // gap open penalty, gap extension penalty
     int match, mis;     // score matrix, match and mismatch
     int8_t sc_mat[25];
     int end_bonus, zdrop;
     // read option
-    float mis_rate, id_rate, mat_rate;
+    float ed_rate, mis_rate, id_rate, mat_rate;
     int read_type;
+    uint8_t aln_mode; // 0x3
+                      //[high-id-rate][overlapping-seeding]
 } lamsa_aln_para;        // for all reads
-//AP
+#define aln_mode_overlap_seed(m) ((m) & 1)
+#define aln_mode_high_id_err(m) ((m) & 2)
 
 int lamsa_aln(int argc, char* argv[]);
 aln_reg *aln_init_reg(int read_len);
 void aln_free_reg(aln_reg *a_reg);
-int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lamsa_aln_para AP, int reg_thd);
+int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lamsa_aln_para *AP, int reg_thd);
 int line_pull_trg(line_node LR);
 
 #endif

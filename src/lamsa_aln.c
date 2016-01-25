@@ -24,7 +24,7 @@ extern char lamsa_pg[1024];
 int lamsa_aln_usage(void)
 {
     fprintf(stderr, "\n");
-    fprintf(stderr, "Usage:   lamsa aln [options] <ref_prefix> <read.fa/fq>\n\n");
+    fprintf(stderr, "Usage:   lamsa aln [options] <ref.fa> <read.fa/fq>\n\n");
 
     fprintf(stderr, "Algorithm options:\n\n");
 
@@ -38,25 +38,28 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster. [%d]\n", MAX_SKEL);
     fprintf(stderr, "    -R --max-reg   [INT]    Maximum allowed length of unaligned read part to trigger a bwt-based query. [%d]\n", MAX_BWT_REG);
     fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. [%d]\n\n", BWT_KMER);
-	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
     
     fprintf(stderr, "Scoring options:\n\n");
 
     fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [%d]\n", MAT_SCORE);
     fprintf(stderr, "    -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [%d]\n", MIS_PEN);
-    fprintf(stderr, "    -O --open-pen  [INT]    Gap open penalty for SW-alignment. [%d]\n", OPEN_PEN);
-    fprintf(stderr, "    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. [%d]\n\n", EXT_PEN);
+    fprintf(stderr, "    -O --open-pen  [INT(,INT)]\n");
+    fprintf(stderr, "                            Gap open penalty for SW-alignment(insertion, deletion). [%d(,%d)]\n", OPEN_PEN, OPEN_PEN);
+    fprintf(stderr, "    -E --ext-pen   [INT(,INT)]\n");
+    fprintf(stderr, "                            Gap extension penalty for SW-alignment(insertion, deletion). [%d(,%d)]\n", EXT_PEN, EXT_PEN);
+    fprintf(stderr, "    -b --end-bonus [INT]    Penalty for end-clipping. [%d]\n\n", END_BONUS);
 
 
     fprintf(stderr, "Read options:\n\n");
 
+    fprintf(stderr, "    -e --err-rate  [FLOAT]  Maximum error rate of read. [%.2f]\n", ED_RATE);
+    fprintf(stderr, "    -d --diff-rate [FLOAT]  Maximum length difference ratio between read and reference. [%.2f]\n", ID_RATE);
     fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
-    fprintf(stderr, "    -e --id-rate   [FLOAT]  Maximum error rate of indels within reads. [%.2f]\n", ID_RATE);
     
-    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden. [0]\n");
+    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden. [0] (0,1,2)\n");
     fprintf(stderr, "                            Illumina moleculo(0): default setting.\n");
-    fprintf(stderr, "                            PacBio(1): -i10 -l30 -m4 -M5 -O2 -E2 -e 0.3 \n");
-    //fprintf(stderr, "                            Oxford Nanopore(2). [%s]\n", MOL_STR);
+    fprintf(stderr, "                            PacBio(1): -i%d -l%d -m%d -M%d -O%d,%d -E%d,%d -b%d -e%.2f -d%.2f -x%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE, PB_MIS_RATE);
+    fprintf(stderr, "                            Oxford Nanopore(2): XXX.\n\n");
 
 
     fprintf(stderr, "Output options:\n\n");
@@ -79,7 +82,7 @@ int lamsa_aln_usage(void)
 int lamsa_aln_de_usage(void)
 {
     fprintf(stderr, "\n");
-    fprintf(stderr, "Usage:   lamsa aln [options] <ref_prefix> <read.fa/fq>\n\n");
+    fprintf(stderr, "Usage:   lamsa aln [options] <ref.fa> <read.fa/fq>\n\n");
 
     fprintf(stderr, "Algorithm options:\n\n");
 
@@ -108,27 +111,31 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "                            further process it; otherwise, LAMSA will query the exact matches of the\n");
     fprintf(stderr, "                            kmers of the unaligned part as hits to further align the read part. [%d]\n", MAX_BWT_REG);
     fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. For the unaligned read part shorter than -R bp, LAMSA\n");
-    fprintf(stderr, "                            will extract all its -k bp tokens and query their exact match as hits. [%d]]\n\n", BWT_KMER);
-	//fprintf(stderr, "         -d [INT]      The maximum number of seed's locations for first round's DP. [2]\n\n");
-
-    fprintf(stderr, "Read options:\n\n");
-
-    fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
-    fprintf(stderr, "    -e --id-rate   [FLOAT]  Maximum error rate of indels within reads. [%.2f]\n", ID_RATE);
-    
-    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden [mol]\n");
-    fprintf(stderr, "                            Illumina moleculo(mol): default setting.\n");
-    fprintf(stderr, "                            PacBio(pacbio): -i10 -l30 -m4 -M5 -O2 -E2 -e 0.3 \n");
-    //fprintf(stderr, "                            Oxford Nanopore(nano). [%s]\n", MOL_STR);
-
+    fprintf(stderr, "                            will extract all its -k bp tokens and query their exact match as hits. [%d]\n\n", BWT_KMER);
 
     fprintf(stderr, "Scoring options:\n\n");
 
     fprintf(stderr, "    -m --match-sc  [INT]    Match score for SW-alignment. [%d]\n", MAT_SCORE);
     fprintf(stderr, "    -M --mis-pen   [INT]    Mismatch penalty for SW-alignment. [%d]\n", MIS_PEN);
-    fprintf(stderr, "    -O --open-pen  [INT]    Gap open penalty for SW-alignment. [%d]\n", OPEN_PEN);
-    fprintf(stderr, "    -E --ext-pen   [INT]    Gap extension penalty for SW-alignment. A gap of length k costs O + k*E\n");
-    fprintf(stderr, "                            (i.e. -O is for opening a zero-length gap). [%d]\n\n", EXT_PEN);
+    fprintf(stderr, "    -O --open-pen  [INT(,INT)]\n");
+    fprintf(stderr, "                            Gap open penalty for SW-alignment(insertion, deletion). [%d(,%d)]\n", OPEN_PEN, OPEN_PEN);
+    fprintf(stderr, "    -E --ext-pen   [INT(,INT)]\n");
+    fprintf(stderr, "                            Gap extension penalty for SW-alignment(insertion, deletion). A gap of length k costs O + k*E\n");
+    fprintf(stderr, "                            (i.e. -O is for opening a zero-length gap). [%d(,%d)]\n", EXT_PEN, EXT_PEN);
+    fprintf(stderr, "    -b --end-bonus [INT]    Penalty for end-clipping. [%d]\n\n", END_BONUS);
+
+
+    fprintf(stderr, "Read options:\n\n");
+
+    fprintf(stderr, "    -e --err-rate  [FLOAT]  Maximum error rate of read. [%.2f]\n", ED_RATE);
+    fprintf(stderr, "    -d --diff-rate [FLOAT]  Maximum length difference ratio between read and reference. [%.2f]\n", ID_RATE);
+    fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
+    
+    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden [0]\n");
+    fprintf(stderr, "                            Illumina moleculo(0): default setting.\n");
+    fprintf(stderr, "                            PacBio(1): -i%d -l%d -m%d -M%d -O%d,%d -E%d,%d -b%d -e%.2f -d%.2f -x%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE, PB_MIS_RATE);
+    fprintf(stderr, "                            Oxford Nanopore(2). XXX\n\n");
+
 
     fprintf(stderr, "Output options:\n\n");
     fprintf(stderr, "    -r --max-out   [INT]    Maximum number of output records for a specific split read region. For a\n");
@@ -526,23 +533,23 @@ void push_reg(aln_reg *reg, int beg, int end, int beg_n, reg_b ref_beg[], int en
     int beg, end;
 } reg_t;*/
 // dump remain-regions that are longger than 'thd'
-int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lamsa_aln_para AP, int reg_thd)
+int get_remain_reg(aln_reg *a_reg, aln_reg *remain_reg, lamsa_aln_para *AP, int reg_thd)
 {
     if (a_reg->reg_n == 0) {
-        if (AP.bwt_seed_len < a_reg->read_len && a_reg->read_len <= reg_thd) {
+        if (AP->bwt_seed_len < a_reg->read_len && a_reg->read_len <= reg_thd) {
             push_reg(remain_reg, 1, a_reg->read_len, 0, 0, 0, 0);
             return 1;
         } else return 0;
     }
-    aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP.bwt_seed_len);
+    aln_sort_reg(a_reg); aln_merg_reg(a_reg, AP->bwt_seed_len);
     int i; 
-    if (a_reg->reg[0].beg > AP.bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd)
+    if (a_reg->reg[0].beg > AP->bwt_seed_len && a_reg->reg[0].beg-1 <= reg_thd)
         push_reg(remain_reg, 1, a_reg->reg[0].beg-1, 0, 0, a_reg->reg[0].beg_n, a_reg->reg[0].ref_beg);
     for (i = 1; i < a_reg->reg_n; ++i) {
-        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->reg[i].beg-1-a_reg->reg[i-1].end <= reg_thd)
+        if (a_reg->reg[i].beg - a_reg->reg[i-1].end > AP->bwt_seed_len && a_reg->reg[i].beg-1-a_reg->reg[i-1].end <= reg_thd)
             push_reg(remain_reg, a_reg->reg[i-1].end+1, a_reg->reg[i].beg-1, a_reg->reg[i-1].end_n, a_reg->reg[i-1].ref_end, a_reg->reg[i].beg_n, a_reg->reg[i].ref_beg);
     }
-	if (a_reg->read_len - a_reg->reg[i-1].end > AP.bwt_seed_len && a_reg->read_len-a_reg->reg[i-1].end <= reg_thd) 
+	if (a_reg->read_len - a_reg->reg[i-1].end > AP->bwt_seed_len && a_reg->read_len-a_reg->reg[i-1].end <= reg_thd) 
         push_reg(remain_reg, a_reg->reg[i-1].end+1, a_reg->read_len, a_reg->reg[i-1].end_n, a_reg->reg[i-1].ref_end, 0, 0);
     return remain_reg->reg_n;
 }
@@ -924,24 +931,23 @@ int lamsa_main_aln(thread_aux_t *aux)
         aln_reset_res(la_seqs->a_res, 3, seqs->seq.l);
         // aln_reg
         aln_reg *a_reg = aln_init_reg(seqs->seq.l);
-        int line_n = frag_line_BCC(a_msg, f_msg, *APP, *AP, seqs, line, line_end, &line_m, f_node, _line, line_n_max);
+        int line_n = frag_line_BCC(a_msg, f_msg, APP, AP, seqs, line, line_end, &line_m, f_node, _line, line_n_max);
         
-        // char -> 0123
         uint8_t *bseq = (uint8_t*)malloc(seqs->seq.l * sizeof(uint8_t));
         for (j = 0; j < (int)seqs->seq.l; ++j) bseq[j] = nst_nt4_table[(int)(seqs->seq.s[j])];
         uint8_t *rbseq=NULL;
         if (line_n > 0) {
-            frag_check(a_msg, f_msg, la_seqs->a_res, bns, pac, bseq, &rbseq, *APP, *AP, seqs, line_n, &hash_num, &hash_node);
+            frag_check(a_msg, f_msg, la_seqs->a_res, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
             get_reg(la_seqs->a_res, a_reg);
         }
         // remain region
-        line_n = frag_line_remain(a_reg, a_msg, f_msg, *APP, *AP, seqs, line, line_end, &line_m, f_node, _line, _line_end, line_n_max);
+        line_n = frag_line_remain(a_reg, a_msg, f_msg, APP, AP, seqs, line, line_end, &line_m, f_node, _line, _line_end, line_n_max);
         if (line_n > 0) {
-            frag_check(a_msg, f_msg, la_seqs->a_res+1, bns, pac, bseq, &rbseq, *APP, *AP, seqs, line_n, &hash_num, &hash_node);
+            frag_check(a_msg, f_msg, la_seqs->a_res+1, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
             get_reg(la_seqs->a_res+1, a_reg);
         }
         // bwt aln
-        bwt_aln_remain(a_reg, la_seqs->a_res+2, bwt, bns, pac, bseq, &rbseq, *AP, seqs);
+        bwt_aln_remain(a_reg, la_seqs->a_res+2, bwt, bns, pac, bseq, &rbseq, AP, seqs);
         get_reg(la_seqs->a_res+2, a_reg);
 
         la_seqs->a_res->cov_f = get_cov_f(la_seqs->a_res, a_reg);
@@ -1254,11 +1260,11 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
 int lamsa_gem(const char *ref_prefix, const char *read_prefix, char *bin_dir, lamsa_aln_para *AP)
 {
     int per_loci = AP->per_aln_m, n_thread = AP->n_thread;
-    float mis_rate = AP->mis_rate, id_rate = AP->id_rate, min_match_rate = AP->mat_rate;
+    float mis_rate = AP->mis_rate, ed_rate = AP->ed_rate, id_rate = AP->id_rate, min_match_rate = AP->mat_rate;
     char cmd[1024];
     sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %f %f %f %d %d", bin_dir, ref_prefix, read_prefix, mis_rate, id_rate, min_match_rate, per_loci, n_thread);
     fprintf(stderr, "[lamsa_aln] Executing gem-mapper ... \n");
-    fprintf(stderr, "[lamsa_aln] Time consumption of gem-mapper:");
+    //fprintf(stderr, "[lamsa_aln] Time consumption of gem-mapper:");
     if (system(cmd) != 0) { fprintf(stderr, "[lamsa_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
     fprintf(stderr, "[lamsa_aln] gem-mapper done!\n");
     return 0;
@@ -1354,7 +1360,6 @@ void init_aln_para(lamsa_aln_para *AP)
 
     AP->seed_len = -1;//SEED_LEN;   // read_type
     AP->seed_step = -1;//SEED_STEP; // read_type
-    //AP->match_distype = 0; //     // read_type
     AP->per_aln_m = SEED_PER_LOCI;
     AP->first_loci_thd = SEED_FIRST_ROUND_LOCI;
 
@@ -1381,15 +1386,18 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->frag_score_table = f_BCC_score_table;
     AP->match = -1; //MAT_SCORE; // read_type
     AP->mis = -1;//MIS_PEN;      // read_type
-    AP->gapo = -1;//OPEN_PEN;    // read_type
-    AP->gape = -1;//EXT_PEN;     // read_type
+    AP->ins_gapo = AP->del_gapo = -1;//OPEN_PEN;    // read_type
+    AP->ins_gape = AP->del_gape = -1;//EXT_PEN;     // read_type
+    AP->ed_rate = -1; //ED_RATE; // read_type
     AP->mis_rate = -1;//MIS_RATE;// read_type
     AP->id_rate = -1; //ID_RATE; // read_type
     AP->mat_rate = -1;//MAT_RATE;// read_type
     AP->read_type = 0; // low-error-rate
 
-    AP->end_bonus = 5;
+    AP->end_bonus = -1; //END_BONUS// read_type
     AP->zdrop = 100;
+
+    AP->aln_mode = 0;
 }
 
 void lamsa_fill_mat(int mat, int mis, int8_t sc_mat[25])
@@ -1403,32 +1411,43 @@ void lamsa_fill_mat(int mat, int mis, int8_t sc_mat[25])
     for (j = 0; j < 5; ++j) sc_mat[k++] = -1; // 'N'
 }
 
-void lamsa_set_readtype(lamsa_aln_para *AP)
+void lamsa_set_aln_mode(lamsa_aln_para *AP)
 {
-    AP->match_dis_type = AP->read_type;
     if (AP->read_type == 0) { // Illumina Moleculo
         if (AP->seed_step < 0) AP->seed_step = SEED_STEP;
         if (AP->seed_len < 0) AP->seed_len = SEED_LEN;
         if (AP->match < 0) AP->match = MAT_SCORE;
         if (AP->mis < 0) AP->mis = MIS_PEN;
-        if (AP->gapo < 0) AP->gapo = OPEN_PEN;
-        if (AP->gape < 0) AP->gape = EXT_PEN;
+        if (AP->ins_gapo < 0) AP->ins_gapo = OPEN_PEN;
+        if (AP->ins_gape < 0) AP->ins_gape = EXT_PEN;
+        if (AP->del_gapo < 0) AP->del_gapo = OPEN_PEN;
+        if (AP->del_gape < 0) AP->del_gape = EXT_PEN;
+        if (AP->ed_rate < 0) AP->ed_rate = ED_RATE;
         if (AP->mis_rate < 0) AP->mis_rate = MIS_RATE;
         if (AP->id_rate < 0) AP->id_rate = ID_RATE;
         if (AP->mat_rate < 0) AP->mat_rate = MAT_RATE;
+        if (AP->end_bonus < 0) AP->end_bonus = END_BONUS;
         AP->match_dis = MATCH_DIS;
+        AP->mismatch_thd = MISMATCH_THD;
     } else if (AP->read_type == 1) { // PacBio
         if (AP->seed_step < 0) AP->seed_step = PB_SEED_STEP;
         if (AP->seed_len < 0) AP->seed_len = PB_SEED_LEN;
         if (AP->match < 0) AP->match = PB_MAT_SCORE;
         if (AP->mis < 0) AP->mis = PB_MIS_PEN;
-        if (AP->gapo < 0) AP->gapo = PB_OPEN_PEN;
-        if (AP->gape < 0) AP->gape = PB_EXT_PEN;
-        if (AP->mis_rate < 0) AP->mis_rate = MIS_RATE;
+        if (AP->ins_gapo < 0) AP->ins_gapo = PB_INS_OPEN_PEN;
+        if (AP->ins_gape < 0) AP->ins_gape = PB_INS_EXT_PEN;
+        if (AP->del_gapo < 0) AP->del_gapo = PB_DEL_OPEN_PEN;
+        if (AP->del_gape < 0) AP->del_gape = PB_DEL_EXT_PEN;
+        if (AP->ed_rate < 0) AP->ed_rate = PB_ED_RATE;
+        if (AP->mis_rate < 0) AP->mis_rate = PB_MIS_RATE;
         if (AP->id_rate < 0) AP->id_rate = PB_ID_RATE;
         if (AP->mat_rate < 0) AP->mat_rate = PB_MAT_RATE;
-        AP->match_dis = AP->seed_step * AP->id_rate / 3.0;
+        if (AP->end_bonus < 0) AP->end_bonus = PB_END_BONUS;
+        AP->match_dis = (int)ceilf(AP->seed_step * AP->id_rate);
+        AP->mismatch_thd = PB_MISMATCH_THD;
+        AP->aln_mode |= 0x2;
     }
+    if (AP->seed_step < AP->seed_len) AP->aln_mode |= 0x1; // overlapping
 }
 
 extern char *get_bin_dir(char *bin);
@@ -1444,8 +1463,9 @@ const struct option long_opt [] = {
     { "max-reg", 1, NULL, 'R' },
     { "bwt-kmer", 1, NULL, 'k' },
 
+    { "ed-rate", 1, NULL, 'e' },
+    { "diff-rate", 1, NULL, 'd' },
     { "mis-rate", 1, NULL, 'x' },
-    { "id-rate", 1, NULL, 'e' },
     { "read-type", 1, NULL, 'T' },
 
     { "match-sc", 1, NULL, 'm' },
@@ -1466,7 +1486,7 @@ const struct option long_opt [] = {
 
 int lamsa_aln(int argc, char *argv[])
 {
-    int c;
+    int c; char *p;
     char *ref, *read;
     // parameters
     lamsa_aln_para *AP = (lamsa_aln_para*)calloc(1, sizeof(lamsa_aln_para));
@@ -1474,7 +1494,7 @@ int lamsa_aln(int argc, char *argv[])
     int no_seed_aln=0, seed_info=0, seed_program=0; 
     char seed_result_f[1024]="";
 
-    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:x:e:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
+    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:b::e:d:x:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
     {
         switch (c)
         {
@@ -1491,11 +1511,13 @@ int lamsa_aln(int argc, char *argv[])
 
             case 'm': AP->match = atoi(optarg); break;
             case 'M': AP->mis = atoi(optarg); break;
-            case 'O': AP->gapo = atoi(optarg); break;
-            case 'E': AP->gape = atoi(optarg); break;
+            case 'O': AP->ins_gapo = AP->del_gapo = strtol(optarg, &p, 10); if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->del_gapo = strtol(p+1, &p, 10); break;
+            case 'E': AP->ins_gape = AP->del_gape = strtol(optarg, &p, 10); if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->del_gape = strtol(p+1, &p, 10); break;
+            case 'b': AP->end_bonus = atoi(optarg); break;
 
+            case 'e': AP->ed_rate = atof(optarg); AP->mat_rate = 0.95-AP->ed_rate; break;
+            case 'd': AP->id_rate = atof(optarg); break;
             case 'x': AP->mis_rate = atof(optarg); break;
-            case 'e': AP->id_rate = atof(optarg); break;
             case 'T': AP->read_type = atoi(optarg); break;//mol:0, pacbio:1
 
             case 'r': AP->res_mul_max = atoi(optarg); break;
@@ -1512,8 +1534,7 @@ int lamsa_aln(int argc, char *argv[])
             default: return lamsa_aln_usage();
         }
     }
-    lamsa_set_readtype(AP);
-
+    lamsa_set_aln_mode(AP);
     AP->seed_inv = AP->seed_step-AP->seed_len;
     lamsa_fill_mat(AP->match, AP->mis, AP->sc_mat);
     if (argc - optind != 3)

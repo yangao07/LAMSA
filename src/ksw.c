@@ -543,6 +543,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
                 int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
                 int w, int *n_cigar_, cigar32_t **cigar_)
 {
+    //e_del=8, o_del=5, e_ins=5, o_ins=2; XXX
     if (qlen < 0 || tlen < 0) { fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
 	eh_t *eh;
 	int8_t *qp; // query profile
@@ -821,14 +822,14 @@ int ksw_extend_softP(int qlen, const uint8_t *query, int tlen, const uint8_t *ta
  *********************************/
 int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
                     int m, const int8_t *mat, int w, int h0,
-                    lamsa_aln_para AP,
+                    lamsa_aln_para *AP,
                     int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
 	int8_t *qp; // query profile
-    int gapo = AP.gapo, gape = AP.gape, end_bonus = AP.end_bonus, zdrop = AP.zdrop;
-	int i, j, k, o_ins = gapo, o_del = gapo, e_ins = gape, e_del = gape, oe_del = gapo + gape, oe_ins = oe_del, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
+    int o_ins = AP->ins_gapo, e_ins = AP->ins_gape, o_del = AP->del_gapo, e_del = AP->del_gape, end_bonus = AP->end_bonus, zdrop = AP->zdrop;
+	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
 	assert(h0 > 0);
 	// allocate memory
 	qp = malloc(qlen * m);
@@ -957,7 +958,7 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 }
 
 int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-		         int m, const int8_t *mat, int w, int h0, lamsa_aln_para AP,
+		         int m, const int8_t *mat, int w, int h0, lamsa_aln_para *AP,
                  int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_,  int *m_cigar_)
 {
     *n_cigar_ = *m_cigar_ = 0;
@@ -968,7 +969,7 @@ int ksw_extend_c(int qlen, const uint8_t *query, int tlen, const uint8_t *target
 }
 
 int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-		         int m, const int8_t *mat, int w, int h0, lamsa_aln_para AP,
+		         int m, const int8_t *mat, int w, int h0, lamsa_aln_para *AP,
                  int *_qre, int *_tre, cigar32_t **cigar_, int *n_cigar_,  int *m_cigar_)
 {
 	int i;
@@ -990,7 +991,7 @@ int ksw_extend_r(int qlen, const uint8_t *query, int tlen, const uint8_t *target
  ***************************************/
 // ksw_both_extend now is UNUSED.
 int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
-                    const int8_t *mat, int w, int lh0, int rh0, lamsa_aln_para AP,
+                    const int8_t *mat, int w, int lh0, int rh0, lamsa_aln_para *AP,
                     cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
     int i;
@@ -1047,13 +1048,13 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     return 1;
 }
 
-void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *lcigar, int ln_cigar, cigar32_t *rcigar, int rn_cigar, const uint8_t *query, int qlen, int lqe, int rqe, const uint8_t *target, int tlen, int lte, int rte, lamsa_aln_para AP, int m, const int8_t *mat)
+void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *lcigar, int ln_cigar, cigar32_t *rcigar, int rn_cigar, const uint8_t *query, int qlen, int lqe, int rqe, const uint8_t *target, int tlen, int lte, int rte, lamsa_aln_para *AP, int m, const int8_t *mat)
 {
     int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
 
-    if (abs(Sn) < AP.split_len/2 && abs(Hn) < AP.split_len/2 && abs(Sn - Hn) < AP.split_len/2) { // for small 'nS' and 'nH', change into indels
+    if (abs(Sn) < AP->split_len/2 && abs(Hn) < AP->split_len/2 && abs(Sn - Hn) < AP->split_len/2) { // for small 'nS' and 'nH', change into indels
         cigar32_t *g_cigar; int g_clen;
-        ksw_global(qlen, query, tlen, target, m, mat, AP.gapo, AP.gape, abs(tlen-qlen)+3, &g_clen, &g_cigar);
+        ksw_global2(qlen, query, tlen, target, m, mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, abs(tlen-qlen)+3, &g_clen, &g_cigar);
         _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
         free(g_cigar);
     } else {
@@ -1065,12 +1066,12 @@ void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *lcigar
 }
 
 int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
-                    const int8_t *mat, int w, int lh0, int rh0, lamsa_aln_para AP,
+                    const int8_t *mat, int w, int lh0, int rh0, lamsa_aln_para *AP,
                     cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
     int res;
     if (*n_cigar_) *n_cigar_ = 0;
-    int gapo = AP.gapo, gape = AP.gape;
+    int ins_gapo = AP->ins_gapo, ins_gape = AP->ins_gape, del_gapo = AP->del_gapo, del_gape = AP->del_gape;
     //left boundary extension
     int lqe, lte, ln_cigar, lm_cigar;
     cigar32_t *lcigar=0;
@@ -1081,11 +1082,11 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = lm_cigar;
         _push_cigar1(cigar_, n_cigar_, m_cigar_, (res==0?(((tlen-lte)<<4)|CDEL):(((qlen-lqe)<<4)|CINS)));
         return 0;
-    } else if (abs(qlen-tlen) < AP.split_len && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
+    } else if (abs(qlen-tlen) < AP->split_len && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
 		//  sw-global, disallow cigar like '3S4H50M'
 		if (lcigar) free(lcigar);
 		w = abs(qlen-tlen)+3;
-		ksw_global(qlen, query, tlen, target, m, mat, gapo, gape, w, n_cigar_, cigar_);
+		ksw_global2(qlen, query, tlen, target, m, mat, del_gapo, del_gape, ins_gapo, ins_gape, w, n_cigar_, cigar_);
 		*m_cigar_ = *n_cigar_;
 		return 0;
 	}
@@ -1101,11 +1102,11 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = rm_cigar;
         free(lcigar); 
         return 0;
-    } else if (abs(qlen-tlen) < AP.split_len && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
+    } else if (abs(qlen-tlen) < AP->split_len && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
 		// sw-global
 		if (lcigar) free(lcigar); if (rcigar) free(rcigar);
 		w = abs(qlen-tlen)+3;
-		ksw_global(qlen, query, tlen, target, m, mat, gapo, gape, w, n_cigar_, cigar_);
+		ksw_global2(qlen, query, tlen, target, m, mat, del_gapo, del_gape, ins_gapo, ins_gape, w, n_cigar_, cigar_);
 		*m_cigar_ = *n_cigar_;
 		return 0;
 	}
@@ -1126,7 +1127,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     *cigar_ = cigar; *n_cigar_ = cigar_n; *m_cigar_ = cigar_m;
     if (lcigar) free(lcigar); 
     if (rcigar) free(rcigar);
-    if (Sn >= AP.split_len) return 1; // gap exists
+    if (Sn >= AP->split_len) return 1; // gap exists
     else return 0; 
 }
 #endif

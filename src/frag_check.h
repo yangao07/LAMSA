@@ -204,11 +204,11 @@ void frag_init_msg(frag_msg *f_msg, int frag_max);
 void frag_free_msg(frag_msg *f_msg, int line_num);
 int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i);//FLAG 0: start/1:end / 2:seed
 int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg);
-void lamsa_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, int read_len, lamsa_aln_para AP, kseq_t *seqs);
+void lamsa_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, int read_len, lamsa_aln_para *AP, kseq_t *seqs);
 void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
                bntseq_t *bns, uint8_t *pac, 
                uint8_t *read_bseq, uint8_t **read_rbseq,
-               lamsa_aln_per_para APP, lamsa_aln_para AP,
+               lamsa_aln_per_para *APP, lamsa_aln_para *AP,
                kseq_t *seqs,
                int line_n,
                uint32_t **hash_num, uint64_t ***hash_node);

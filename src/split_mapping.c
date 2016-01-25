@@ -215,10 +215,10 @@ int init_hash(uint8_t *ref_seq, int ref_len, int hash_len,
 //
 //NOTE: for overlaped-DUP: ref_len = read_len+read_len-ref_len+2*hash_len
 //                       
-int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, lamsa_aln_para AP, int *con_flag,
+int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, lamsa_aln_para *AP, int *con_flag,
                   int ref_len, int read_len, int ref_offset)
 {
-    int hash_len = AP.hash_len, hash_step = AP.hash_step;
+    int hash_len = AP->hash_len, hash_step = AP->hash_step;
 	int dis;
 	if (a_i > b_i) dis = a_offset - b_offset;
 	else dis = b_offset - a_offset;
@@ -233,7 +233,7 @@ int hash_main_dis(int a_i, int a_offset, int b_i, int b_offset, lamsa_aln_para A
 		else if (dis >= -(abs(b_i-a_i)-hash_len)) *con_flag = F_INSERT; // unoverlaped-ins
         //else *con_flag = F_UNCONNECT;
 		// overlapped
-        else if (dis <= -(AP.split_len/2)) { // SV_SPLIT_LEN
+        else if (dis <= -(AP->split_len/2)) { // SV_SPLIT_LEN
             if (ref_offset > 0) { // INS region
                 if (b_i>a_i) {
                     // if (read_len-ref_len+b_i+b_offset >= b_i-(a_i+hash_len-1) && read_len-(a_i+hash_len-1+a_offset)>= b_i-(a_i+hash_len-1))
@@ -265,7 +265,7 @@ int hash_dp_init(hash_dp_node **h_node,
 		int *hash_pos, int *start_a, int *len_a, 
 		int node_i, int read_i, 
 		line_node head, 
-		lamsa_aln_para AP, int dp_flag,
+		lamsa_aln_para *AP, int dp_flag,
 		int ref_len, int read_len, int ref_offset)
 {
 	int i;
@@ -339,7 +339,7 @@ NextCheck:;
 
 //pruning XXX
 int hash_dp_update(hash_dp_node **h_node, int *len_a, 
-				   int node_x, int node_y, int start, lamsa_aln_para AP, int dp_flag,
+				   int node_x, int node_y, int start, lamsa_aln_para *AP, int dp_flag,
 				   int ref_len, int read_len, int ref_offset)
 {
 	int i, j, con_flag;
@@ -398,7 +398,7 @@ int hash_dp_update(hash_dp_node **h_node, int *len_a,
 
 int hash_mini_dp_init(hash_dp_node **h_node, int *len_a, 
 					  int node_i, line_node head, 
-					  lamsa_aln_para AP, int mini_dp_flag,
+					  lamsa_aln_para *AP, int mini_dp_flag,
 					  int ref_len, int read_len, int ref_offset)
 {
 	int i;
@@ -443,7 +443,7 @@ int hash_mini_dp_init(hash_dp_node **h_node, int *len_a,
 //line: forward
 int mini_hash_main_line(hash_dp_node **h_node, 
 						int *len_a, 
-                        lamsa_aln_para AP,
+                        lamsa_aln_para *AP,
 						line_node head, line_node tail, 
 						line_node *line,
 						int ref_len, int read_len, int ref_offset)
@@ -491,7 +491,7 @@ int mini_hash_main_line(hash_dp_node **h_node,
 //for only one of _head and _tail is set as 1, use the seed_len-limit penalty
 int hash_main_line(int *hash_pos, int *start_a, int *len_a, 
 			       int ref_len, int read_len, int ref_offset, int hash_seed_n, 
-                   lamsa_aln_para AP,
+                   lamsa_aln_para *AP,
 				   hash_dp_node **h_node, line_node *line, 
 				   int _head, int _tail)
 {
@@ -503,7 +503,7 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 	{
 		//head/tail init
 		if (_head) {
-			h_node[0][0] = (hash_dp_node){{-1,0}, 0-AP.hash_len, 0, 0, 0, F_MATCH, MIN_FLAG};
+			h_node[0][0] = (hash_dp_node){{-1,0}, 0-AP->hash_len, 0, 0, 0, F_MATCH, MIN_FLAG};
 			if (_tail) { h_node[hash_seed_n+1][0] = (hash_dp_node){{0,0}, read_len, ref_len-read_len, 0, 0, F_UNMATCH, MIN_FLAG}; } //split_offset=ref_len-read_len; }
 			else h_node[hash_seed_n+1][0] = (hash_dp_node){{0,0}, -1, -1, 0, 0, F_MATCH, UNLIMITED_FLAG}; 
 		} else {
@@ -515,10 +515,10 @@ int hash_main_line(int *hash_pos, int *start_a, int *len_a,
 		//seed init
 		for (i = 1; i <= hash_seed_n; ++i) {
 			if (len_a[i] == min_len) {
-				hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*AP.hash_step/*read offset*/, head, AP, MIN_FLAG, ref_len, read_len, ref_offset);
+				hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*AP->hash_step/*read offset*/, head, AP, MIN_FLAG, ref_len, read_len, ref_offset);
 				min_exist = 1;
 			}
-			else hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*AP.hash_step/*read offset*/, head, AP, MULTI_FLAG, ref_len, read_len, ref_offset);
+			else hash_dp_init(h_node, hash_pos, start_a, len_a, i, (i-1)*AP->hash_step/*read offset*/, head, AP, MULTI_FLAG, ref_len, read_len, ref_offset);
 		}
 	}
 	//dp update and backtrack
@@ -633,11 +633,11 @@ int make_indel_cigar(int ref_left, int read_left, int ref_right, int read_right,
 
 int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 				   uint8_t *ref_seq, int ref_len, int ref_offset/*for DUP*/, uint8_t *read_seq, int read_len, 
-                   lamsa_aln_para AP,
+                   lamsa_aln_para *AP,
 				   uint32_t *hash_num, uint64_t **hash_node, int **hash_node_num, int32_t *hash_pos, 
 				   int _head, int _tail)
 {
-    int hash_len = AP.hash_len, hash_step = AP.hash_step, key_len = AP.hash_key_len, split_len = AP.split_pen;
+    int hash_len = AP->hash_len, hash_step = AP->hash_step, key_len = AP->hash_key_len, split_len = AP->split_pen;
 	int i, j, res=0;   //res: 0x01 -> pull trigger & cut cigar/ 0x10 -> split result
 	uint8_t *read_query;
 	int q_key_int, q_kmer_int, node_i;
@@ -699,12 +699,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 		_t_len = _refi + tail_in;
 		if (_head) {
 			if (_readi != 0 && _refi != 0) { // blank exists
-				if (_t_len < AP.split_len && _q_len < AP.split_len) {
+				if (_t_len < AP->split_len && _q_len < AP->split_len) {
 					_b_w = abs(_t_len-_q_len)+3;
-					ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, AP.sc_mat, AP.gapo, AP.gape, _b_w, &_clen, &_cigar);
+					ksw_global2(_q_len, read_seq, _t_len, ref_seq, 5, AP->sc_mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, _b_w, &_clen, &_cigar);
 				} else {
 					_b_w = (abs(_t_len-_q_len) > hash_len) ? hash_len : (abs(_t_len-_q_len)+3);
-					res |= ksw_bi_extend(_q_len, read_seq, _t_len, ref_seq, 5, AP.sc_mat, _b_w, hash_len*AP.match, hash_len*AP.match, AP, &_cigar, &_clen, &_cm);
+					res |= ksw_bi_extend(_q_len, read_seq, _t_len, ref_seq, 5, AP->sc_mat, _b_w, hash_len*AP->match, hash_len*AP->match, AP, &_cigar, &_clen, &_cm);
 				} 					
 				_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 				free(_cigar);
@@ -734,12 +734,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					_q_len = r_readi - (l_readi + 1) + head_in + tail_in;
 					_t_len = _q_len + r_offset - l_offset;
 
-					if (_q_len < AP.split_len && _t_len < AP.split_len) {
+					if (_q_len < AP->split_len && _t_len < AP->split_len) {
 						_b_w = abs(_q_len-_t_len)+3;
-						ksw_global(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP.sc_mat, AP.gapo, AP.gape, _b_w, &_clen, &_cigar);
+						ksw_global2(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP->sc_mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, _b_w, &_clen, &_cigar);
 					} else {
 						_b_w = (abs(_t_len-_q_len) > hash_len) ? hash_len : (abs(_t_len-_q_len)+3);
-						res |= ksw_bi_extend(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP.sc_mat, _b_w, hash_len*AP.match, hash_len*AP.match, AP, &_cigar, &_clen, &_cm);
+						res |= ksw_bi_extend(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP->sc_mat, _b_w, hash_len*AP->match, hash_len*AP->match, AP, &_cigar, &_clen, &_cm);
 					} 
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					overlap = 0;
@@ -750,7 +750,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					_t_len = _q_len + (ref_offset>0?hash_len:0);
 					int lqe, lte, rqe, rte;
 					// left-extend
-					ksw_extend_core(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP.sc_mat, 3, hash_len*AP.match, AP, &lqe, &lte, &_cigar, &_clen, &_cm);
+					ksw_extend_core(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP->sc_mat, 3, hash_len*AP->match, AP, &lqe, &lte, &_cigar, &_clen, &_cm);
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					free(_cigar);
                     // right-extend
@@ -763,7 +763,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                     }
                     for (j = 0; j < _q_len; ++j) re_qseq[j] = read_seq[r_readi+tail_in-1-j];
                     for (j = 0; j < _t_len; ++j) re_tseq[j] = ref_seq[r_refi+tail_in-1-j];
-                    ksw_extend_core(_q_len, re_qseq, _t_len, re_tseq, 5, AP.sc_mat, 3, hash_len*AP.match, AP, &rqe, &rte, &_cigar, &_clen, &_cm);
+                    ksw_extend_core(_q_len, re_qseq, _t_len, re_tseq, 5, AP->sc_mat, 3, hash_len*AP->match, AP, &rqe, &rte, &_cigar, &_clen, &_cm);
                     _invert_cigar(&_cigar, _clen);
                     free(re_qseq); free(re_tseq);
  				
@@ -790,12 +790,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 		_t_len = ref_len - (_refi+1)+head_in;
 		if (_tail) {
 			if (_readi + 1 < read_len && _refi + 1 < ref_len) { // blank exists
-				if (_q_len < AP.split_len && _t_len < AP.split_len) {
+				if (_q_len < AP->split_len && _t_len < AP->split_len) {
 					_b_w = abs(_t_len-_q_len)+3;
-					ksw_global(_q_len, read_seq+_readi+1-head_in, _t_len, ref_seq+_refi+1-head_in, 5, AP.sc_mat, AP.gapo, AP.gape, _b_w, &_clen, &_cigar);
+					ksw_global2(_q_len, read_seq+_readi+1-head_in, _t_len, ref_seq+_refi+1-head_in, 5, AP->sc_mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, _b_w, &_clen, &_cigar);
 				} else {
 					_b_w = (abs(_t_len-_q_len) > hash_len) ? hash_len : (abs(_t_len-_q_len)+3);
-					res |=  ksw_bi_extend(_q_len, read_seq+_readi+1-head_in, _t_len, ref_seq+_refi+1-head_in, 5, AP.sc_mat, _b_w, hash_len*AP.match, hash_len*AP.match, AP, &_cigar, &_clen, &_cm);
+					res |=  ksw_bi_extend(_q_len, read_seq+_readi+1-head_in, _t_len, ref_seq+_refi+1-head_in, 5, AP->sc_mat, _b_w, hash_len*AP->match, hash_len*AP->match, AP, &_cigar, &_clen, &_cm);
 				}
 				_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 				free(_cigar);
@@ -809,12 +809,12 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 	} else { // no hash-dp line nodes exist
 		if (_head && _tail) {
 			_t_len = ref_len; _q_len = read_len; 
-			if (_t_len < AP.split_len && _q_len < AP.split_len) {
+			if (_t_len < AP->split_len && _q_len < AP->split_len) {
 				_b_w = abs(_t_len-_q_len)+3;
-				ksw_global(_q_len, read_seq, _t_len, ref_seq, 5, AP.sc_mat, AP.gapo, AP.gape, _b_w, &_clen, &_cigar);
+				ksw_global2(_q_len, read_seq, _t_len, ref_seq, 5, AP->sc_mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, _b_w, &_clen, &_cigar);
 			} else {
 				_b_w = (abs(_t_len-_q_len) > hash_len) ? hash_len : (abs(_t_len-_q_len)+3);
-				res |= ksw_bi_extend(_q_len, read_seq, _t_len, ref_seq, 5, AP.sc_mat, _b_w, hash_len*AP.match, hash_len*AP.match, AP, &_cigar, &_clen, &_cm);
+				res |= ksw_bi_extend(_q_len, read_seq, _t_len, ref_seq, 5, AP->sc_mat, _b_w, hash_len*AP->match, hash_len*AP->match, AP, &_cigar, &_clen, &_cm);
 			}
 			_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 			free(_cigar);
@@ -831,10 +831,10 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,
                     uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
                     int ref_offset,
-                    lamsa_aln_para AP,
+                    lamsa_aln_para *AP,
                     uint32_t **hash_num, uint64_t ***hash_node)
 {
-    int hash_len = AP.hash_len, key_len = AP.hash_key_len, hash_size = AP.hash_size;
+    int hash_len = AP->hash_len, key_len = AP->hash_key_len, hash_size = AP->hash_size;
 
 	int32_t *hash_pos = (int32_t*)malloc(ref_len * sizeof(int32_t)); int **hash_node_num;
 	init_hash(ref_seq, ref_len, hash_len, hash_num, hash_node, &hash_node_num, &hash_pos, key_len, hash_size);
@@ -850,10 +850,10 @@ int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,
 
 int hash_right_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
-        lamsa_aln_para AP,
+        lamsa_aln_para *AP,
 		uint32_t **hash_num, uint64_t ***hash_node)
 {
-    int hash_len = AP.hash_len, hash_key = AP.hash_key_len, hash_size = AP.hash_size;
+    int hash_len = AP->hash_len, hash_key = AP->hash_key_len, hash_size = AP->hash_size;
 	int32_t *hash_pos = (int32_t*)malloc(ref_len * sizeof(int32_t));
 	int **hash_node_num;
 	if (init_hash(ref_seq, ref_len, hash_len, hash_num, hash_node, &hash_node_num, &hash_pos, hash_key, hash_size) != 0)
@@ -877,14 +877,14 @@ int hash_right_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 	if (readINcigar < read_len)     
 	{
 		int qlen = read_len-readINcigar;
-		int tlen = read_len -readINcigar + ((hash_len+read_len-readINcigar)*AP.match-5-1)/2;
+		int tlen = read_len -readINcigar + ((hash_len+read_len-readINcigar)*AP->match-5-1)/2;
 		tlen = tlen < (ref_len - refINcigar) ? tlen : (ref_len - refINcigar);
 		int read_end, ref_end, n_cigar_, m_cigar_;
 		cigar32_t *cigar_= NULL;
 		//
 		//printf("ref:\t");for (i = 0; i < tlen; ++i) printf("%c", "ACGT"[(ref_seq+refINcigar)[i]]);printf("\n");
 		//printf("read:\t");for (i =0; i < qlen; ++i) printf("%c", "ACGT"[(read_seq+readINcigar)[i]]);printf("\n");
-		res |= ksw_extend_c(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, AP.sc_mat, abs(read_len-readINcigar-ref_len + refINcigar)+3, hash_len*AP.match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
+		res |= ksw_extend_c(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, AP->sc_mat, abs(read_len-readINcigar-ref_len + refINcigar)+3, hash_len*AP->match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
 		if (cigar_ != NULL)
 		{
 			_push_cigar(cigar, cigar_len, cigar_m, cigar_, n_cigar_);
@@ -905,10 +905,10 @@ int hash_right_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 
 int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
-        lamsa_aln_para AP,
+        lamsa_aln_para *AP,
 		uint32_t **hash_num, uint64_t ***hash_node)
 {
-    int hash_len = AP.hash_len, hash_key = AP.hash_key_len, hash_size = AP.hash_size; 
+    int hash_len = AP->hash_len, hash_key = AP->hash_key_len, hash_size = AP->hash_size; 
 	int hash_cigar_len=0, hash_cigar_m=CIGAR_LEN_M;
 	cigar32_t *hash_cigar = (cigar32_t*)malloc(hash_cigar_m * sizeof(cigar32_t));;
 	int32_t *hash_pos = (int32_t*)malloc(ref_len * sizeof(int32_t));
@@ -931,7 +931,7 @@ int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 	if (readINcigar < read_len)     //'S' exists
 	{
 		int qlen = read_len - readINcigar;
-		int tlen = read_len - readINcigar + ((hash_len+read_len-readINcigar)*AP.match-5-1)/2;
+		int tlen = read_len - readINcigar + ((hash_len+read_len-readINcigar)*AP->match-5-1)/2;
 		tlen = tlen < (ref_len -refINcigar) ? tlen : (ref_len - refINcigar);
 		uint8_t *qseq = (uint8_t*)malloc(qlen * sizeof(uint8_t));
 		uint8_t *tseq = (uint8_t*)malloc(tlen * sizeof(uint8_t));
@@ -940,7 +940,7 @@ int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		for (i = 0; i < qlen; ++i) qseq[i] = read_seq[qlen-i-1];
 		for (i = 0; i < tlen; ++i) tseq[i] = ref_seq[ref_len-refINcigar-i-1];
 
-		res |= ksw_extend_c(qlen, qseq, tlen, tseq, 5, AP.sc_mat, abs(qlen-tlen)+3, hash_len*AP.match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
+		res |= ksw_extend_c(qlen, qseq, tlen, tseq, 5, AP->sc_mat, abs(qlen-tlen)+3, hash_len*AP->match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
 
 		if (cigar_ != NULL) {
 			if (read_end < read_len-readINcigar) _push_cigar1(&cigar_, &n_cigar_, &m_cigar_, (((read_len-readINcigar-read_end) << 4) | CSOFT_CLIP));//'S' exsit
@@ -963,10 +963,10 @@ int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 //for 'MIS-MATCH' case
 int hash_both_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		uint8_t *ref_seq, int ref_len, uint8_t *read_seq, int read_len, 
-        lamsa_aln_para AP,
+        lamsa_aln_para *AP,
 		uint32_t **hash_num, uint64_t ***hash_node)
 {
-    int hash_len = AP.hash_len, hash_key = AP.hash_key_len, hash_size = AP.hash_size;
+    int hash_len = AP->hash_len, hash_key = AP->hash_key_len, hash_size = AP->hash_size;
 	int32_t *hash_pos = (int32_t*)malloc(ref_len * sizeof(int32_t));
 	int **hash_node_num;
 	if (init_hash(ref_seq, ref_len, hash_len, hash_num, hash_node, &hash_node_num, &hash_pos, hash_key, hash_size) != 0) {

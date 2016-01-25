@@ -139,7 +139,9 @@ int line_merge(int a, int b, line_node **line, int *line_end, float ovlp_r) {
 //            		 3. Secondary is allowed to equal the Best
 // new
 // Best and all secondary whose score exceed best/2
-void line_filter(line_node **line, int *line_end, int li, int len, trig_node **trg_node, int *tri_n, frag_dp_node **f_node, aln_msg *a_msg, int per_max_multi)
+void line_filter(line_node **line, int *line_end, int li, int len, 
+                 trig_node **trg_node, int *tri_n, frag_dp_node **f_node, 
+                 aln_msg *a_msg, int per_max_multi)
 {
     int i, ii, j, k, l, m_ii;
     tri_node **m_b = (tri_node**)malloc(len * sizeof(tri_node*)); // (i, score, NM)
@@ -556,7 +558,24 @@ int line_set_bound1(line_node **line, int *line_end,
     return 0;
 }
 
-void get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, lamsa_aln_para AP)
+void line_filter_overlap(line_node **line, int *line_end, int line_n, aln_msg *a_msg, int seed_step, int seed_len) 
+{
+    int i, j, last_i;
+    for (i = 0; i < line_n; ++i) {
+        last_i = 0;
+        for (j = 1; j < line_end[i]-1; ++j) { // keep the head-tail nodes
+            if ((a_msg[line[i][j].x].read_id - a_msg[line[i][last_i].x].read_id) * seed_step < seed_len) { // overlap
+                line[i][j].x = -1;
+            } else last_i = j;
+        }
+        if (line_end[i]-1 != last_i) {
+            if ((a_msg[line[i][line_end[i]-1].x].read_id - a_msg[line[i][last_i].x].read_id) * seed_step < seed_len)
+                line[i][last_i].x = -1;
+        }
+    }
+}
+
+void get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, lamsa_aln_para *AP)
 {
     if (pre == -1 || i == -1) { 
         *flag = F_MATCH; 
@@ -573,24 +592,25 @@ void get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, 
         return;
     }
 
-    int seed_len = AP.seed_len; int seed_step = AP.seed_step;
-    if (abs(a_msg[pre].read_id-a_msg[i].read_id) * seed_step < seed_len) { // for overlapped seeds
-        *flag = F_UNCONNECT; return;
-    }
+    int seed_len = AP->seed_len; int seed_step = AP->seed_step;
+    //if (abs(a_msg[pre].read_id-a_msg[i].read_id) * seed_step < seed_len) { // for overlapped seeds
+    //    *flag = F_UNCONNECT; return;
+    //}
 
     int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * seed_step;	
     int64_t act = a_msg[i].at[j].offset;
 
-    int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act)) - (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id-a_msg[i].read_id) < 0)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
+    //int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act)) - (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id-a_msg[i].read_id) < 0)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
+    int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act));
 
-    int mat_dis =  AP.match_dis * ((AP.match_dis_type == 0) ? 1 : abs(a_msg[pre].read_id-a_msg[i].read_id)); // low-error-rate OR high-error-rate
+    int mat_dis =  AP->match_dis * ((aln_mode_high_id_err(AP->aln_mode)) ? abs(a_msg[pre].read_id-a_msg[i].read_id) : 1); // low-error-rate OR high-error-rate
     if (dis <= mat_dis && dis >= -mat_dis) {
         if (abs(a_msg[pre].read_id - a_msg[i].read_id) == 1) *flag = F_MATCH;
-        else if (abs(a_msg[pre].read_id - a_msg[i].read_id) < 10) *flag = F_MISMATCH; 
+        else if (abs(a_msg[pre].read_id - a_msg[i].read_id) <= AP->mismatch_thd) *flag = F_MISMATCH; 
         else *flag = F_LONG_MISMATCH;
-    } else if (dis > mat_dis && dis < AP.SV_len_thd) *flag = F_DELETE;
+    } else if (dis > mat_dis && dis < AP->SV_len_thd) *flag = F_DELETE;
     else if ((dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*seed_step-seed_len))) // nonoverlaped ins
-          || (dis < -(AP.split_len/2) && dis >= -AP.SV_len_thd)) { // overlaped ins/dup
+          || (dis < -(AP->split_len/2) && dis >= -AP->SV_len_thd)) { // overlaped ins/dup
         *flag = F_INSERT; 
     } else { 
         *flag = F_UNCONNECT; 
@@ -623,7 +643,7 @@ void fnode_set(frag_dp_node *f_node, line_node from,
 int frag_dp_init(frag_dp_node **f_node, 
                  aln_msg *a_msg, int seed_i, 
                  line_node from, 
-                 lamsa_aln_para AP,
+                 lamsa_aln_para *AP,
                  int dp_flag)
 {
     int i;
@@ -636,7 +656,7 @@ int frag_dp_init(frag_dp_node **f_node,
         for (i = 0; i < a_msg[seed_i].n_aln; ++i) {
             
             get_fseed_dis(a_msg, from.x, from.y, seed_i, i, &con_flag, AP);
-            con_score = AP.frag_score_table[con_flag];
+            con_score = AP->frag_score_table[con_flag];
 
             if (con_flag != F_UNCONNECT && con_flag != F_CHR_DIF)
                 fnode_set(&(f_node[seed_i][i]), from, 2+con_score, a_msg[from.x].at[from.y].NM+a_msg[seed_i].at[i].NM, con_flag, dp_flag);
@@ -663,7 +683,7 @@ int fnode_add_son(frag_dp_node **f_node,
 //pruning	XXX
 int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg, 
                    int seed_i, int aln_i, int start, 
-                   lamsa_aln_para AP, 
+                   lamsa_aln_para *AP, 
                    int dp_flag)
 {
     int i, j, con_flag, con_score;
@@ -690,14 +710,14 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
                 // '-' strand: precursor-Match 
                 else if (con_flag <= F_MISMATCH) {
                     max_from = (line_node){i,j};
-                    con_score = AP.frag_score_table[con_flag];
+                    con_score = AP->frag_score_table[con_flag];
                     max_score = f_node[i][j].score + 1 + con_score;
                     max_flag = con_flag;
                     max_NM = f_node[i][j].tol_NM + f_node[seed_i][aln_i].tol_NM;
                     goto UPDATE;
                 }
 
-                con_score = AP.frag_score_table[con_flag];
+                con_score = AP->frag_score_table[con_flag];
                 if (f_node[i][j].score + 1 + con_score > max_score)	{
                     max_from = (line_node){i,j};
                     max_score = f_node[i][j].score + 1 + con_score;
@@ -730,7 +750,7 @@ UPDATE:
 
 int frag_dp_per_init(frag_dp_node **f_node, aln_msg *a_msg, 
                      int seed_i, int aln_i, line_node from, 
-                     lamsa_aln_para AP,
+                     lamsa_aln_para *AP,
                      int dp_flag)
 {
     if (from.x == START_NODE.x) //UNLIMITED
@@ -739,7 +759,7 @@ int frag_dp_per_init(frag_dp_node **f_node, aln_msg *a_msg,
     else {
         int con_flag, con_score;
         get_fseed_dis(a_msg, from.x, from.y, seed_i, aln_i, &con_flag, AP);
-        con_score = AP.frag_score_table[con_flag];
+        con_score = AP->frag_score_table[con_flag];
 
         if (con_flag != F_UNCONNECT && con_flag != F_CHR_DIF)
             fnode_set(&(f_node[seed_i][aln_i]), from, 2+con_score, a_msg[seed_i].at[aln_i].NM+a_msg[from.x].at[from.y].NM, con_flag, dp_flag);
@@ -877,12 +897,10 @@ void branch_track_new(frag_dp_node **f_node, aln_msg *a_msg, int x, int y, node_
     return;
 }
 
-
-
 //for multi-dp-lines
 //line, line_end: start at 1
 int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg, 
-                            lamsa_aln_para AP, kseq_t *seqs,
+                            lamsa_aln_para *AP, kseq_t *seqs,
                             int left_b, int right_b, 
                             reg_t trg_reg,
                             line_node **line, int *line_end,
@@ -936,7 +954,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         int s_i = f_node[_right.x][_right.y].seed_i, a_i = f_node[_right.x][_right.y].aln_i;
         for (i = 0; i < trg_reg.beg_n; i++) {
             if (a_msg[s_i].at[a_i].chr == trg_reg.ref_beg[i].chr
-                && labs((a_msg[s_i].at[a_i].offset-trg_reg.ref_beg[i].ref_pos) - (s_i-left_b)*AP.seed_step) < AP.SV_len_thd) {
+                && labs((a_msg[s_i].at[a_i].offset-trg_reg.ref_beg[i].ref_pos) - (s_i-left_b)*AP->seed_step) < AP->SV_len_thd) {
                 // connectable with main-line
                 if (score > 1) score += score/2;
                 else score++;
@@ -945,7 +963,7 @@ int frag_mini_dp_multi_line(frag_dp_node **f_node, aln_msg *a_msg,
         }
         for (i = 0; i < trg_reg.end_n; i++) {
             if (a_msg[s_i].at[a_i].chr == trg_reg.ref_end[i].chr
-                && labs((a_msg[s_i].at[a_i].offset-trg_reg.ref_end[i].ref_pos) - (s_i-left_b)*AP.seed_step) < AP.SV_len_thd) {
+                && labs((a_msg[s_i].at[a_i].offset-trg_reg.ref_end[i].ref_pos) - (s_i-left_b)*AP->seed_step) < AP->SV_len_thd) {
                 // connectable with main-line
                 if (score > 1) score += score/2;
                 else score++;
@@ -973,14 +991,14 @@ L_START:
 }
 
 int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
-                lamsa_aln_para AP, kseq_t *seqs,
+                lamsa_aln_para *AP, kseq_t *seqs,
                 int left, int right, 
                 reg_t trg_reg,
                 line_node **line, int *line_end, 
                 int line_n_max) 
 {
     int l = frag_mini_dp_multi_line(f_node, a_msg, AP, seqs, left, right, trg_reg, line, line_end, line_n_max);//, 0, 0);
-    line_set_bound1(line, line_end, 0,  &l, left, right, AP.ske_max, AP.ovlp_rat);
+    line_set_bound1(line, line_end, 0,  &l, left, right, AP->ske_max, AP->ovlp_rat);
     ///l = line_remove(line, line_end, 0, l);
     return l;
 }
@@ -988,7 +1006,7 @@ int trg_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
 void frag_min_extend(frag_dp_node **f_node, aln_msg *a_msg,
                     int node_i, int aln_i,
                     int aln_min, int dp_flag,
-                    lamsa_aln_per_para APP, lamsa_aln_para AP)
+                    lamsa_aln_per_para *APP, lamsa_aln_para *AP)
 {
     int i, j, con_flag;
     int last_x = node_i, last_y = aln_i;
@@ -1008,7 +1026,7 @@ void frag_min_extend(frag_dp_node **f_node, aln_msg *a_msg,
         --i;
     }
     i = last_x + 1;
-    while (i < APP.seed_out) {
+    while (i < APP->seed_out) {
         if (a_msg[i].n_aln > aln_min) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
                 get_fseed_dis(a_msg, last_x, last_y, i, j, &con_flag, AP);
@@ -1023,7 +1041,7 @@ void frag_min_extend(frag_dp_node **f_node, aln_msg *a_msg,
 }
 
 int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg, 
-                      lamsa_aln_para AP, kseq_t *seqs,
+                      lamsa_aln_para *AP, kseq_t *seqs,
                       line_node left, line_node right, 
                       line_node *line, int *de_score, int *de_NM,
                       int _head, int _tail)
@@ -1107,10 +1125,10 @@ int frag_mini_dp_line(frag_dp_node **f_node, aln_msg *a_msg,
 }
 
 int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
-        lamsa_aln_per_para APP,
-        int *l_n, int *line_m,
-        line_node **line, int *line_end,
-        frag_dp_node ***f_node)
+                 lamsa_aln_para *AP, lamsa_aln_per_para *APP, 
+                 int *l_n, int *line_m,
+                 line_node **line, int *line_end,
+                 frag_dp_node ***f_node)
 {
     if (*l_n == 0) return 0;
     int line_n = *l_n, i, l;
@@ -1131,8 +1149,7 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
 
     if (line_n > (*line_m)) {
         (*f_msg) = (frag_msg*)realloc(*f_msg, line_n * sizeof(frag_msg));
-        for (i = (*line_m); i < line_n; ++i)
-        {
+        for (i = (*line_m); i < line_n; ++i) {
             frag_init_msg((*f_msg)+i, (*f_msg)->frag_max); 
             frag_copy_msg(*f_msg, (*f_msg)+i);
         }
@@ -1140,19 +1157,17 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         (*line_m)= line_n;
     }
 
+    if (aln_mode_overlap_seed(AP->aln_mode)) line_filter_overlap(line, line_end, line_n, a_msg, AP->seed_step, AP->seed_len);
+
     for (l = 0; l < line_n; ++l) {
         frag_num=0;
         pre_x = line[l][line_end[l]-1].x; pre_y = line[l][line_end[l]-1].y;
-        //fprintf(stdout, "left: %d, right: %d\n", line[l][line_end[l]].x, line[l][line_end[l]+1].x);
-        //right bound
-        //right_bound = ((E_RB(line, line_end, l) == APP.seed_out) ? (APP.seed_all+1) : a_msg[E_RB(line, line_end, l)].read_id);
-        right_bound = APP.seed_all+1;
-        //MIS-MATCH
-        //first end
+        right_bound = APP->seed_all+1;
         frag_set_msg(a_msg, pre_x, pre_y, FRAG_END, (*f_msg)+l, frag_num);
         ((*f_msg)+l)->frag_right_bound = right_bound;
         for (i = line_end[l]-1; i > 0; --i) {
             cur_x = pre_x; cur_y = pre_y;
+            if (line[l][i-1].x < 0) continue;
             pre_x = line[l][i-1].x; pre_y = line[l][i-1].y;
             //INS
             if ((*f_node)[cur_x][cur_y].match_flag == F_INSERT)
@@ -1184,7 +1199,6 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         //last start
         cur_x = line[l][0].x; cur_y = line[l][0].y;
         frag_set_msg(a_msg, cur_x, cur_y, FRAG_START, (*f_msg)+l, frag_num);
-        //left_bound = ((E_LB(line, line_end, l) == -1) ? 0 : a_msg[E_LB(line, line_end, l)].read_id);
         left_bound = 0;
 
         //MIS-MATCH
@@ -1193,14 +1207,26 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
     }
     *l_n = l;
 
+#ifdef __DEBUG__
+    fprintf(stderr, "After Filtering:\n");
+    for (i = 0; i < line_n; ++i) {
+        fprintf(stderr, "%d(%d,%d score: %d):\t", i+1, L_MF(line, line_end, i), L_MH(line, line_end,i), L_LS(line, line_end, i));
+        for (l = 0; l < line_end[i]; ++l) {
+            if (line[i][l].x != -1)
+                fprintf(stderr, "(%d, %d)\t", a_msg[line[i][l].x].read_id-1, line[i][l].y);
+        }
+        fprintf(stderr, "\n");
+    }
+#endif
+
     return 1;
 }
 
 int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
-        lamsa_aln_per_para APP, lamsa_aln_para AP, kseq_t *seqs,
-        line_node **line, int *line_end, int *line_m, 
-        frag_dp_node ***f_node, line_node **_line, int *_line_end,
-        int line_n_max)
+                     lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
+                     line_node **line, int *line_end, int *line_m, 
+                     frag_dp_node ***f_node, line_node **_line, int *_line_end,
+                     int line_n_max)
 {
     int l_n = 0;
     aln_reg *re_reg = aln_init_reg(seqs->seq.l);
@@ -1209,18 +1235,18 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
     int left_id, right_id, left, right, l;
     for (i = 0; i < re_reg->reg_n; ++i) {
         // get region boundary (left, right)
-        left_id = (re_reg->reg[i].beg + AP.seed_inv - 1) / AP.seed_step+1; 
-        right_id = (re_reg->reg[i].end - 1) / AP.seed_step+1;
-        if (right_id > APP.seed_all) right_id -= 1;
+        left_id = (re_reg->reg[i].beg + AP->seed_inv - 1) / AP->seed_step+1; 
+        right_id = (re_reg->reg[i].end - 1) / AP->seed_step+1;
+        if (right_id > APP->seed_all) right_id -= 1;
         left = right = -2;
-        for (j = 0; j < APP.seed_out; ++j) {
+        for (j = 0; j < APP->seed_out; ++j) {
             if (a_msg[j].read_id >= left_id) {
                 left = j-1;
                 break;
             }
         }
         if (left == -2) continue;
-        for (j = APP.seed_out-1; j >= 0; --j) {
+        for (j = APP->seed_out-1; j >= 0; --j) {
             if (a_msg[j].read_id <= right_id) {
                 right = j+1;
                 break;
@@ -1240,22 +1266,22 @@ int frag_line_remain(aln_reg *a_reg, aln_msg *a_msg, frag_msg **f_msg,
     }
 End:
     aln_free_reg(re_reg);
-    frag_dp_path(a_msg, f_msg, APP, &l_n, line_m, line, line_end, f_node);
+    frag_dp_path(a_msg, f_msg, AP, APP, &l_n, line_m, line, line_end, f_node);
     return l_n;
 }
 
 //new tree-generating and pruning
 int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
-        lamsa_aln_per_para APP, lamsa_aln_para AP, kseq_t *seqs,
+        lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
         line_node **line, int *line_end, int *line_m,
         frag_dp_node ***f_node,
         line_node **_line, int line_n_max)
 {
     int i, j, k, line_n;
-    int min_n = AP.first_loci_thd, min_exist=0, min_num = 0;
+    int min_n = AP->first_loci_thd, min_exist=0, min_num = 0;
 
     { // dp init
-        for (i = 0; i < APP.seed_out; ++i)
+        for (i = 0; i < APP->seed_out; ++i)
         {
             if (a_msg[i].n_aln <= min_n)
             {
@@ -1264,20 +1290,20 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
                 ++min_num;
             } else frag_dp_init(*f_node, a_msg, i, START_NODE, AP, MULTI_FLAG);
         }
-        if (!min_exist || min_num * 3 < APP.seed_out)
+        if (!min_exist || min_num * 3 < APP->seed_out)
         {
-            for (i = 0; i < APP.seed_out; ++i) {
+            for (i = 0; i < APP->seed_out; ++i) {
                 for (j = 0; j < a_msg[i].n_aln; ++j) (*f_node)[i][j].dp_flag = MIN_FLAG;
             }
-            min_n = AP.per_aln_m;
+            min_n = AP->per_aln_m;
             min_exist = 1;
         }
     }
     { // dp update
         //min extend, when min_n == PER_ALN_N: no need to extend
-        if (min_n != AP.per_aln_m)
+        if (min_n != AP->per_aln_m)
         {
-            for (i = 0; i < APP.seed_out; ++i) {
+            for (i = 0; i < APP->seed_out; ++i) {
                 if (a_msg[i].n_aln <= min_n) {
                     for (j = 0; j < a_msg[i].n_aln; ++j)
                         frag_min_extend(*f_node, a_msg, i, j, min_n, MIN_FLAG, APP, AP);
@@ -1285,7 +1311,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
             }
         }
         //min update
-        for (i = 1; i < APP.seed_out; ++i) {
+        for (i = 1; i < APP->seed_out; ++i) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
                 if ((*f_node)[i][j].dp_flag == MIN_FLAG)
                     frag_dp_update(*f_node, a_msg, i, j, 0/*update start pos*/, AP, MIN_FLAG);
@@ -1296,7 +1322,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
         //prune tree to find multi-nodes/roads for backtrack
         node_score *ns = node_init_score(line_n_max); //size of node_score
         ns->min_score_thd = 2;
-        for (i = APP.seed_out-1; i >=0; --i) {
+        for (i = APP->seed_out-1; i >=0; --i) {
             for (j = 0; j < a_msg[i].n_aln; ++j) {
                 if ((*f_node)[i][j].dp_flag == MIN_FLAG && (*f_node)[i][j].in_de == 0) //leaf node
                     branch_track_new(*f_node, a_msg, i, j, ns); 
@@ -1307,7 +1333,7 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
         int node_i, mini_len;
         trig_node **inter_tri = (trig_node**)malloc(o_l* sizeof(trig_node*)); int *inter_n=(int*)malloc(o_l*sizeof(int));
         for (i = 0; i < o_l;++i)
-            inter_tri[i] = (trig_node*)malloc(APP.seed_out * sizeof(trig_node));
+            inter_tri[i] = (trig_node*)malloc(APP->seed_out * sizeof(trig_node));
         //multi-backtrack
         //extend for min-line AND set inter-trigger
         while (1) {
@@ -1319,8 +1345,8 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
             //fill-up for right end
             node_i=0;
             inter_n[l_i]=0;
-            if (max_node.x < APP.seed_out-1) {
-                mini_len = frag_mini_dp_line(*f_node, a_msg, AP, seqs, max_node, (line_node){APP.seed_out, 0}, _line[0], &line_score, &line_NM, 1, 0);
+            if (max_node.x < APP->seed_out-1) {
+                mini_len = frag_mini_dp_line(*f_node, a_msg, AP, seqs, max_node, (line_node){APP->seed_out, 0}, _line[0], &line_score, &line_NM, 1, 0);
                 for (k = mini_len-1; k >= 0; --k) {
                     line[l_i][node_i++] = _line[0][k];
                     (*f_node)[_line[0][k].x][_line[0][k].y].dp_flag = TRACKED_FLAG; 
@@ -1378,14 +1404,14 @@ int frag_line_BCC(aln_msg *a_msg, frag_msg **f_msg,
         }
         // min-lines have been extended, and sorted by end-pos
         // set boundary and filter best/secondary
-        line_set_bound(line, line_end, 0, &min_l, -1, APP.seed_out, inter_tri, inter_n, *f_node, a_msg, AP.ske_max, AP.ovlp_rat);
+        line_set_bound(line, line_end, 0, &min_l, -1, APP->seed_out, inter_tri, inter_n, *f_node, a_msg, AP->ske_max, AP->ovlp_rat);
         for (i = 0; i < o_l; ++i) free(inter_tri[i]);
         free(inter_tri); free(inter_n);
         node_free_score(ns);
 
         line_n = min_l+new_l;
 
-        frag_dp_path(a_msg, f_msg, APP, &line_n, line_m, line, line_end, f_node);
+        frag_dp_path(a_msg, f_msg, AP, APP, &line_n, line_m, line, line_end, f_node);
         return line_n;
     }
 }

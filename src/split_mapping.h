@@ -80,21 +80,21 @@ extern const int8_t hash_nt4_table[5];
 int split_indel_map(cigar32_t **res_cigar, int *res_len, int *res_m,
 					 uint8_t *read_seq, int read_len, uint8_t *ref_seq, int ref_len, 
 					 int ref_offset, // for DUP
-                     lamsa_aln_para AP,
+                     lamsa_aln_para *AP,
 					 uint32_t **hash_num, uint64_t ***hash_node);
 int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 						uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
-                        lamsa_aln_para AP,
+                        lamsa_aln_para *AP,
 		                uint32_t **hash_num, uint64_t ***hash_node);
 
 int hash_right_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 						 uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
-                         lamsa_aln_para AP,
+                         lamsa_aln_para *AP,
 		                 uint32_t **hash_num, uint64_t ***hash_node);
 
 int hash_both_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 						 uint8_t *ref, int ref_len, uint8_t *read, int read_len, 
-                         lamsa_aln_para AP,
+                         lamsa_aln_para *AP,
 		                 uint32_t **hash_num, uint64_t ***hash_node);
 
 
