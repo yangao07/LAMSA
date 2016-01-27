@@ -262,11 +262,11 @@ void line_filter(line_node **line, int *line_end, int li, int len,
                             int x_s = line[l][0].x, y_s = line[l][0].y;
                             int x_e = line[l][line_end[l]-1].x, y_e = line[l][line_end[l]-1].y;
                             int x1 = trg_node[j][k].n1.x, y1 = trg_node[j][k].n1.y, x2 = trg_node[j][k].n2.x, y2 = trg_node[j][k].n2.y;
-                            int nsrand = a_msg[x_s].at[y_s].nsrand;
-                            if (nsrand == a_msg[x1].at[y1].nsrand ||
+                            int nstrand = a_msg[x_s].at[y_s].nstrand;
+                            if (nstrand == a_msg[x1].at[y1].nstrand ||
                                     a_msg[x_s].at[y_s].chr != a_msg[x1].at[y1].chr ||
-                                    nsrand * a_msg[x_s].at[y_s].offset < nsrand * a_msg[x2].at[y2].offset ||
-                                    nsrand * a_msg[x_e].at[y_e].offset > nsrand * a_msg[x1].at[y1].offset)
+                                    nstrand * a_msg[x_s].at[y_s].offset < nstrand * a_msg[x2].at[y2].offset ||
+                                    nstrand * a_msg[x_e].at[y_e].offset > nstrand * a_msg[x1].at[y1].offset)
                                 continue;
 
                             E_LB(line, line_end, l) = trg_node[j][k].n1.x;
@@ -558,18 +558,26 @@ int line_set_bound1(line_node **line, int *line_end,
     return 0;
 }
 
-void line_filter_overlap(line_node **line, int *line_end, int line_n, aln_msg *a_msg, int seed_step, int seed_len) 
+void line_filter_overlap(line_node **line, int *line_end, int line_n, aln_msg *a_msg, frag_dp_node **f_node, int seed_step, int seed_len) 
 {
-    int i, j, last_i;
+    int i, j, last_i, pre_x, pre_y, cur_x, cur_y;
     for (i = 0; i < line_n; ++i) {
         last_i = 0;
         for (j = 1; j < line_end[i]-1; ++j) { // keep the head-tail nodes
-            if ((a_msg[line[i][j].x].read_id - a_msg[line[i][last_i].x].read_id) * seed_step < seed_len) { // overlap
+            cur_x = line[i][j].x, cur_y = line[i][j].y;
+            pre_x = line[i][last_i].x, pre_y = line[i][last_i].y;
+            //if ((a_msg[cur_x].read_id - a_msg[pre_x].read_id) * seed_step < seed_len // read_overlap
+            //  || (seed_len + ((a_msg[cur_x].at[cur_y].nstrand==1)?a_msg[pre_x].at[pre_y].len_dif:a_msg[cur_x].at[cur_y].len_dif) > a_msg[cur_x].at[cur_y].nstrand * (a_msg[cur_x].at[cur_y].offset - a_msg[pre_x].at[pre_y].offset) && f_node[cur_x][cur_y].match_flag != F_INSERT)) { // ref_overlap
+            if (seed_len + ((a_msg[cur_x].at[cur_y].nstrand==1)?a_msg[pre_x].at[pre_y].len_dif:a_msg[cur_x].at[cur_y].len_dif) > a_msg[cur_x].at[cur_y].nstrand * (a_msg[cur_x].at[cur_y].offset - a_msg[pre_x].at[pre_y].offset) && f_node[cur_x][cur_y].match_flag != F_INSERT) // ref_overlap
                 line[i][j].x = -1;
-            } else last_i = j;
+            else last_i = j;
         }
         if (line_end[i]-1 != last_i) {
-            if ((a_msg[line[i][line_end[i]-1].x].read_id - a_msg[line[i][last_i].x].read_id) * seed_step < seed_len)
+            cur_x = line[i][line_end[i]-1].x, cur_y = line[i][line_end[i]-1].y;
+            pre_x = line[i][last_i].x, pre_y = line[i][last_i].y;
+            //if ((a_msg[cur_x].read_id - a_msg[pre_x].read_id) * seed_step < seed_len // read_overlap
+            //  || (seed_len + ((a_msg[cur_x].at[cur_y].nstrand==1)?a_msg[pre_x].at[pre_y].len_dif:a_msg[cur_x].at[cur_y].len_dif) > a_msg[cur_x].at[cur_y].nstrand * (a_msg[cur_x].at[cur_y].offset - a_msg[pre_x].at[pre_y].offset) && f_node[cur_x][cur_y].match_flag != F_INSERT)) // ref_overlap
+            if (seed_len + ((a_msg[cur_x].at[cur_y].nstrand==1)?a_msg[pre_x].at[pre_y].len_dif:a_msg[cur_x].at[cur_y].len_dif) > a_msg[cur_x].at[cur_y].nstrand * (a_msg[cur_x].at[cur_y].offset - a_msg[pre_x].at[pre_y].offset) && f_node[cur_x][cur_y].match_flag != F_INSERT) // ref_overlap
                 line[i][last_i].x = -1;
         }
     }
@@ -586,27 +594,24 @@ void get_fseed_dis(aln_msg *a_msg, int pre, int pre_a, int i, int j, int *flag, 
         else *flag = F_UNCONNECT;
         return;
     }
-    if (a_msg[i].at[j].chr != a_msg[pre].at[pre_a].chr || a_msg[i].at[j].nsrand != a_msg[pre].at[pre_a].nsrand)	//different chr or different srnad
-    {
+    if (a_msg[i].at[j].chr != a_msg[pre].at[pre_a].chr || a_msg[i].at[j].nstrand != a_msg[pre].at[pre_a].nstrand)	{ //diff chr or diff strnad
         *flag = F_CHR_DIF; 
         return;
     }
 
     int seed_len = AP->seed_len; int seed_step = AP->seed_step;
-    //if (abs(a_msg[pre].read_id-a_msg[i].read_id) * seed_step < seed_len) { // for overlapped seeds
-    //    *flag = F_UNCONNECT; return;
-    //}
-
-    int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nsrand * (a_msg[i].read_id - a_msg[pre].read_id) * seed_step;	
+    if (abs(a_msg[pre].read_id-a_msg[i].read_id) * seed_step < seed_len) { // for overlapped seeds
+        *flag = F_UNCONNECT; return;
+    }
+    int64_t exp = a_msg[pre].at[pre_a].offset + a_msg[pre].at[pre_a].nstrand * (a_msg[i].read_id - a_msg[pre].read_id) * seed_step;	
     int64_t act = a_msg[i].at[j].offset;
 
-    //int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act)) - (((a_msg[pre].at[pre_a].nsrand) * (a_msg[pre].read_id-a_msg[i].read_id) < 0)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
-    int dis = a_msg[pre].at[pre_a].nsrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act));
+    int dis = a_msg[pre].at[pre_a].nstrand * ((a_msg[pre].read_id < a_msg[i].read_id)?(act-exp):(exp-act)) - (((a_msg[pre].at[pre_a].nstrand) * (a_msg[pre].read_id-a_msg[i].read_id) < 0)?(a_msg[pre].at[pre_a].len_dif):(a_msg[i].at[j].len_dif));
 
     int mat_dis =  AP->match_dis * ((aln_mode_high_id_err(AP->aln_mode)) ? abs(a_msg[pre].read_id-a_msg[i].read_id) : 1); // low-error-rate OR high-error-rate
     if (dis <= mat_dis && dis >= -mat_dis) {
         if (abs(a_msg[pre].read_id - a_msg[i].read_id) == 1) *flag = F_MATCH;
-        else if (abs(a_msg[pre].read_id - a_msg[i].read_id) <= AP->mismatch_thd) *flag = F_MISMATCH; 
+        else if (abs(a_msg[pre].read_id - a_msg[i].read_id) <= 3*AP->mismatch_thd) *flag = F_MISMATCH; 
         else *flag = F_LONG_MISMATCH;
     } else if (dis > mat_dis && dis < AP->SV_len_thd) *flag = F_DELETE;
     else if ((dis < -mat_dis && dis >= (0-(abs(a_msg[i].read_id-a_msg[pre].read_id)*seed_step-seed_len))) // nonoverlaped ins
@@ -683,12 +688,12 @@ int fnode_add_son(frag_dp_node **f_node,
 //pruning	XXX
 int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg, 
                    int seed_i, int aln_i, int start, 
-                   lamsa_aln_para *AP, 
-                   int dp_flag)
+                   lamsa_aln_para *AP, int dp_flag)
 {
     int i, j, con_flag, con_score;
     line_node max_from;
     int max_score, max_flag, max_NM;
+    int match_pen;
 
     max_from = f_node[seed_i][aln_i].from;
     max_score = f_node[seed_i][aln_i].score;
@@ -696,19 +701,18 @@ int frag_dp_update(frag_dp_node **f_node, aln_msg *a_msg,
 
     for (i = seed_i - 1; i >= start; --i) {
         for (j = 0; j < a_msg[i].n_aln; ++j) {
-            if (f_node[i][j].dp_flag == dp_flag)// || f_node[i][j].dp_flag == UPDATE_FLAG)
+            if (f_node[i][j].dp_flag == dp_flag)
             {
-                get_fseed_dis(a_msg, i, j, seed_i, aln_i, &con_flag, AP);
-                if (con_flag == F_UNCONNECT || con_flag == F_CHR_DIF)
-                    continue;
                 // '+' strand: successor-Match
-                if (a_msg[i].at[j].nsrand == 1) {
-                    if (f_node[i][j].son_flag <= F_MISMATCH) {
-                        continue;
-                    } 
+                if (a_msg[i].at[j].nstrand == 1) { 
+                    if (f_node[i][j].son_flag <= F_MATCH_THD) continue;
                 }
+
+                get_fseed_dis(a_msg, i, j, seed_i, aln_i, &con_flag, AP);
+                if (con_flag == F_UNCONNECT || con_flag == F_CHR_DIF) continue;
+                
                 // '-' strand: precursor-Match 
-                else if (con_flag <= F_MISMATCH) {
+                if (a_msg[i].at[j].nstrand == -1 && con_flag <= F_MATCH_THD) { 
                     max_from = (line_node){i,j};
                     con_score = AP->frag_score_table[con_flag];
                     max_score = f_node[i][j].score + 1 + con_score;
@@ -787,20 +791,22 @@ void node_add_score(int score, int NM, line_node node, node_score *ns, frag_dp_n
 //  b.Short-Distance
 line_node get_max_son(frag_dp_node **f_node, int x, int y)
 {
-    int i, max_score, max_NM, max_flag, max_dis;
+    int i, max_score, max_NM, max_flag, max_dis, flag_thd=F_INIT;
     line_node max, son;
     max_score = 0, max_NM = 0, max_dis = 0;
 
     for (i = 0; i < f_node[x][y].son_n; ++i) {
         son = f_node[x][y].son[i];
         max_flag = f_node[son.x][son.y].match_flag;
-        if (max_flag == F_MATCH || max_flag == F_MISMATCH)// || max_flag == F_LONG_MISMATCH)
-            return son;
-        if (f_node[son.x][son.y].max_score > max_score || (f_node[son.x][son.y].max_score == max_score && (son.x - x < max_dis || f_node[son.x][son.y].max_NM < max_NM))) {
+        // for high-err-overlap seed
+        //if (max_flag == F_MATCH || max_flag == F_MISMATCH)// || max_flag == F_LONG_MISMATCH)
+        //    return son;
+        if (f_node[son.x][son.y].match_flag <= flag_thd && (f_node[son.x][son.y].max_score > max_score || (f_node[son.x][son.y].max_score == max_score && (son.x - x < max_dis || f_node[son.x][son.y].max_NM < max_NM)))) {
             max = son;
             max_score = f_node[son.x][son.y].max_score;
             max_NM = f_node[son.x][son.y].max_NM;
             max_dis = son.x - x;
+            if (f_node[son.x][son.y].match_flag <= F_MATCH_THD) flag_thd = F_MATCH_THD;
         } 
     }
     return max;
@@ -1157,7 +1163,7 @@ int frag_dp_path(aln_msg *a_msg, frag_msg **f_msg,
         (*line_m)= line_n;
     }
 
-    if (aln_mode_overlap_seed(AP->aln_mode)) line_filter_overlap(line, line_end, line_n, a_msg, AP->seed_step, AP->seed_len);
+    if (aln_mode_overlap_seed(AP->aln_mode)) line_filter_overlap(line, line_end, line_n, a_msg, *f_node, AP->seed_step, AP->seed_len);
 
     for (l = 0; l < line_n; ++l) {
         frag_num=0;

@@ -11,7 +11,7 @@ KSEQ_INIT(gzFile, gzread)
 
 typedef struct {
 	int chr;
-	int srand;
+	int strand;
 
 	uint64_t cigar_ref_start;	//frag's cigar start of ref, 1-based
 	uint64_t cigar_ref_end;		                                    
@@ -46,7 +46,7 @@ typedef struct {
 typedef struct {
     uint64_t offset;	//1-based
     int chr;
-    int nsrand;			//1:'+' 0:'-'
+    int nstrand;			//1:'+' 0:'-'
     cigar32_t *cigar;
     int c_m; int cigar_len;
     uint64_t refend; int readend; // for merge_cigar

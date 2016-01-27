@@ -37,18 +37,22 @@
 #define PB_SEED_LEN 30
 #define PB_SEED_STEP 10
 
-#define PB_ED_RATE 0.2
-#define PB_ID_RATE 0.2
-#define PB_MAT_RATE 0.75
+#define PB_ED_RATE 0.3
+#define PB_ID_RATE 0.3
+#define PB_MAT_RATE 0.7
 #define PB_MIS_RATE 0.04
 #define PB_MISMATCH_THD 10
 
 #define PB_MAT_SCORE 4
 #define PB_MIS_PEN 5
 #define PB_INS_OPEN_PEN 2
-#define PB_INS_EXT_PEN 2
-#define PB_DEL_OPEN_PEN 2
-#define PB_DEL_EXT_PEN 2
+#define PB_INS_EXT_PEN 5
+#define PB_DEL_OPEN_PEN 5
+#define PB_DEL_EXT_PEN 8
+#define PB_INS_EXT_OPEN_PEN 1
+#define PB_INS_EXT_EXT_PEN 1
+#define PB_DEL_EXT_OPEN_PEN 2
+#define PB_DEL_EXT_EXT_PEN 4
 #define PB_END_BONUS 0
 
 
@@ -183,7 +187,7 @@ typedef struct {
 typedef struct {
 	int32_t chr;
 	int64_t offset;	// 1-base
-	int8_t nsrand;
+	int8_t nstrand;
 	int NM;      // edit distance
 
 	cigar32_t *cigar;
@@ -203,7 +207,7 @@ typedef struct {
 
 typedef struct {
 	int readid;		// qname
-	char nsrand;	// flag
+	char nstrand;	// flag
 	int chr;		// tid
 	int64_t offset;	// 1-base
 
@@ -382,7 +386,8 @@ typedef struct {
              -6,    F_UNMATCH
         };*/
     // SW para
-    int ins_gapo, ins_gape, del_gapo, del_gape; // gap open penalty, gap extension penalty
+    int ins_gapo, ins_gape, del_gapo, del_gape; // gap open/extension penalty in sw-global
+    int ins_ext_o, ins_ext_e, del_ext_o, del_ext_e; // gap open/extension penalty in sw-extend
     int match, mis;     // score matrix, match and mismatch
     int8_t sc_mat[25];
     int end_bonus, zdrop;

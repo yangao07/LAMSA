@@ -203,7 +203,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     int read_len = seqs->seq.l;
     int extra_ext_len = 100;
     la->cur_res_n = 0;
-	la->res[0].chr = ref_id+1; la->res[0].nsrand = 1-is_rev;
+	la->res[0].chr = ref_id+1; la->res[0].nstrand = 1-is_rev;
     int i; 
     int left_eta_len, extra_beg, right_eta_len, extra_end, extra_reg_len;
     uint8_t *query;

@@ -544,7 +544,8 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
                 int w, int *n_cigar_, cigar32_t **cigar_)
 {
     //e_del=8, o_del=5, e_ins=5, o_ins=2; XXX
-    if (qlen < 0 || tlen < 0) { fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
+    if (qlen < 0 || tlen < 0) { 
+        fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
 	eh_t *eh;
 	int8_t *qp; // query profile
 	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, score, n_col;
@@ -828,7 +829,7 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
 	int8_t *qp; // query profile
-    int o_ins = AP->ins_gapo, e_ins = AP->ins_gape, o_del = AP->del_gapo, e_del = AP->del_gape, end_bonus = AP->end_bonus, zdrop = AP->zdrop;
+    int o_ins = AP->ins_ext_o, e_ins = AP->ins_ext_e, o_del = AP->del_ext_o, e_del = AP->del_ext_e, end_bonus = AP->end_bonus, zdrop = AP->zdrop;
 	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
 	assert(h0 > 0);
 	// allocate memory
@@ -1048,7 +1049,11 @@ int ksw_both_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
     return 1;
 }
 
-void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t *lcigar, int ln_cigar, cigar32_t *rcigar, int rn_cigar, const uint8_t *query, int qlen, int lqe, int rqe, const uint8_t *target, int tlen, int lte, int rte, lamsa_aln_para *AP, int m, const int8_t *mat)
+void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m, 
+                cigar32_t *lcigar, int ln_cigar, cigar32_t *rcigar, int rn_cigar, 
+                const uint8_t *query, int qlen, int lqe, int rqe, 
+                const uint8_t *target, int tlen, int lte, int rte, 
+                lamsa_aln_para *AP, int m, const int8_t *mat)
 {
     int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
 

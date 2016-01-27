@@ -48,9 +48,9 @@ typedef struct {
 
 #define HASH_LEN 10
 #define HASH_KEY 2
-//#define HASH_STEP 1
-//#define HASH_STEP 15 //for un-overlap
 #define HASH_STEP 10
+#define PB_HASH_LEN 8//10
+#define PB_HASH_STEP 4//5
 #define NT_N 4	
 
 #define HASH_MIN_LEN 1
