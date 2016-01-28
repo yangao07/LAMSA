@@ -74,7 +74,7 @@ void md2cigar(char *md, map_t *map)
     int i=0; 
 	char *c = (char*)malloc((md_len+1) * sizeof(char)); int c_i;
 	char *indel = (char*)malloc((md_len+1) * sizeof(char));
-    char id; int indel_n=0;
+    char id; int indel_n=0, bd=0, bi=0;
     int m, mm;
 	map->cigar->cigar_n = 0;
 	map->NM = 0;
@@ -82,7 +82,13 @@ void md2cigar(char *md, map_t *map)
 		if (md[i] == '>') { // indel
 			sscanf(md+i, ">%[^+-]%[+-]", indel, &id);
             indel_n = atoi(indel);
-			_push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | (id=='+'?CDEL:CINS));
+            if (id=='+') {
+                bd += indel_n;
+                _push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | CDEL);
+            } else { 
+                bi += indel_n;
+                _push_cigar1(&(map->cigar->cigar), &(map->cigar->cigar_n), &(map->cigar->cigar_m), (indel_n) << 4 | CINS);
+            }
 			map->NM += indel_n;
             i += (get_d(indel_n) + 2);
 		} else {
@@ -97,6 +103,8 @@ void md2cigar(char *md, map_t *map)
 			map->NM += mm;
 		}
 	}
+    map->len_dif = bd - bi;
+    map->bmax = bd > bi ? bd : bi;
 	free(c); free(indel);
 }
 
@@ -198,7 +206,7 @@ RET:
 }
 #endif
 
-int  gem_map_read(FILE *mapf, map_msg *m_msg, char *gem_line, int line_size)
+int gem_map_read(FILE *mapf, map_msg *m_msg, char *gem_line, int line_size)
 {
 	if (fgets(gem_line, line_size, mapf) == NULL) return -1;
     
@@ -213,6 +221,7 @@ int  gem_map_read(FILE *mapf, map_msg *m_msg, char *gem_line, int line_size)
     m_msg->map_str = strdup(gem_line+i+1);
 	return 0;
 }
+
 int gem_map_msg(map_msg *m_msg, int max_n)
 {
 	m_msg->map_n = 0;

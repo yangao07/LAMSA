@@ -717,42 +717,6 @@ void rearr_aln_res(aln_res *res, int n, float ovlp_r)
     free(qua); aln_free_reg(reg);
 }
 
-aln_msg *aln_init_msg(int seed_max, int per_aln_m)
-{
-    aln_msg *msg;
-    int i,j;
-    msg = (aln_msg*)malloc(seed_max * sizeof(aln_msg));
-    for (i = 0; i < seed_max; ++i)		//drop away seed whose number of alignments > PER_ALN_N
-    {
-        msg[i].read_id = -1;    // -> seed_id ?
-        msg[i].n_aln = 0;
-        msg[i].skip = 0;
-        msg[i].at = (aln_t*)malloc(per_aln_m * sizeof(aln_t));  // per_aln_m
-        for (j = 0; j < per_aln_m; ++j)
-        {
-            msg[i].at[j].cigar = (cigar32_t*)malloc(7 * sizeof(cigar32_t));//default value for 3-ed
-            msg[i].at[j].cigar_len = 0;
-            msg[i].at[j].cmax = 7;
-            msg[i].at[j].bmax = 0;
-        }
-    }
-    return msg;
-}
-
-void aln_free_msg(aln_msg *a_msg, int seed_max, int per_aln_m)	//a_msg[seed_max]
-{
-    int i,j;
-    for (i = 0; i < seed_max; ++i)
-    {
-        for (j = 0; j < per_aln_m; ++j)
-        {
-            free(a_msg[i].at[j].cigar);
-        }
-        free(a_msg[i].at);
-    }
-    free(a_msg);
-}
-
 frag_dp_node ***fnode_alloc(int seed_m, int per_aln_m)
 {
     int i, j;
@@ -763,8 +727,8 @@ frag_dp_node ***fnode_alloc(int seed_m, int per_aln_m)
         (*f_node)[i] = (frag_dp_node*)malloc(per_aln_m * sizeof(frag_dp_node));
         for (j = 0; j < per_aln_m; ++j) {
             (*f_node)[i][j].seed_i = i, (*f_node)[i][j].aln_i = j;
-            (*f_node)[i][j].son_max = 100; // son_max 
-            (*f_node)[i][j].son = (line_node*)calloc(100, sizeof(line_node));
+            (*f_node)[i][j].son_max = 4; // son_max 
+            (*f_node)[i][j].son = (line_node*)calloc(4, sizeof(line_node));
         }
     }
     return f_node;
@@ -778,7 +742,6 @@ void fnode_init(frag_dp_node **f_node, int seed_m, int per_aln_m)
             f_node[i][j].in_de = 0;
             f_node[i][j].son_n = 0;
             f_node[i][j].max_score = 0;
-            f_node[i][j].trg_n = 0;
         }
     }
 }
@@ -795,67 +758,14 @@ void fnode_free(frag_dp_node ***f_node, int seed_m, int per_aln_m)
     free(f_node);
 }
 
-//MIDNSHP=XB
-//0123456789
-void setCigar(aln_msg *a_msg, int seed_i, int aln_i, char *s_cigar)
+void map_cal_msg(map_msg *m_msg, int seed_id, bntseq_t *bns)
 {
-    int op;
-    long x, bi, bd;
-    char *s, *t;
-
-    a_msg[seed_i].at[aln_i].cigar_len=0;
-    bi = bd = 0;
-    for (s = s_cigar; *s; ) {
-        x = strtol(s, &t, 10);	
-        if (x == 0) {
-            fprintf(stderr, "\n[lamsa_aln] Cigar ERROR 1.\n"); fprintf(stderr, "%s\n",s); exit(1);
-        }
-        op = toupper(*t);
-        switch (op)
-        {
-            case 'M':	op = CMATCH;	break;
-            case 'I':	op = CINS;		bi += x;	break;
-            case 'D':	op = CDEL;		bd += x;	break;
-                        //case 'S':	op = CSOFT_CLIP;		bi += x;	break;
-                        //case 'H':	op = CHARD_CLIP;		bi += x;	break;
-            default:	fprintf(stderr, "\n[lamsa_aln] Cigar ERROR 2.\n"); exit(1); break;
-        }
-        if (a_msg[seed_i].at[aln_i].cigar_len == a_msg[seed_i].at[aln_i].cmax)
-        {
-            a_msg[seed_i].at[aln_i].cmax <<= 2 ;
-            a_msg[seed_i].at[aln_i].cigar = (cigar32_t*)realloc(a_msg[seed_i].at[aln_i].cigar, a_msg[seed_i].at[aln_i].cmax * sizeof(cigar32_t));
-        }
-        a_msg[seed_i].at[aln_i].cigar[a_msg[seed_i].at[aln_i].cigar_len] = CIGAR_GEN(x, op);
-        //modify variable directly OR use a auxiliary-variable
-        ++a_msg[seed_i].at[aln_i].cigar_len;
-        s = t+1;
+    int i;
+    m_msg->seed_id = seed_id;
+    for (i = 0; i < m_msg->map_n; ++i) {
+        m_msg->map[i].nchr = bns_get_rid(bns, m_msg->map[i].chr);
+        m_msg->map[i].nstrand = (m_msg->map[i].strand=='+'?1:-1);
     }
-    a_msg[seed_i].at[aln_i].len_dif = (int)(bd - bi);
-    a_msg[seed_i].at[aln_i].bmax = (int)(bd > bi ? bd : bi);
-}
-
-void set_cigar(aln_t *at, cigar_t *cigar)
-{
-    int i, bd=0, bi=0;
-    at->cigar_len = 0;
-    for (i = 0; i < cigar->cigar_n; ++i) {
-        _push_cigar1(&(at->cigar), &(at->cigar_len), &(at->cmax), cigar->cigar[i]);
-        if (((cigar->cigar[i]) & 0xf) == CINS) bi += (cigar->cigar[i] >> 4);
-        else if (((cigar->cigar[i]) & 0xf) == CDEL) bd += (cigar->cigar[i] >> 4);
-    }
-    at->len_dif = bd - bi;
-    at->bmax = bd > bi ? bd : bi;
-}
-
-void set_aln_msg(aln_msg *a_msg, int32_t read_x, int aln_y, int read_id, map_t map, bntseq_t *bns)
-{
-    a_msg[read_x-1].read_id = read_id;	
-    a_msg[read_x-1].at[aln_y-1].chr = bns_get_rid(bns, map.chr);
-    a_msg[read_x-1].at[aln_y-1].offset = map.offset;	//1-base
-    a_msg[read_x-1].at[aln_y-1].nstrand = ((map.strand=='+')?1:-1);
-    a_msg[read_x-1].at[aln_y-1].NM = map.NM;
-    a_msg[read_x-1].n_aln = aln_y;
-    set_cigar(a_msg[read_x-1].at+aln_y-1, map.cigar);
 }
 
 void init_aln_per_para(lamsa_aln_per_para *APP, seed_msg *s_msg, int read_n)
@@ -890,10 +800,11 @@ typedef struct {
     lamsa_seq_t *lamsa_seqs;    // auxiliary: rseq, APP, m_msg, a_res
     kseq_t *w_seqs;       // whole seqs to be processed
 
-    aln_msg *a_msg;      // seeds' mapping information
     frag_dp_node ***f_node; // DP nodes
-    line_node **line, **_line;
-    int *line_end, *_line_end;
+
+    line_node *line, *_line; // line:[start ... end][start ... end] ... []
+    int *line_start, *_line_start;
+    int *line_len, *_line_len;
 
     int line_n_max; int line_m;
     frag_msg **f_msg;     // alignment information of fragments of read
@@ -909,14 +820,15 @@ pthread_rwlock_t RWLOCK;
 int lamsa_main_aln(thread_aux_t *aux)
 {
     lamsa_aln_para *AP = aux->AP; bwt_t *bwt = aux->bwt; uint8_t *pac = aux->pac; bntseq_t *bns = aux->bns;
-    aln_msg *a_msg = aux->a_msg; frag_dp_node ***f_node = aux->f_node;
-    line_node **line = aux->line, **_line = aux->_line;
-    int *line_end = aux->line_end; int *_line_end = aux->_line_end;
+    frag_dp_node ***f_node = aux->f_node;
+    line_node *line = aux->line, *_line = aux->_line;
+    int *line_start = aux->line_start; int *_line_start = aux->_line_start;
+    int *line_len = aux->line_len; int *_line_len = aux->_line_len;
     frag_msg **f_msg = aux->f_msg;
     uint32_t *hash_num = aux->hash_num; uint64_t **hash_node = aux->hash_node;
     int line_n_max = aux->line_n_max, line_m = aux->line_m;
 
-    int i = 0, j, k;
+    int i = 0, j;
 
     while (1) {
         pthread_rwlock_wrlock(&RWLOCK);
@@ -926,32 +838,33 @@ int lamsa_main_aln(thread_aux_t *aux)
         lamsa_seq_t *la_seqs = aux->lamsa_seqs + i; lamsa_aln_per_para *APP = la_seqs->APP;
         kseq_t *seqs = aux->w_seqs+i;
         strcpy(READ_NAME, seqs->name.s);
-        // set aln_msg
-        int seed_out = 0;
-        for (j = 0; j < APP->seed_all; ++j) {
-            gem_map_msg(la_seqs->m_msg+j, AP->per_aln_m);
-            if ((la_seqs->m_msg+j)->map_n > 0) seed_out++;
-            APP->seed_out = seed_out;
-            for (k = 0; k < (la_seqs->m_msg+j)->map_n; ++k)
-                set_aln_msg(a_msg, seed_out, k+1, j+1, (la_seqs->m_msg+j)->map[k], bns);
+        // set map_msg
+        int seed_i, seed_out_i;
+        for (seed_i = seed_out_i = 0; seed_i < APP->seed_all; ++seed_i) {
+            gem_map_msg(la_seqs->m_msg+seed_out_i, AP->per_aln_m);
+            if ((la_seqs->m_msg+seed_out_i)->map_n > 0) {
+                map_cal_msg(la_seqs->m_msg+seed_out_i, seed_i+1, bns);
+                seed_out_i++;
+            }
         }
+        APP->seed_out = seed_out_i;
         // aln_res
         aln_reset_res(la_seqs->a_res, 3, seqs->seq.l);
         // aln_reg
         aln_reg *a_reg = aln_init_reg(seqs->seq.l);
-        int line_n = frag_line_BCC(a_msg, f_msg, APP, AP, seqs, line, line_end, &line_m, f_node, _line, line_n_max);
+        int line_n = frag_line_BCC(la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start, line_len, &line_m, f_node, _line, line_n_max);
         
         uint8_t *bseq = (uint8_t*)malloc(seqs->seq.l * sizeof(uint8_t));
         for (j = 0; j < (int)seqs->seq.l; ++j) bseq[j] = nst_nt4_table[(int)(seqs->seq.s[j])];
         uint8_t *rbseq=NULL;
         if (line_n > 0) {
-            frag_check(a_msg, f_msg, la_seqs->a_res, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
+            frag_check(la_seqs->m_msg, f_msg, la_seqs->a_res, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
             get_reg(la_seqs->a_res, a_reg);
         }
         // remain region
-        line_n = frag_line_remain(a_reg, a_msg, f_msg, APP, AP, seqs, line, line_end, &line_m, f_node, _line, _line_end, line_n_max);
+        line_n = frag_line_remain(a_reg, la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start, line_len, &line_m, f_node, _line, _line_start, _line_len, line_n_max);
         if (line_n > 0) {
-            frag_check(a_msg, f_msg, la_seqs->a_res+1, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
+            frag_check(la_seqs->m_msg, f_msg, la_seqs->a_res+1, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
             get_reg(la_seqs->a_res+1, a_reg);
         }
         // bwt aln
@@ -1009,7 +922,8 @@ lamsa_seq_t *lamsa_seq_init(int chunk_read_n, int seed_m, int x)
 
 // => seqs(name, seq, (map_msg,APP) * seed_num), n_seqs
 // => seqs(aln_res) in thread
-int lamsa_read_seq(lamsa_seq_t *la_seqs, kseq_t *read_seq_t, FILE *seed_mapfp, char *gem_line, int line_size, seed_msg *s_msg, int chunk_read_n)
+int lamsa_read_seq(lamsa_seq_t *la_seqs, kseq_t *read_seq_t, FILE *seed_mapfp, 
+                   char *gem_line, int line_size, seed_msg *s_msg, int chunk_read_n)
 {
     kseq_t *s = read_seq_t;
     lamsa_seq_t *p=NULL; int n = 0;
@@ -1047,19 +961,15 @@ void lamsa_free_read_seq(lamsa_seq_t *seqs, int n_seqs)
 
 void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lamsa_aln_para AP)
 {
-    aux->a_msg = aln_init_msg(s_msg->seed_max, AP.per_aln_m);  
     aux->f_node = fnode_alloc(s_msg->seed_max+2, AP.per_aln_m);
 
-    int i, line_n_max = s_msg->seed_max * AP.per_aln_m, line_len_max = s_msg->seed_max;
-    aux->line = (line_node**)malloc(line_n_max * sizeof(line_node*));
-    aux->_line = (line_node**)malloc(line_n_max * sizeof(line_node*));
-    aux->line_end = (int*)malloc(line_n_max * sizeof(int));
-    aux->_line_end = (int*)malloc(line_n_max * sizeof(int));
-    for (i = 0; i < line_n_max; ++i) {
-        aux->line[i] = (line_node*)malloc((line_len_max+L_EXTRA) * sizeof(line_node));
-        aux->_line[i] = (line_node*)malloc((line_len_max+L_EXTRA) * sizeof(line_node));
-    }
-    aux->line_n_max = line_n_max;
+    int line_m = s_msg->seed_max * AP.per_aln_m;
+    int line_node_m = line_m * (1+L_EXTRA);
+    aux->line = (line_node*)malloc(line_node_m * sizeof(line_node)); aux->_line = (line_node*)malloc(line_node_m * sizeof(line_node));
+    aux->line_start = (int*)malloc(line_m * sizeof(int)); aux->_line_start = (int*)malloc(line_m * sizeof(int));
+    aux->line_len = (int*)malloc(line_m * sizeof(int)); aux->_line_len = (int*)malloc(line_m * sizeof(int));
+
+    aux->line_n_max = line_m;
     aux->line_m = 1;
 
     aux->f_msg = (frag_msg**)malloc(sizeof(frag_msg*));
@@ -1072,13 +982,10 @@ void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lamsa_aln_para AP)
 
 void aux_dp_free(thread_aux_t *aux, seed_msg *s_msg, lamsa_aln_para *AP)
 {
-    aln_free_msg(aux->a_msg, s_msg->seed_max, AP->per_aln_m);
     fnode_free(aux->f_node, s_msg->seed_max+2, AP->per_aln_m);
-    int i, line_n_max = s_msg->seed_max * AP->per_aln_m;
-    for (i = 0; i < line_n_max; ++i) {
-        free(aux->line[i]); free(aux->_line[i]);
-    } free(aux->line); free(aux->_line); free(aux->line_end); free(aux->_line_end);
-    
+    free(aux->line); free(aux->_line);
+    free(aux->line); free(aux->_line); free(aux->line_start); free(aux->_line_len);
+    int i; 
     for (i = 0; i < pow(NT_N, AP->hash_key_len); ++i) free(aux->hash_node[i]);
     free(aux->hash_node); free(aux->hash_num);
 
@@ -1204,7 +1111,8 @@ void lamsa_aln_output(lamsa_aln_para AP, lamsa_seq_t *lamsa_seqs, kseq_t *seqs, 
 #define CHUNK_SIZE 1
 #define CHUNK_READ_N 1
 #endif
-int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lamsa_aln_para *AP)
+int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
+                   bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lamsa_aln_para *AP)
 {
     lamsa_seq_t *lamsa_seqs; int n_seqs, i;
     gzFile readfp; kseq_t *read_seq_t; FILE *seed_mapfp;
@@ -1268,9 +1176,9 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
 int lamsa_gem(const char *ref_prefix, const char *read_prefix, char *bin_dir, lamsa_aln_para *AP)
 {
     int per_loci = AP->per_aln_m, n_thread = AP->n_thread;
-    float mis_rate = AP->mis_rate, ed_rate = AP->ed_rate, id_rate = AP->id_rate, min_match_rate = AP->mat_rate;
+    float mis_rate = AP->mis_rate, ed_rate = AP->ed_rate, min_match_rate = AP->mat_rate;
     char cmd[1024];
-    sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %f %f %f %d %d", bin_dir, ref_prefix, read_prefix, mis_rate, id_rate, min_match_rate, per_loci, n_thread);
+    sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %f %f %f %d %d", bin_dir, ref_prefix, read_prefix, mis_rate, ed_rate, min_match_rate, per_loci, n_thread);
     fprintf(stderr, "[lamsa_aln] Executing gem-mapper ... \n");
     //fprintf(stderr, "[lamsa_aln] Time consumption of gem-mapper:");
     if (system(cmd) != 0) { fprintf(stderr, "[lamsa_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
@@ -1306,7 +1214,9 @@ void print_sam_header(FILE *outp, const bntseq_t *bns)
 	fprintf(outp, "%s\n", lamsa_pg);
 }
 
-int lamsa_aln_c(const char *ref_prefix, const char *read_prefix, int seed_info, int seed_program, int no_seed_aln, char *seed_result, lamsa_aln_para *AP, char *bin_dir)
+int lamsa_aln_c(const char *ref_prefix, const char *read_prefix, 
+                int seed_info, int seed_program, int no_seed_aln, char *seed_result, 
+                lamsa_aln_para *AP, char *bin_dir)
 {
     clock_t t = clock();
 

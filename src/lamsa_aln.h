@@ -109,17 +109,17 @@
 #define L_DUMP  0x8
 
 #define L_EXTRA 5                    // extra line-node variables
-#define L_LB(l,e,i) (l[i][e[i]].x)   // line left-boundary
-#define L_RB(l,e,i) (l[i][e[i]].y)   // line right-boundary
-#define E_LB(l,e,i) (l[i][e[i]+1].x) // extend left-boundary
-#define E_RB(l,e,i) (l[i][e[i]+1].y) // extend right-boundary
-#define L_MF(l,e,i) (l[i][e[i]+2].x) // line merge-flag
-#define L_MH(l,e,i) (l[i][e[i]+2].y) // line merge-head
+#define L_LB(l,n) (l[n].x)   // line left-boundary
+#define L_RB(l,n) (l[n].y)   // line right-boundary
+#define E_LB(l,n) (l[n+1].x) // extend left-boundary
+#define E_RB(l,n) (l[n+1].y) // extend right-boundary
+#define L_MF(l,n) (l[n+2].x) // line merge-flag
+#define L_MH(l,n) (l[n+2].y) // line merge-head
 
-#define L_LS(l,e,i) (l[i][e[i]+3].x) // line score
-#define L_BS(l,e,i) (l[i][e[i]+3].y) // best score of merged-lines
+#define L_LS(l,n) (l[n+3].x) // line score
+#define L_BS(l,n) (l[n+3].y) // best score of merged-lines
 
-#define L_NM(l,e,i) (l[i][e[i]+4].x) // dis+NM
+#define L_NM(l,n) (l[n+4].x) // dis+NM
 
 
 //  [end+2] -> (line-score, x)
@@ -185,25 +185,22 @@ typedef struct {
 } seed_msg;
 
 typedef struct {
-	int32_t chr;
-	int64_t offset;	// 1-base
-	int8_t nstrand;
-	int NM;      // edit distance
+    char strand; int8_t nstrand;
+    char chr[10]; int32_t nchr;
+    int64_t offset;
+    int NM;            // edit distance
 
-	cigar32_t *cigar;
-	int cigar_len;  // default: 7 for 3-ed
-	int len_dif;	// length difference between ref and read
-	int cmax;
-	int bmax;		// max band-width, NOT for this seed-aln, for this in-del case.
-					// max of the number of inserts and the number of dels
-} aln_t;
+    cigar_t *cigar;
+    int len_dif, bmax; // max band-width, NOT for this seed-aln, for this in-del case.
+					   // max of the number of inserts and the number of dels
 
+} map_t;
 typedef struct {
-	int32_t read_id;
-	int8_t n_aln;
-	int skip;
-	aln_t *at;	
-} aln_msg;
+    map_t *map;
+    int32_t map_n, map_m;
+    int32_t seed_id;
+    char *map_str;
+} map_msg;
 
 typedef struct {
 	int readid;		// qname
@@ -313,8 +310,7 @@ typedef struct {
 typedef struct {
     int son_flag;
 	line_node from; 
-	int seed_i;     //ALLOC
-	int aln_i;      //ALLOC
+	int seed_i, aln_i;      //ALLOC
 
 	//tree generating and pruning
 	int in_de; // in-degree
@@ -332,8 +328,6 @@ typedef struct {
 	int dp_flag;
 
 	int node_n;
-    uint8_t trg_n; //00 01 10 11
-    line_node next_trg, pre_trg;
 } frag_dp_node;
 
 typedef struct {

@@ -67,12 +67,12 @@ void frag_free_msg(frag_msg *f_msg, int line_num)
 	free(f_msg);
 }
 
-int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i,
+int frag_set_msg(map_msg *m_msg, int seed_i, int aln_i,
 				 int FLAG, frag_msg *f_msg, int frag_i)//FLAG 0:start / 1:end / 2:seed
 {
 	if (FLAG == FRAG_END) {	//end
-		f_msg->fa_msg[frag_i].chr = a_msg[seed_i].at[aln_i].chr;
-		f_msg->fa_msg[frag_i].strand = a_msg[seed_i].at[aln_i].nstrand;	//+:1/-:-1
+		f_msg->fa_msg[frag_i].chr = m_msg[seed_i].map[aln_i].nchr;
+		f_msg->fa_msg[frag_i].strand = m_msg[seed_i].map[aln_i].nstrand;	//+:1/-:-1
 		f_msg->fa_msg[frag_i].seed_i[0] = seed_i;
 		f_msg->fa_msg[frag_i].seed_aln_i[0] = aln_i;
 		f_msg->fa_msg[frag_i].seed_num = 1;
@@ -92,39 +92,39 @@ int frag_set_msg(aln_msg *a_msg, int seed_i, int aln_i,
 
 int get_ref_intv(uint8_t **ref_bseq, int *ref_max_blen, 
 				 bntseq_t *bns, uint8_t *pac, 
-				 aln_msg *a_msg, 
+				 map_msg *m_msg, 
 				 int seed1_i, int seed1_aln_i, int seed2_i, int seed2_aln_i, 
                  lamsa_aln_para *AP)
 {
 	int64_t start; int32_t len;
-    start = a_msg[seed1_i].at[seed1_aln_i].offset + AP->seed_len - 1 + a_msg[seed1_i].at[seed1_aln_i].len_dif;
-    len = a_msg[seed2_i].at[seed2_aln_i].offset - 1 - start;
+    start = m_msg[seed1_i].map[seed1_aln_i].offset + AP->seed_len - 1 + m_msg[seed1_i].map[seed1_aln_i].len_dif;
+    len = m_msg[seed2_i].map[seed2_aln_i].offset - 1 - start;
     if (len <= 0) return 0;
 	if (len > *ref_max_blen) {
 		*ref_bseq = (uint8_t*)realloc(*ref_bseq, len * sizeof(uint8_t));
 		*ref_max_blen = len;
 	}
-    pac2fa_core(bns, pac, a_msg[seed1_i].at[seed1_aln_i].chr, start, &len, *ref_bseq);
+    pac2fa_core(bns, pac, m_msg[seed1_i].map[seed1_aln_i].nchr, start, &len, *ref_bseq);
 	return (int)len;
 }
 
 int get_read_intv(uint8_t *seq2, uint8_t *read_bseq, 
-				  aln_msg *a_msg, 
+				  map_msg *m_msg, 
 				  int seed1_i, int seed1_aln_i, int seed2_i, int seed2_aln_i, 
 				  int *band_width, 
 				  lamsa_aln_para *AP, lamsa_aln_per_para *APP)
 {
 	int32_t i; int j;
 	//set band-width
-	*band_width = 2 * (((a_msg[seed2_i].read_id - a_msg[seed1_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
+	*band_width = 2 * (((m_msg[seed2_i].seed_id - m_msg[seed1_i].seed_id) << 1) - 1) * MAXOFTWO(m_msg[seed1_i].map[seed1_aln_i].bmax, m_msg[seed2_i].map[seed2_aln_i].bmax);
 	//convert char seq to int seq
-	if (a_msg[seed1_i].at[seed1_aln_i].nstrand == 1) {
-		*band_width = 2 * (((a_msg[seed2_i].read_id - a_msg[seed1_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
-		for (j=0, i = (a_msg[seed1_i].read_id) * AP->seed_step-AP->seed_inv; i < (a_msg[seed2_i].read_id-1) * AP->seed_step; ++j, ++i)
+	if (m_msg[seed1_i].map[seed1_aln_i].nstrand == 1) {
+		*band_width = 2 * (((m_msg[seed2_i].seed_id - m_msg[seed1_i].seed_id) << 1) - 1) * MAXOFTWO(m_msg[seed1_i].map[seed1_aln_i].bmax, m_msg[seed2_i].map[seed2_aln_i].bmax);
+		for (j=0, i = (m_msg[seed1_i].seed_id) * AP->seed_step-AP->seed_inv; i < (m_msg[seed2_i].seed_id-1) * AP->seed_step; ++j, ++i)
 			seq2[j] = read_bseq[i];
 	} else {
-		*band_width = 2 * (((a_msg[seed2_i].read_id - a_msg[seed1_i].read_id) << 1) - 1) * MAXOFTWO(a_msg[seed1_i].at[seed1_aln_i].bmax, a_msg[seed2_i].at[seed2_aln_i].bmax);
-        for (j=0, i = APP->last_len+(a_msg[seed1_i].read_id)*AP->seed_step-AP->seed_inv; i < APP->last_len+(a_msg[seed2_i].read_id-1)*AP->seed_step; ++j, ++i)
+		*band_width = 2 * (((m_msg[seed2_i].seed_id - m_msg[seed1_i].seed_id) << 1) - 1) * MAXOFTWO(m_msg[seed1_i].map[seed1_aln_i].bmax, m_msg[seed2_i].map[seed2_aln_i].bmax);
+        for (j=0, i = APP->last_len+(m_msg[seed1_i].seed_id)*AP->seed_step-AP->seed_inv; i < APP->last_len+(m_msg[seed2_i].seed_id-1)*AP->seed_step; ++j, ++i)
 			seq2[j] = read_bseq[i];
 	}
     return j;
@@ -301,7 +301,7 @@ void merge_cigar(cigar32_t **c1, int *c1_n, int *c1_m, uint64_t *c1_refend, int 
 
 //Extend the intervals between seeds in the same frag
 //un-seed region: end of + strand and start of - end 
-int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i, 
+int frag_extend(frag_msg *f_msg, map_msg *m_msg, int f_i, 
 				bntseq_t *bns, uint8_t *pac, 
 				uint8_t *read_bseq, uint8_t *bseq1, uint8_t **bseq2, int *ref_max_blen,
                 lamsa_aln_per_para *APP, lamsa_aln_para *AP,
@@ -320,21 +320,21 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 		i = fa_msg->seed_num-1;
 		last_i = fa_msg->seed_i[i];
 		last_aln_i = fa_msg->seed_aln_i[i];
-        fa_msg->cigar_read_start = (a_msg[last_i].read_id-1) * AP->seed_step + 1;
+        fa_msg->cigar_read_start = (m_msg[last_i].seed_id-1) * AP->seed_step + 1;
         fa_msg->cigar_read_end = fa_msg->cigar_read_start - 1 + AP->seed_len;
 	} else {	//'-' strand 
 		last_i = fa_msg->seed_i[0];
 		last_aln_i = fa_msg->seed_aln_i[0];
-        fa_msg->cigar_read_start = APP->last_len + (a_msg[last_i].read_id-1) * AP->seed_step + 1; 
+        fa_msg->cigar_read_start = APP->last_len + (m_msg[last_i].seed_id-1) * AP->seed_step + 1; 
         fa_msg->cigar_read_end = fa_msg->cigar_read_start - 1 + AP->seed_len;
 	}
 
 	//copy the first seed's cigar to frag
 	{
-		_push_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), a_msg[last_i].at[last_aln_i].cigar, a_msg[last_i].at[last_aln_i].cigar_len);
+		_push_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), m_msg[last_i].map[last_aln_i].cigar->cigar, m_msg[last_i].map[last_aln_i].cigar->cigar_n);
 		//start/end: 1-base
-		fa_msg->cigar_ref_start = a_msg[last_i].at[last_aln_i].offset;
-		fa_msg->cigar_ref_end = a_msg[last_i].at[last_aln_i].offset + AP->seed_len -1 + a_msg[last_i].at[last_aln_i].len_dif;
+		fa_msg->cigar_ref_start = m_msg[last_i].map[last_aln_i].offset;
+		fa_msg->cigar_ref_end = m_msg[last_i].map[last_aln_i].offset + AP->seed_len -1 + m_msg[last_i].map[last_aln_i].len_dif;
 	}
 	if (fa_msg->strand == 1)
 	{
@@ -342,8 +342,8 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			seed_i = fa_msg->seed_i[i];
 			seed_aln_i = fa_msg->seed_aln_i[i];
 			//get ref seq and seed-interval seq
-			if ((len2 = get_ref_intv(bseq2, ref_max_blen, bns, pac, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, AP)) < 0) { fprintf(stderr, "\n[frag extend] frag path error : (%d,%d) -> %d %lld %d %lld\n", last_i, last_aln_i, a_msg[last_i].read_id, (long long)a_msg[last_i].at[last_aln_i].offset, a_msg[seed_i].read_id, (long long)a_msg[seed_i].at[seed_aln_i].offset); return -1;}
-			len1 = get_read_intv(bseq1, read_bseq, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, &b, AP, APP);
+			if ((len2 = get_ref_intv(bseq2, ref_max_blen, bns, pac, m_msg, last_i, last_aln_i, seed_i, seed_aln_i, AP)) < 0) { fprintf(stderr, "\n[frag extend] frag path error : (%d,%d) -> %d %lld %d %lld\n", last_i, last_aln_i, m_msg[last_i].seed_id, (long long)m_msg[last_i].map[last_aln_i].offset, m_msg[seed_i].seed_id, (long long)m_msg[seed_i].map[seed_aln_i].offset); return -1;}
+			len1 = get_read_intv(bseq1, read_bseq, m_msg, last_i, last_aln_i, seed_i, seed_aln_i, &b, AP, APP);
 			min_b = abs(len2-len1)+3;
 			b = MAXOFTWO(b, min_b);
 			cigar_len = 0;
@@ -352,7 +352,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr,
 					     cigar, cigar_len, len2, len1, bns, pac, read_bseq, AP);
 			merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr, 
-					     a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len, AP->seed_len+a_msg[seed_i].at[seed_aln_i].len_dif, AP->seed_len, bns, pac, read_bseq, AP);//merge seed to frag
+					     m_msg[seed_i].map[seed_aln_i].cigar->cigar, m_msg[seed_i].map[seed_aln_i].cigar->cigar_n, AP->seed_len+m_msg[seed_i].map[seed_aln_i].len_dif, AP->seed_len, bns, pac, read_bseq, AP);//merge seed to frag
 
 			last_i = seed_i;
 			last_aln_i = seed_aln_i;
@@ -364,8 +364,8 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 			seed_i = fa_msg->seed_i[i];
 			seed_aln_i = fa_msg->seed_aln_i[i];
 			//get ref seq and seed-interval seq
-			if ((len2 = get_ref_intv(bseq2, ref_max_blen, bns, pac, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, AP)) < 0) { fprintf(stderr, "\n[frag extend] frag path error : (%d,%d) -> %d %lld %d %lld\n", last_i, last_aln_i, a_msg[last_i].read_id, (long long)a_msg[last_i].at[last_aln_i].offset, a_msg[seed_i].read_id, (long long)a_msg[seed_i].at[seed_aln_i].offset); return -1;}
-			len1 = get_read_intv(bseq1, read_bseq, a_msg, last_i, last_aln_i, seed_i, seed_aln_i, &b, AP, APP);
+			if ((len2 = get_ref_intv(bseq2, ref_max_blen, bns, pac, m_msg, last_i, last_aln_i, seed_i, seed_aln_i, AP)) < 0) { fprintf(stderr, "\n[frag extend] frag path error : (%d,%d) -> %d %lld %d %lld\n", last_i, last_aln_i, m_msg[last_i].seed_id, (long long)m_msg[last_i].map[last_aln_i].offset, m_msg[seed_i].seed_id, (long long)m_msg[seed_i].map[seed_aln_i].offset); return -1;}
+			len1 = get_read_intv(bseq1, read_bseq, m_msg, last_i, last_aln_i, seed_i, seed_aln_i, &b, AP, APP);
 			min_b = abs(len2-len1)+3;
 			b = MAXOFTWO(b, min_b);
 			cigar_len = 0;
@@ -374,7 +374,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
             merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr,
                          cigar, cigar_len, len2, len1, bns, pac, read_bseq, AP);
             merge_cigar(&(fa_msg->cigar), &(fa_msg->cigar_len), &(fa_msg->cigar_max), &(fa_msg->cigar_ref_end), &(fa_msg->cigar_read_end), fa_msg->chr,
-                        a_msg[seed_i].at[seed_aln_i].cigar, a_msg[seed_i].at[seed_aln_i].cigar_len, AP->seed_len+a_msg[seed_i].at[seed_aln_i].len_dif, AP->seed_len, bns, pac, read_bseq, AP);//merge seed to frag 
+                        m_msg[seed_i].map[seed_aln_i].cigar->cigar, m_msg[seed_i].map[seed_aln_i].cigar->cigar_n, AP->seed_len+m_msg[seed_i].map[seed_aln_i].len_dif, AP->seed_len, bns, pac, read_bseq, AP);//merge seed to frag 
 
 			last_i = seed_i;
 			last_aln_i = seed_aln_i;
@@ -391,7 +391,7 @@ int frag_extend(frag_msg *f_msg, aln_msg *a_msg, int f_i,
 //3. combine with aln results of other regions.
 void split_mapping(bntseq_t *bns, uint8_t *pac, 
 				   uint8_t *read_bseq, 
-				   frag_msg *f_msg, aln_msg *a_msg, 
+				   frag_msg *f_msg, map_msg *m_msg, 
 				   uint32_t **hash_num, uint64_t ***hash_node, 
 				   int f1_i, int f2_i, 
                    lamsa_aln_per_para *APP, lamsa_aln_para *AP,
@@ -421,8 +421,8 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 		s2_i = fa_msg2.seed_i[0];
 		s2_aln_i = fa_msg2.seed_aln_i[0];
 	}
-    aln_t at1 = a_msg[s1_i].at[s1_aln_i];
-    aln_t at2 = a_msg[s2_i].at[s2_aln_i];
+    map_t at1 = m_msg[s1_i].map[s1_aln_i];
+    map_t at2 = m_msg[s2_i].map[s2_aln_i];
 
 	int s_qlen, s_tlen, res;
 	uint8_t *s_qseq, *s_tseq;
@@ -430,19 +430,19 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 	//init value for hash-map
 	int hash_len = AP->hash_len;
 
-	s_qlen = (a_msg[s2_i].read_id-a_msg[s1_i].read_id) * AP->seed_step - AP->seed_len;
+	s_qlen = (m_msg[s2_i].seed_id-m_msg[s1_i].seed_id) * AP->seed_step - AP->seed_len;
 	s_qseq = (uint8_t*)malloc(s_qlen * sizeof(uint8_t));
 
     int bd;
-    get_read_intv(s_qseq, read_bseq, a_msg, s1_i, s1_aln_i, s2_i, s2_aln_i, &bd, AP, APP);
+    get_read_intv(s_qseq, read_bseq, m_msg, s1_i, s1_aln_i, s2_i, s2_aln_i, &bd, AP, APP);
 
 	//check SV-type
 	{
-		int64_t exp = at1.offset + at1.len_dif + (a_msg[s2_i].read_id - a_msg[s1_i].read_id) * AP->seed_step;	
+		int64_t exp = at1.offset + at1.len_dif + (m_msg[s2_i].seed_id - m_msg[s1_i].seed_id) * AP->seed_step;	
 		int64_t act = at2.offset;
 		int dis = act-exp;
 
-        int match_dis = AP->match_dis * (aln_mode_high_id_err(AP->aln_mode) ? (a_msg[s2_i].read_id-a_msg[s1_i].read_id) : 1);
+        int match_dis = AP->match_dis * (aln_mode_high_id_err(AP->aln_mode) ? (m_msg[s2_i].seed_id-m_msg[s1_i].seed_id) : 1);
 #ifdef __DEBUG__
 		int64_t pos = at1.offset+AP->seed_len-1+at1.len_dif;
         if (abs(dis) > match_dis) 
@@ -452,7 +452,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
             s_tlen = s_qlen + dis;
             s_tseq = (uint8_t*)malloc(s_tlen * sizeof(uint8_t));
             ref_offset = at1.offset + AP->seed_len + at1.len_dif;
-            pac2fa_core(bns, pac, at1.chr, ref_offset-1, &s_tlen, s_tseq);
+            pac2fa_core(bns, pac, at1.nchr, ref_offset-1, &s_tlen, s_tseq);
             if (s_qlen < hash_len) {
                 ksw_bi_extend(s_qlen, s_qseq, s_tlen, s_tseq, 5, AP->sc_mat, dis+3, hash_len*AP->match, hash_len*AP->match, AP, &_cigar, &_cigar_n, &_cigar_m);
                 _push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
@@ -471,14 +471,14 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                 // left-extend
                 cigar32_t *l_cigar=0; int l_cigar_n=0, l_cigar_m;
                 ref_offset = at1.offset + AP->seed_len + at1.len_dif;
-                pac2fa_core(bns, pac, at1.chr, ref_offset-1, &_s_tlen, s_tseq);
+                pac2fa_core(bns, pac, at1.nchr, ref_offset-1, &_s_tlen, s_tseq);
                 ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, AP->sc_mat, 3, hash_len*AP->match, AP, &lqe, &lte, &l_cigar, &l_cigar_n, &l_cigar_m);
                 //_push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
                 //free(_cigar);
 
                 // right-extend
                 ref_offset = at2.offset - _s_tlen;
-                pac2fa_core(bns, pac, at2.chr, ref_offset-1, &_s_tlen, s_tseq);
+                pac2fa_core(bns, pac, at2.nchr, ref_offset-1, &_s_tlen, s_tseq);
                 // reverse ref and read seq
 				char tmp;
                 for (i = 0; i < s_qlen>>1; ++i) {
@@ -504,7 +504,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                 s_tlen += 2*(hash_len-dis);
                 s_tseq = (uint8_t*)malloc(s_tlen * sizeof(uint8_t));
                 ref_offset = at1.offset + AP->seed_len + at1.len_dif + dis - hash_len;
-                pac2fa_core(bns, pac, at1.chr, ref_offset-1, &s_tlen, s_tseq);
+                pac2fa_core(bns, pac, at1.nchr, ref_offset-1, &s_tlen, s_tseq);
 				s_tlen = s_qlen + dis;
                 if (s_tlen < hash_len) {
                     ksw_bi_extend(s_qlen, s_qseq, s_tlen, s_tseq+hash_len-dis, 5, AP->sc_mat, abs(s_tlen-s_qlen)+3, hash_len*AP->match, hash_len*AP->match, AP, &_cigar, &_cigar_n, &_cigar_m);
@@ -518,7 +518,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
             s_tlen = s_qlen + dis;
             s_tseq = (uint8_t*)malloc(s_tlen * sizeof(uint8_t));
             ref_offset = at1.offset + AP->seed_len + at1.len_dif;
-            pac2fa_core(bns, pac, at1.chr, ref_offset-1, &s_tlen, s_tseq);
+            pac2fa_core(bns, pac, at1.nchr, ref_offset-1, &s_tlen, s_tseq);
             //if (s_tlen < 0)
                 //printf("debug");
 			res = ksw_bi_extend(s_qlen, s_qseq, s_tlen, s_tseq, 5, AP->sc_mat, abs(s_tlen-s_qlen)+3, 100, 100, AP, &_cigar, &_cigar_n, &_cigar_m);
@@ -526,7 +526,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 			free(_cigar);
         }
     } 
-	merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), at1.chr, s_cigar, s_clen, s_tlen, s_qlen, bns, pac, read_bseq, AP);
+	merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), at1.nchr, s_cigar, s_clen, s_tlen, s_qlen, bns, pac, read_bseq, AP);
     free(s_qseq); free(s_tseq);
 	free(s_cigar);
 }
@@ -541,7 +541,7 @@ void check_cigar(cigar32_t *cigar, int cigar_len, char *read_name, int read_len)
     if (mid[0] + mid[1] + mid[4] != read_len) { fprintf(stderr, "\n[cigar len error]: %s cigar error[%d]\t", read_name, read_len); printcigar(stderr, cigar, cigar_len); }
 }
 
-int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg, 
+int frag_head_bound_fix(frag_msg *f_msg, map_msg *m_msg, 
                         uint64_t *offset, bntseq_t *bns, uint8_t *pac, 
                         uint8_t *read_bseq, 
                         lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
@@ -556,15 +556,15 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
         seed_x = f_msg->fa_msg[frag_i].seed_num - 1;
         seed_i = f_msg->fa_msg[frag_i].seed_i[seed_x];
         aln_i = f_msg->fa_msg[frag_i].seed_aln_i[seed_x];
-        if (a_msg[seed_i].read_id != 1) {
-            read_len = ((left_bound==0)?0:AP->seed_inv) + (a_msg[seed_i].read_id - left_bound - 1) * AP->seed_step;
+        if (m_msg[seed_i].seed_id != 1) {
+            read_len = ((left_bound==0)?0:AP->seed_inv) + (m_msg[seed_i].seed_id - left_bound - 1) * AP->seed_step;
             if (read_len < 0) { 
                 fprintf(stderr, "[frag_head_bound] Error: %s left bound error.\n", seqs->name.s); exit(1); 
             }
             read_start = (left_bound==0)?0:(left_bound * AP->seed_step - AP->seed_inv);
         } else {
-            *offset = a_msg[seed_i].at[aln_i].offset;
-            la->res[la->cur_res_n].offset = a_msg[seed_i].at[aln_i].offset;
+            *offset = m_msg[seed_i].map[aln_i].offset;
+            la->res[la->cur_res_n].offset = m_msg[seed_i].map[aln_i].offset;
             la->res[la->cur_res_n].refend = la->res[la->cur_res_n].offset - 1;
             la->res[la->cur_res_n].cigar_len = 0;
             return 0;
@@ -573,10 +573,10 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
         frag_i = 0; seed_x = 0;
         seed_i = f_msg->fa_msg[0].seed_i[0];
         aln_i = f_msg->fa_msg[0].seed_aln_i[0];
-        read_len = ((left_bound==0)?APP->last_len:AP->seed_inv) + (a_msg[seed_i].read_id - 1 - left_bound) * AP->seed_step;
+        read_len = ((left_bound==0)?APP->last_len:AP->seed_inv) + (m_msg[seed_i].seed_id - 1 - left_bound) * AP->seed_step;
 		if (read_len == 0) {
-            *offset = a_msg[seed_i].at[aln_i].offset;
-            la->res[la->cur_res_n].offset = a_msg[seed_i].at[aln_i].offset;
+            *offset = m_msg[seed_i].map[aln_i].offset;
+            la->res[la->cur_res_n].offset = m_msg[seed_i].map[aln_i].offset;
             la->res[la->cur_res_n].refend = la->res[la->cur_res_n].offset - 1;
             la->res[la->cur_res_n].cigar_len = 0;
 			return 0;
@@ -589,20 +589,20 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
     //hash map
     {	
         int hash_len = AP->hash_len, hash_step = AP->hash_step;
-        (*offset) = a_msg[seed_i].at[aln_i].offset;
-        la->res[la->cur_res_n].offset = a_msg[seed_i].at[aln_i].offset;
+        (*offset) = m_msg[seed_i].map[aln_i].offset;
+        la->res[la->cur_res_n].offset = m_msg[seed_i].map[aln_i].offset;
         //read
         uint8_t *bseq1 = (uint8_t*)calloc(read_len, sizeof(uint8_t));
         for (i = 0; i < read_len; ++i) bseq1[i] = read_bseq[read_start+i];
         //ref
         ref_len = read_len + hash_step * 2;	
-        ref_start = a_msg[seed_i].at[aln_i].offset - ref_len;	//1-base
+        ref_start = m_msg[seed_i].map[aln_i].offset - ref_len;	//1-base
         if (ref_start < 1) {
             ref_start = 1;
-            ref_len = a_msg[seed_i].at[aln_i].offset - 1;
+            ref_len = m_msg[seed_i].map[aln_i].offset - 1;
         }
 		uint8_t *bseq2 = (uint8_t*)calloc(ref_len, sizeof(uint8_t));
-        pac2fa_core(bns, pac, a_msg[seed_i].at[aln_i].chr, ref_start-1/*0-base*/, &ref_len, bseq2);
+        pac2fa_core(bns, pac, m_msg[seed_i].map[aln_i].nchr, ref_start-1/*0-base*/, &ref_len, bseq2);
 		cigar32_t *cigar_=0; int cigar_n_, cigar_m_;
 		int qre, tre;
 		int res = ksw_extend_r(read_len, bseq1, ref_len , bseq2, 5, AP->sc_mat, hash_len, AP->seed_len * AP->match, AP, &qre, &tre, &cigar_, &cigar_n_, &cigar_m_);
@@ -614,14 +614,14 @@ int frag_head_bound_fix(frag_msg *f_msg, aln_msg *a_msg,
 		(*offset) -= refInCigar(cigar_, cigar_n_);
 		(la->res[la->cur_res_n].offset) -= refInCigar(cigar_, cigar_n_);
         la->res[la->cur_res_n].refend = la->res[la->cur_res_n].offset - 1;
-        //merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), a_msg[seed_i].at[aln_i].chr, *cigar, *cigar_len, refInCigar(*cigar, *cigar_len), readInCigar(*cigar, *cigar_len), bns, pac, read_seq);
+        //merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), m_msg[seed_i].map[aln_i].nchr, *cigar, *cigar_len, refInCigar(*cigar, *cigar_len), readInCigar(*cigar, *cigar_len), bns, pac, read_seq);
 		_push_cigar_e(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), cigar_, cigar_n_);
 		free(cigar_); free(bseq1); free(bseq2);
     }
     return 0;
 }
 
-int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg, bntseq_t *bns, uint8_t *pac, 
+int frag_tail_bound_fix(frag_msg *f_msg, map_msg *m_msg, bntseq_t *bns, uint8_t *pac, 
                         uint8_t *read_bseq,
                         lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
                         line_aln_res *la)
@@ -634,8 +634,8 @@ int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg, bntseq_t *bns, uint8_t 
     if (f_msg->fa_msg[0].strand == 1) {	//'+' strand
         seed_i = f_msg->fa_msg[0].seed_i[0];
         aln_i = f_msg->fa_msg[0].seed_aln_i[0];
-        read_start = a_msg[seed_i].read_id * AP->seed_step - AP->seed_inv;
-        read_len = ((right_bound==APP->seed_all+1)?APP->last_len:AP->seed_inv) + (right_bound - 1 - a_msg[seed_i].read_id) * AP->seed_step;
+        read_start = m_msg[seed_i].seed_id * AP->seed_step - AP->seed_inv;
+        read_len = ((right_bound==APP->seed_all+1)?APP->last_len:AP->seed_inv) + (right_bound - 1 - m_msg[seed_i].seed_id) * AP->seed_step;
 		if (read_len == 0) return 0;
         if (read_len < 0) { fprintf(stderr, "[frag_tail_bound] Error: %s right bound error.\n", seqs->name.s); exit(1); }
     } else {
@@ -643,9 +643,9 @@ int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg, bntseq_t *bns, uint8_t 
         seed_x = f_msg->fa_msg[frag_i].seed_num - 1;
         seed_i = f_msg->fa_msg[frag_i].seed_i[seed_x];
         aln_i = f_msg->fa_msg[frag_i].seed_aln_i[seed_x];
-        if (a_msg[seed_i].read_id != APP->seed_all) {
-            read_start = a_msg[seed_i].read_id * AP->seed_step - AP->seed_inv + APP->last_len;
-            read_len = ((right_bound== APP->seed_all+1)?0:AP->seed_inv) + (right_bound - 1 - a_msg[seed_i].read_id) * AP->seed_step;
+        if (m_msg[seed_i].seed_id != APP->seed_all) {
+            read_start = m_msg[seed_i].seed_id * AP->seed_step - AP->seed_inv + APP->last_len;
+            read_len = ((right_bound== APP->seed_all+1)?0:AP->seed_inv) + (right_bound - 1 - m_msg[seed_i].seed_id) * AP->seed_step;
             if (read_len < 0) { fprintf(stderr, "[frag_tail_bound] Error: %s right bound error.\n", seqs->name.s); exit(1); }
         } else return 0;
     }
@@ -658,9 +658,9 @@ int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg, bntseq_t *bns, uint8_t 
         for (i = 0; i < read_len; ++i)
             bseq1[i] = read_bseq[read_start+i];
         //ref
-        ref_start = a_msg[seed_i].at[aln_i].offset + AP->seed_len+ a_msg[seed_i].at[aln_i].len_dif;	//1-base
+        ref_start = m_msg[seed_i].map[aln_i].offset + AP->seed_len+ m_msg[seed_i].map[aln_i].len_dif;	//1-base
         uint8_t *bseq2 = (uint8_t*)calloc(ref_len, sizeof(uint8_t));
-        pac2fa_core(bns, pac, a_msg[seed_i].at[aln_i].chr, ref_start-1/*0-base*/, &ref_len, bseq2);
+        pac2fa_core(bns, pac, m_msg[seed_i].map[aln_i].nchr, ref_start-1/*0-base*/, &ref_len, bseq2);
 
 		cigar32_t *cigar_=0; int cigar_n_, cigar_m_;
 		int qle, tle;
@@ -668,7 +668,7 @@ int frag_tail_bound_fix(frag_msg *f_msg, aln_msg *a_msg, bntseq_t *bns, uint8_t 
         if (res != 0) { // not-to-end 
 			_push_cigar1(&cigar_, &cigar_n_, &cigar_m_, ((read_len-qle)<<4)|CSOFT_CLIP);
 		}
-		merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), a_msg[seed_i].at[aln_i].chr, cigar_, cigar_n_, refInCigar(cigar_, cigar_n_), readInCigar(cigar_, cigar_n_), bns, pac, read_bseq, AP);
+		merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), m_msg[seed_i].map[aln_i].nchr, cigar_, cigar_n_, refInCigar(cigar_, cigar_n_), readInCigar(cigar_, cigar_n_), bns, pac, read_bseq, AP);
 		free(cigar_); free(bseq1); free(bseq2);
     }
     return 0;
@@ -821,7 +821,7 @@ void lamsa_res_aux(line_aln_res *la, bntseq_t *bns, uint8_t *pac, uint8_t *read_
 }
 
 //read_seq: char or uint8_t?
-void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
+void frag_check(map_msg *m_msg, frag_msg **f_msg, aln_res *a_res,
         bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq,/*char *read_cseq,*/
         lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
         int line_n, uint32_t **hash_num, uint64_t ***hash_node) 
@@ -868,14 +868,14 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
                 _push_cigar_e1(&(la->res[res_n].cigar), &(la->res[res_n].cigar_len), &(la->res[res_n].c_m), 0, &(la->res[res_n].readend), s_cigar);
             }
             //fix the boundary blank before first frag, if it exists
-            frag_head_bound_fix((*f_msg)+j, a_msg, &offset, bns, pac, read_bseq, APP, AP, seqs, la);
+            frag_head_bound_fix((*f_msg)+j, m_msg, &offset, bns, pac, read_bseq, APP, AP, seqs, la);
             for (i = ((*f_msg)+j)->frag_num-1; i > 0; --i) {
-                frag_extend((*f_msg)+j, a_msg, i, bns, pac, read_bseq, bseq1, &bseq2, &ref_max_blen, APP, AP, la);
-                split_mapping(bns, pac, read_bseq, ((*f_msg)+j), a_msg, hash_num, hash_node, i, i-1, APP, AP, la);
+                frag_extend((*f_msg)+j, m_msg, i, bns, pac, read_bseq, bseq1, &bseq2, &ref_max_blen, APP, AP, la);
+                split_mapping(bns, pac, read_bseq, ((*f_msg)+j), m_msg, hash_num, hash_node, i, i-1, APP, AP, la);
             }
-            frag_extend((*f_msg)+j, a_msg, i, bns, pac, read_bseq, bseq1, &bseq2, &ref_max_blen, APP, AP, la);
+            frag_extend((*f_msg)+j, m_msg, i, bns, pac, read_bseq, bseq1, &bseq2, &ref_max_blen, APP, AP, la);
             //fix the boundary blank after the last frag
-            frag_tail_bound_fix((*f_msg)+j, a_msg, bns, pac, read_bseq, APP, AP, seqs, la);
+            frag_tail_bound_fix((*f_msg)+j, m_msg, bns, pac, read_bseq, APP, AP, seqs, la);
             //tail 'S'
             if (((*f_msg)+j)->frag_right_bound <= APP->seed_all) {
                 cigar32_t s_cigar = ((read_len - (((*f_msg)+j)->frag_right_bound-1) * AP->seed_step) << 4) | CSOFT_CLIP; 
@@ -891,7 +891,7 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
                 *read_rbseq = (uint8_t*)calloc(read_len, sizeof(uint8_t));
                 for (i = 0; i < read_len; ++i) (*read_rbseq)[i] =  (read_bseq[read_len-1-i]<4)?3-read_bseq[read_len-1-i]:4;
             }
-            for (i = 0; i < APP->seed_all; ++i) a_msg[i].read_id = (APP->seed_all + 1 - a_msg[i].read_id);
+            for (i = 0; i < APP->seed_all; ++i) m_msg[i].seed_id = (APP->seed_all + 1 - m_msg[i].seed_id);
             int tmp = ((*f_msg)+j)->frag_left_bound;
             ((*f_msg)+j)->frag_left_bound = APP->seed_all + 1 - ((*f_msg)+j)->frag_right_bound;
             ((*f_msg)+j)->frag_right_bound = APP->seed_all + 1 - tmp;
@@ -902,14 +902,14 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
                 _push_cigar_e1(&(la->res[res_n].cigar), &(la->res[res_n].cigar_len), &(la->res[res_n].c_m), 0, &(la->res[res_n].readend), s_cigar);
             }
             //fix the boundary blank before first frag
-            frag_head_bound_fix((*f_msg)+j, a_msg, &offset, bns, pac, *read_rbseq, APP, AP, seqs, la);
+            frag_head_bound_fix((*f_msg)+j, m_msg, &offset, bns, pac, *read_rbseq, APP, AP, seqs, la);
             for (i = 0; i < ((*f_msg)+j)->frag_num-1; ++i) {
-                frag_extend((*f_msg)+j, a_msg, i, bns, pac, *read_rbseq, bseq1, &bseq2, &ref_max_blen, APP, AP, la);
-                split_mapping(bns, pac, *read_rbseq, (*f_msg)+j, a_msg, hash_num, hash_node, i, i+1, APP, AP, la);
+                frag_extend((*f_msg)+j, m_msg, i, bns, pac, *read_rbseq, bseq1, &bseq2, &ref_max_blen, APP, AP, la);
+                split_mapping(bns, pac, *read_rbseq, (*f_msg)+j, m_msg, hash_num, hash_node, i, i+1, APP, AP, la);
             }
-            frag_extend(((*f_msg)+j), a_msg, i, bns, pac, *read_rbseq, bseq1, &bseq2, &ref_max_blen,  APP, AP, la);
+            frag_extend(((*f_msg)+j), m_msg, i, bns, pac, *read_rbseq, bseq1, &bseq2, &ref_max_blen,  APP, AP, la);
             //fix the boundary blank after the last frag
-            frag_tail_bound_fix(((*f_msg)+j), a_msg, bns, pac, *read_rbseq, APP, AP, seqs, la);
+            frag_tail_bound_fix(((*f_msg)+j), m_msg, bns, pac, *read_rbseq, APP, AP, seqs, la);
             //tail 'S'
             if (((*f_msg)+j)->frag_right_bound <= APP->seed_all) {
                 cigar32_t s_cigar = (((APP->seed_all - ((*f_msg)+j)->frag_right_bound+1) * AP->seed_step - AP->seed_inv) << 4) | CSOFT_CLIP;
@@ -918,7 +918,7 @@ void frag_check(aln_msg *a_msg, frag_msg **f_msg, aln_res *a_res,
             }
             lamsa_res_split(a_res->la+j, read_len, AP);
             lamsa_res_aux(a_res->la+j, bns, pac, *read_rbseq, read_len, AP, seqs);
-            for (i = 0; i < APP->seed_all; ++i) a_msg[i].read_id = (APP->seed_all + 1 - a_msg[i].read_id);
+            for (i = 0; i < APP->seed_all; ++i) m_msg[i].seed_id = (APP->seed_all + 1 - m_msg[i].seed_id);
         }
     }
     // filter line-aln-res in merged-lines, get opt-res OR multi-sub-opt-res
