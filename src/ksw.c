@@ -1057,16 +1057,16 @@ void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m,
 {
     int Sn = qlen - lqe - rqe, Hn = tlen - lte - rte;
 
-    if (abs(Sn) < AP->split_len/2 && abs(Hn) < AP->split_len/2 && abs(Sn - Hn) < AP->split_len/2) { // for small 'nS' and 'nH', change into indels
-        cigar32_t *g_cigar; int g_clen;
-        ksw_global2(qlen, query, tlen, target, m, mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, abs(tlen-qlen)+3, &g_clen, &g_cigar);
-        _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
-        free(g_cigar);
-    } else {
+    if (abs(Sn) >= AP->split_len/2 || abs(Hn) >= AP->split_len/2 || abs(Sn - Hn) >= AP->split_len/2 || tlen < 0 || qlen < 0) {
         _push_cigar(cigar, cigar_n, cigar_m, lcigar, ln_cigar);
         _push_cigar0(cigar, cigar_n, cigar_m, (Sn << 4) | CSOFT_CLIP);
         _push_cigar0(cigar, cigar_n, cigar_m, Hn << 4 | CHARD_CLIP);
         _push_cigar(cigar, cigar_n, cigar_m, rcigar, rn_cigar);
+    } else { // for small 'nS' and 'nH', change into indels
+        cigar32_t *g_cigar; int g_clen;
+        ksw_global2(qlen, query, tlen, target, m, mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, abs(tlen-qlen)+3, &g_clen, &g_cigar);
+        _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
+        free(g_cigar);
     }
 }
 

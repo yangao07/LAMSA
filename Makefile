@@ -14,7 +14,8 @@ OBJS    =	$(SOURCE:.c=.o)
 
 BIN     =	$(BIN_DIR)/lamsa
 
-DEBUG   =   $(BIN_DIR)/gdb_lamsa
+GDB_DEBUG   =   $(BIN_DIR)/gdb_lamsa
+NOR_DEBUG   =   $(BIN_DIR)/debug_lamsa
 DMARCRO =	-D __DEBUG__
 
 .c.o:
@@ -22,17 +23,20 @@ DMARCRO =	-D __DEBUG__
 
 all:       $(SOURCE) $(BIN) 
 #lamsa:     $(SOURCE) $(BIN) 
-gdb_lamsa: $(SOURCE) $(DEBUG) 
+gdb_lamsa: $(SOURCE) $(GDB_DEBUG) 
+debug_lamsa: $(SOURCE) $(NOR_DEBUG)
 
 
 $(BIN): $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LIB)
 
-$(DEBUG):
+$(GDB_DEBUG):
 	$(CC) $(DFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
+$(NOR_DEBUG):
+	$(CC) $(CFLAGS) $(SOURCE) $(DMARCRO) -o $@ $(LIB)
 
 clean:
 	rm -f $(SRC_DIR)/*.o $(BIN)
 
 clean_debug:
-	rm -f $(SRC_DIR)/*.o $(DEBUG)
+	rm -f $(SRC_DIR)/*.o $(GDB_DEBUG) $(NOR_DEBUG)
