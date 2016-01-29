@@ -803,8 +803,8 @@ typedef struct {
     frag_dp_node ***f_node; // DP nodes
 
     line_node *line, *_line; // line:[start ... end][start ... end] ... []
-    int *line_start, *_line_start;
-    int *line_len, *_line_len;
+    int *line_start_len, *line_rank, *line_select_rank;// [start, len][start, len] ... []
+    int *_line_start_len, *_line_rank;
 
     int line_n_max; int line_m;
     frag_msg **f_msg;     // alignment information of fragments of read
@@ -822,8 +822,8 @@ int lamsa_main_aln(thread_aux_t *aux)
     lamsa_aln_para *AP = aux->AP; bwt_t *bwt = aux->bwt; uint8_t *pac = aux->pac; bntseq_t *bns = aux->bns;
     frag_dp_node ***f_node = aux->f_node;
     line_node *line = aux->line, *_line = aux->_line;
-    int *line_start = aux->line_start; int *_line_start = aux->_line_start;
-    int *line_len = aux->line_len; int *_line_len = aux->_line_len;
+    int *line_start_len = aux->line_start_len; int *_line_start_len = aux->_line_start_len;
+    int *line_rank = aux->line_rank; int *_line_rank = aux->_line_rank; int *line_select_rank = aux->line_select_rank;
     frag_msg **f_msg = aux->f_msg;
     uint32_t *hash_num = aux->hash_num; uint64_t **hash_node = aux->hash_node;
     int line_n_max = aux->line_n_max, line_m = aux->line_m;
@@ -852,7 +852,7 @@ int lamsa_main_aln(thread_aux_t *aux)
         aln_reset_res(la_seqs->a_res, 3, seqs->seq.l);
         // aln_reg
         aln_reg *a_reg = aln_init_reg(seqs->seq.l);
-        int line_n = frag_line_BCC(la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start, line_len, &line_m, f_node, _line, line_n_max);
+        int line_n = frag_line_BCC(la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start_len, line_rank, line_select_rank, &line_m, f_node, _line, line_n_max);
         
         uint8_t *bseq = (uint8_t*)malloc(seqs->seq.l * sizeof(uint8_t));
         for (j = 0; j < (int)seqs->seq.l; ++j) bseq[j] = nst_nt4_table[(int)(seqs->seq.s[j])];
@@ -862,7 +862,7 @@ int lamsa_main_aln(thread_aux_t *aux)
             get_reg(la_seqs->a_res, a_reg);
         }
         // remain region
-        line_n = frag_line_remain(a_reg, la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start, line_len, &line_m, f_node, _line, _line_start, _line_len, line_n_max);
+        line_n = frag_line_remain(a_reg, la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start_len, line_rank, line_select_rank, &line_m, f_node, _line, _line_start_len, _line_rank, line_n_max);
         if (line_n > 0) {
             frag_check(la_seqs->m_msg, f_msg, la_seqs->a_res+1, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
             get_reg(la_seqs->a_res+1, a_reg);
@@ -966,8 +966,9 @@ void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lamsa_aln_para AP)
     int line_m = s_msg->seed_max * AP.per_aln_m;
     int line_node_m = line_m * (1+L_EXTRA);
     aux->line = (line_node*)malloc(line_node_m * sizeof(line_node)); aux->_line = (line_node*)malloc(line_node_m * sizeof(line_node));
-    aux->line_start = (int*)malloc(line_m * sizeof(int)); aux->_line_start = (int*)malloc(line_m * sizeof(int));
-    aux->line_len = (int*)malloc(line_m * sizeof(int)); aux->_line_len = (int*)malloc(line_m * sizeof(int));
+    aux->line_start_len = (int*)malloc(line_m * 2 * sizeof(int)); aux->_line_start_len = (int*)malloc(line_m * 2 * sizeof(int));
+    aux->line_rank = (int*)malloc(line_m * sizeof(int)); aux->_line_rank = (int*)malloc(line_m * sizeof(int));
+    aux->line_select_rank = (int*)malloc(line_m * sizeof(int));
 
     aux->line_n_max = line_m;
     aux->line_m = 1;
@@ -984,11 +985,10 @@ void aux_dp_free(thread_aux_t *aux, seed_msg *s_msg, lamsa_aln_para *AP)
 {
     fnode_free(aux->f_node, s_msg->seed_max+2, AP->per_aln_m);
     free(aux->line); free(aux->_line);
-    free(aux->line); free(aux->_line); free(aux->line_start); free(aux->_line_len);
+    free(aux->line_start_len); free(aux->_line_start_len); free(aux->line_rank); free(aux->_line_rank); free(aux->line_select_rank);
     int i; 
     for (i = 0; i < pow(NT_N, AP->hash_key_len); ++i) free(aux->hash_node[i]);
     free(aux->hash_node); free(aux->hash_num);
-
     frag_free_msg(*(aux->f_msg), aux->line_m); free(aux->f_msg);
 }
 

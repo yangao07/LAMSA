@@ -109,17 +109,32 @@
 #define L_DUMP  0x8
 
 #define L_EXTRA 5                    // extra line-node variables
-#define L_LB(l,n) (l[n].x)   // line left-boundary
-#define L_RB(l,n) (l[n].y)   // line right-boundary
-#define E_LB(l,n) (l[n+1].x) // extend left-boundary
-#define E_RB(l,n) (l[n+1].y) // extend right-boundary
-#define L_MF(l,n) (l[n+2].x) // line merge-flag
-#define L_MH(l,n) (l[n+2].y) // line merge-head
+#define L_LB(l,n) ((l)[(n)].x)   // line left-boundary
+#define L_RB(l,n) ((l)[(n)].y)   // line right-boundary
+#define E_LB(l,n) ((l)[(n)+1].x) // extend left-boundary
+#define E_RB(l,n) ((l)[(n)+1].y) // extend right-boundary
+#define L_MF(l,n) ((l)[(n)+2].x) // line merge-flag
+#define L_MH(l,n) ((l)[(n)+2].y) // line merge-head
 
-#define L_LS(l,n) (l[n+3].x) // line score
-#define L_BS(l,n) (l[n+3].y) // best score of merged-lines
+#define L_LS(l,n) ((l)[(n)+3].x) // line score
+#define L_BS(l,n) ((l)[(n)+3].y) // best score of merged-lines
 
-#define L_NM(l,n) (l[n+4].x) // dis+NM
+#define L_NM(l,n) ((l)[(n)+4].x) // dis+NM
+
+#define _L_LB(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]].x)   // line left-boundary
+#define _L_RB(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]].y)   // line right-boundary
+#define _E_LB(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+1].x) // extend left-boundary
+#define _E_RB(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+1].y) // extend right-boundary
+#define _L_MF(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+2].x) // line merge-flag
+#define _L_MH(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+2].y) // line merge-head
+
+#define _L_LS(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+3].x) // line score
+#define _L_BS(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+3].y) // best score of merged-lines
+
+#define _L_NM(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+4].x) // dis+NM
+
+#define get_line_node(l, lsl, i) (l+(lsl)[(i)<<1])
+#define get_line_len(lsl, i) ((lsl)[((i)<<1)+1])
 
 
 //  [end+2] -> (line-score, x)
