@@ -133,8 +133,8 @@
 
 #define _L_NM(l,sl,i) (((l)+(sl)[(i)<<1])[(sl)[((i)<<1)+1]+4].x) // dis+NM
 
-#define get_line_node(l, lsl, i) (l+(lsl)[(i)<<1])
-#define get_line_len(lsl, i) ((lsl)[((i)<<1)+1])
+#define _line_node(l, lsl, i) (l+(lsl)[(i)<<1])
+#define _line_len(lsl, i) ((lsl)[((i)<<1)+1])
 
 
 //  [end+2] -> (line-score, x)
