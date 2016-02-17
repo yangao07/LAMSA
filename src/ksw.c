@@ -826,6 +826,8 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
                     lamsa_aln_para *AP,
                     int *_qle, int *_tle, cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
+    if (qlen < 0 || tlen < 0) { 
+        fprintf(stderr, "[ksw_extend_core] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
 	int8_t *qp; // query profile
@@ -834,7 +836,7 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 	assert(h0 > 0);
 	// allocate memory
 	qp = malloc(qlen * m);
-	eh = calloc(qlen + 1, 8);
+	eh = calloc(qlen + 2, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];

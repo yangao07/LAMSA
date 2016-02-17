@@ -208,7 +208,8 @@ RET:
 
 int gem_map_read(FILE *mapf, map_msg *m_msg, char *gem_line, int line_size)
 {
-	if (fgets(gem_line, line_size, mapf) == NULL) return -1;
+	if (fgets(gem_line, line_size, mapf) == NULL)
+    { fprintf(stderr, "[lamsa_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
     
     int i, ct=0;
     gem_line[strlen(gem_line)-1] = 0;
@@ -218,8 +219,9 @@ int gem_map_read(FILE *mapf, map_msg *m_msg, char *gem_line, int line_size)
             else ct++;
         }
     }
+    if (*(gem_line+i+1) == '-') return 0;
     m_msg->map_str = strdup(gem_line+i+1);
-	return 0;
+	return 1;
 }
 
 int gem_map_msg(map_msg *m_msg, int max_n)
@@ -232,12 +234,12 @@ int gem_map_msg(map_msg *m_msg, int max_n)
 	long long offset; char os[100];
 
 	//sscanf(gem_line, "%*[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", aln_msg);
-	if (strcmp(aln_msg, "-") == 0) {
-#ifdef __DEBUG__
-		fprintf(stderr, "-\n");
-#endif
-		goto RET;
-	}
+	//if (strcmp(aln_msg, "-") == 0) {
+//#ifdef __DEBUG__
+		//fprintf(stderr, "-\n");
+//#endif
+		//goto RET;
+	//}
 
 	msg_len = strlen(aln_msg);
 	t = strtok(aln_msg, ",");

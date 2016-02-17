@@ -6,7 +6,7 @@
 #include "kstring.h"
 
 #define CHUNK_SIZE 10000000
-#define CHUNK_READ_N 5120
+#define CHUNK_READ_N 512
 
 #define READ_MAX_NUM 1000
 
@@ -208,7 +208,6 @@ typedef struct {
     cigar_t *cigar;
     int len_dif, bmax; // max band-width, NOT for this seed-aln, for this in-del case.
 					   // max of the number of inserts and the number of dels
-
 } map_t;
 typedef struct {
     map_t *map;

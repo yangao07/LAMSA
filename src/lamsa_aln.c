@@ -758,10 +758,9 @@ void fnode_free(frag_dp_node ***f_node, int seed_m, int per_aln_m)
     free(f_node);
 }
 
-void map_cal_msg(map_msg *m_msg, int seed_id, bntseq_t *bns)
+void map_cal_msg(map_msg *m_msg, bntseq_t *bns)
 {
     int i;
-    m_msg->seed_id = seed_id;
     for (i = 0; i < m_msg->map_n; ++i) {
         m_msg->map[i].nchr = bns_get_rid(bns, m_msg->map[i].chr);
         m_msg->map[i].nstrand = (m_msg->map[i].strand=='+'?1:-1);
@@ -839,15 +838,12 @@ int lamsa_main_aln(thread_aux_t *aux)
         kseq_t *seqs = aux->w_seqs+i;
         strcpy(READ_NAME, seqs->name.s);
         // set map_msg
-        int seed_i, seed_out_i;
-        for (seed_i = seed_out_i = 0; seed_i < APP->seed_all; ++seed_i) {
+        int seed_out_i;
+        for (seed_out_i = 0; seed_out_i < APP->seed_out; ++seed_out_i) {
             gem_map_msg(la_seqs->m_msg+seed_out_i, AP->per_aln_m);
-            if ((la_seqs->m_msg+seed_out_i)->map_n > 0) {
-                map_cal_msg(la_seqs->m_msg+seed_out_i, seed_i+1, bns);
-                seed_out_i++;
-            }
+            //if ((la_seqs->m_msg+seed_out_i)->map_n > 0) {
+            map_cal_msg(la_seqs->m_msg+seed_out_i, bns);
         }
-        APP->seed_out = seed_out_i;
         // aln_res
         aln_reset_res(la_seqs->a_res, 3, seqs->seq.l);
         // aln_reg
@@ -936,12 +932,16 @@ int lamsa_read_seq(lamsa_seq_t *la_seqs, kseq_t *read_seq_t, FILE *seed_mapfp,
         init_aln_per_para(p->APP, s_msg, s_msg->read_count);
 
         int seed_all = p->APP->seed_all;
-        int seed_n = 0;
+        int seed_n = 0, seed_out = 0;
         while (seed_n < seed_all) {
             //if ((map_n = gem_map_read(seed_mapfp, p->m_msg+seed_n, AP.per_aln_m)) < 0) { fprintf(stderr, "[lamsa_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
-            if (gem_map_read(seed_mapfp, p->m_msg+seed_n, gem_line, line_size) < 0) { fprintf(stderr, "[lamsa_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
-            seed_n++;
+            if (gem_map_read(seed_mapfp, p->m_msg+seed_out, gem_line, line_size)) {
+                p->m_msg[seed_out].seed_id = seed_n+1;
+                ++seed_out;
+            }
+            ++seed_n;
         }
+        p->APP->seed_out = seed_out;
         if (n >= chunk_read_n) break;
     }
     return n;
