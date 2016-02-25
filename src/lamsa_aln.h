@@ -31,6 +31,7 @@
 #define MIS_PEN 3
 #define OPEN_PEN 5
 #define EXT_PEN 2
+#define EXT_BAND_W 200
 #define END_BONUS 5
 
 // PacBio(15%,1:12:2) aln para
@@ -398,7 +399,7 @@ typedef struct {
     int ins_ext_o, ins_ext_e, del_ext_o, del_ext_e; // gap open/extension penalty in sw-extend
     int match, mis;     // score matrix, match and mismatch
     int8_t sc_mat[25];
-    int end_bonus, zdrop;
+    int ext_band_w, end_bonus, zdrop;
     // read option
     float ed_rate, mis_rate, id_rate, mat_rate;
     int read_type;

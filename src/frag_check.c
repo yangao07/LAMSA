@@ -472,7 +472,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                 cigar32_t *l_cigar=0; int l_cigar_n=0, l_cigar_m;
                 ref_offset = at1.offset + AP->seed_len + at1.len_dif;
                 pac2fa_core(bns, pac, at1.nchr, ref_offset-1, &_s_tlen, s_tseq);
-                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, AP->sc_mat, 3, hash_len*AP->match, AP, &lqe, &lte, &l_cigar, &l_cigar_n, &l_cigar_m);
+                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, AP->sc_mat, AP->ext_band_w, hash_len*AP->match, AP, &lqe, &lte, &l_cigar, &l_cigar_n, &l_cigar_m);
                 //_push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
                 //free(_cigar);
 
@@ -492,7 +492,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 					s_tseq[i] = tmp;
 				}
                 cigar32_t *r_cigar=0; int r_cigar_n=0, r_cigar_m;
-                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, AP->sc_mat, 3, hash_len*AP->match, AP, &rqe, &rte, &r_cigar, &r_cigar_n, &r_cigar_m);
+                ksw_extend_core(s_qlen, s_qseq, _s_tlen, s_tseq, 5, AP->sc_mat, AP->ext_band_w, hash_len*AP->match, AP, &rqe, &rte, &r_cigar, &r_cigar_n, &r_cigar_m);
                 _invert_cigar(&r_cigar, r_cigar_n);
                 
                 // merge, add overlap-flag('S/H')
@@ -605,7 +605,7 @@ int frag_head_bound_fix(frag_msg *f_msg, map_msg *m_msg,
         pac2fa_core(bns, pac, m_msg[seed_i].map[aln_i].nchr, ref_start-1/*0-base*/, &ref_len, bseq2);
 		cigar32_t *cigar_=0; int cigar_n_, cigar_m_;
 		int qre, tre;
-		int res = ksw_extend_r(read_len, bseq1, ref_len , bseq2, 5, AP->sc_mat, hash_len, AP->seed_len * AP->match, AP, &qre, &tre, &cigar_, &cigar_n_, &cigar_m_);
+		int res = ksw_extend_r(read_len, bseq1, ref_len , bseq2, 5, AP->sc_mat, AP->ext_band_w, AP->seed_len * AP->match, AP, &qre, &tre, &cigar_, &cigar_n_, &cigar_m_);
 		if (res != 0) { // not-to-end
 			// push head 'S'
 			_push_cigar1(&cigar_, &cigar_n_, &cigar_m_, ((read_len-qre)<<4)|CSOFT_CLIP);
@@ -664,7 +664,7 @@ int frag_tail_bound_fix(frag_msg *f_msg, map_msg *m_msg, bntseq_t *bns, uint8_t 
 
 		cigar32_t *cigar_=0; int cigar_n_, cigar_m_;
 		int qle, tle;
-        int res = ksw_extend_c(read_len, bseq1, ref_len, bseq2, 5, AP->sc_mat, hash_len, AP->seed_len*AP->match, AP, &qle, &tle, &cigar_, &cigar_n_, &cigar_m_);
+        int res = ksw_extend_c(read_len, bseq1, ref_len, bseq2, 5, AP->sc_mat, AP->ext_band_w, AP->seed_len*AP->match, AP, &qle, &tle, &cigar_, &cigar_n_, &cigar_m_);
         if (res != 0) { // not-to-end 
 			_push_cigar1(&cigar_, &cigar_n_, &cigar_m_, ((read_len-qle)<<4)|CSOFT_CLIP);
 		}

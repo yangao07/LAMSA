@@ -750,7 +750,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
 					_t_len = _q_len + (ref_offset>0?hash_len:0);
 					int lqe, lte, rqe, rte;
 					// left-extend
-					ksw_extend_core(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP->sc_mat, 3, hash_len*AP->match, AP, &lqe, &lte, &_cigar, &_clen, &_cm);
+					ksw_extend_core(_q_len, read_seq+l_readi+1-head_in, _t_len, ref_seq+l_refi+1-head_in, 5, AP->sc_mat, AP->ext_band_w, hash_len*AP->match, AP, &lqe, &lte, &_cigar, &_clen, &_cm);
 					_push_cigar(split_cigar, split_clen, split_m, _cigar, _clen);
 					free(_cigar);
                     // right-extend
@@ -763,7 +763,7 @@ int hash_split_map(cigar32_t **split_cigar, int *split_clen, int *split_m,
                     }
                     for (j = 0; j < _q_len; ++j) re_qseq[j] = read_seq[r_readi+tail_in-1-j];
                     for (j = 0; j < _t_len; ++j) re_tseq[j] = ref_seq[r_refi+tail_in-1-j];
-                    ksw_extend_core(_q_len, re_qseq, _t_len, re_tseq, 5, AP->sc_mat, 3, hash_len*AP->match, AP, &rqe, &rte, &_cigar, &_clen, &_cm);
+                    ksw_extend_core(_q_len, re_qseq, _t_len, re_tseq, 5, AP->sc_mat, AP->ext_band_w, hash_len*AP->match, AP, &rqe, &rte, &_cigar, &_clen, &_cm);
                     _invert_cigar(&_cigar, _clen);
                     free(re_qseq); free(re_tseq);
  				
@@ -884,7 +884,7 @@ int hash_right_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		//
 		//printf("ref:\t");for (i = 0; i < tlen; ++i) printf("%c", "ACGT"[(ref_seq+refINcigar)[i]]);printf("\n");
 		//printf("read:\t");for (i =0; i < qlen; ++i) printf("%c", "ACGT"[(read_seq+readINcigar)[i]]);printf("\n");
-		res |= ksw_extend_c(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, AP->sc_mat, abs(read_len-readINcigar-ref_len + refINcigar)+3, hash_len*AP->match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
+		res |= ksw_extend_c(qlen, read_seq+readINcigar, tlen , ref_seq+refINcigar, 5, AP->sc_mat, AP->ext_band_w, hash_len*AP->match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
 		if (cigar_ != NULL)
 		{
 			_push_cigar(cigar, cigar_len, cigar_m, cigar_, n_cigar_);
@@ -940,7 +940,7 @@ int hash_left_bound_map(cigar32_t **cigar, int *cigar_len, int *cigar_m,
 		for (i = 0; i < qlen; ++i) qseq[i] = read_seq[qlen-i-1];
 		for (i = 0; i < tlen; ++i) tseq[i] = ref_seq[ref_len-refINcigar-i-1];
 
-		res |= ksw_extend_c(qlen, qseq, tlen, tseq, 5, AP->sc_mat, abs(qlen-tlen)+3, hash_len*AP->match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
+		res |= ksw_extend_c(qlen, qseq, tlen, tseq, 5, AP->sc_mat, AP->ext_band_w, hash_len*AP->match, AP, &read_end, &ref_end, &cigar_, &n_cigar_, &m_cigar_);
 
 		if (cigar_ != NULL) {
 			if (read_end < read_len-readINcigar) _push_cigar1(&cigar_, &n_cigar_, &m_cigar_, (((read_len-readINcigar-read_end) << 4) | CSOFT_CLIP));//'S' exsit

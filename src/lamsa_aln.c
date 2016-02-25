@@ -51,6 +51,7 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -E --ext-pen   [INT(,INT,INT,INT)]\n");
     fprintf(stderr, "                            Gap extension penalty for SW-alignment(end2end-global:insertion, deletion,\n");
     fprintf(stderr, "                            end-extend: insertion, deletion). [%d(,%d,%d,%d)]\n", EXT_PEN, EXT_PEN, EXT_PEN, EXT_PEN);
+    fprintf(stderr, "    -w --band-width[INT]    Band width for SW-extension. [%d]\n", EXT_BAND_W);
     fprintf(stderr, "    -b --end-bonus [INT]    Penalty for end-clipping. [%d]\n\n", END_BONUS);
 
 
@@ -129,6 +130,7 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "                            Gap extension penalty for SW-alignment(end2end-global:insertion, deletion,\n");
     fprintf(stderr, "                            end-extend:insertion, deletion). A gap of length k costs O + k*E.\n");
     fprintf(stderr, "                            (i.e. -O is for opening a zero-length gap) [%d(,%d,%d,%d)]\n", EXT_PEN, EXT_PEN, EXT_PEN, EXT_PEN);
+    fprintf(stderr, "    -w --band-wid  [INT]    Band width for SW-extension. [%d]\n", EXT_BAND_W);
     fprintf(stderr, "    -b --end-bonus [INT]    Penalty for end-clipping. [%d]\n\n", END_BONUS);
 
 
@@ -1314,6 +1316,7 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->mat_rate = -1;//MAT_RATE;// read_type
     AP->read_type = 0; // low-error-rate
 
+    AP->ext_band_w = EXT_BAND_W; // XXX Usage
     AP->end_bonus = -1; //END_BONUS// read_type
     AP->zdrop = 100;
 
@@ -1404,6 +1407,8 @@ const struct option long_opt [] = {
     { "mis-pen", 1, NULL, 'M' },
     { "open-pen", 1, NULL, 'O' },
     { "ext-pen", 1, NULL, 'E' },
+    { "band-width", 1, NULL, 'w' },
+    { "end-bonus", 1, NULL, 'b' },
 
     { "max-out", 1, NULL, 'r' },
     { "gap-split", 1, NULL, 'g' },
@@ -1426,7 +1431,7 @@ int lamsa_aln(int argc, char *argv[])
     int no_seed_aln=0, seed_info=0, seed_program=0; 
     char seed_result_f[1024]="";
 
-    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:b::e:d:x:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
+    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:w:b:e:d:x:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
     {
         switch (c)
         {
@@ -1451,6 +1456,7 @@ int lamsa_aln(int argc, char *argv[])
                       if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->del_gape = strtol(p+1, &p, 10); 
                       if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->ins_ext_e = strtol(p+1, &p, 10); 
                       if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->del_ext_e = strtol(p+1, &p, 10); break;
+            case 'w': AP->ext_band_w = atoi(optarg); break;
             case 'b': AP->end_bonus = atoi(optarg); break;
 
             case 'e': AP->ed_rate = atof(optarg); AP->mat_rate = 0.95-AP->ed_rate; break;
