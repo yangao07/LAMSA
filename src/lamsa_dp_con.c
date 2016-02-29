@@ -788,6 +788,11 @@ void node_add_score(int score, int NM, line_node node, node_score *ns, frag_dp_n
         ns->NM[ns->node_n] = NM;
         ns->node[(ns->node_n)++] = node;
         f_node[node.x][node.y].dp_flag = TRACKED_FLAG;
+        line_node tmp = f_node[node.x][node.y].from;
+        while (tmp.x != -1) {
+            f_node[tmp.x][tmp.y].dp_flag = TRACKED_FLAG;
+            tmp = f_node[tmp.x][tmp.y].from;
+        }
     } else {
         fprintf(stderr, "[lamsa_aln] node_add_score ERROR. (%d %d)\n", ns->node_n, ns->max_n); exit(1);
     }
