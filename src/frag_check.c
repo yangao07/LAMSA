@@ -523,6 +523,10 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                 //printf("debug");
 			res = ksw_bi_extend(s_qlen, s_qseq, s_tlen, s_tseq, 5, AP->sc_mat, abs(s_tlen-s_qlen)+3, 100, 100, AP, &_cigar, &_cigar_n, &_cigar_m);
 			_push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
+#ifdef __DEBUG__
+            printcigar(stdout, _cigar, _cigar_n);
+            printf("\n");
+#endif
 			free(_cigar);
         }
     } 

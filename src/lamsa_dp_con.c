@@ -1259,7 +1259,7 @@ int frag_line_remain(aln_reg *a_reg, map_msg *m_msg, frag_msg **f_msg,
 {
     int l_n = 0;
     aln_reg *re_reg = aln_init_reg(seqs->seq.l);
-    if (get_remain_reg(a_reg, re_reg, AP, seqs->seq.l) == 0) goto End;
+    if (get_remain_reg(a_reg, re_reg, AP, AP->seed_len, seqs->seq.l) == 0) goto End;
     int i, j, _j, k;
     int left_id, right_id, left, right, l;
     int next_start = 0;

@@ -31,6 +31,7 @@
 #include "ksw.h"
 #ifndef _KSW_MAIN
 #include "frag_check.h"
+#include "lamsa_aln.h"
 #endif
 
 #ifdef USE_MALLOC_WRAPPERS
@@ -869,7 +870,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = lm_cigar;
         _push_cigar1(cigar_, n_cigar_, m_cigar_, (res==0?(((tlen-lte)<<4)|CDEL):(((qlen-lqe)<<4)|CINS)));
         return 0;
-    } else if (abs(qlen-tlen) < AP->split_len && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
+    } else if (abs(qlen-tlen) < AP->split_len+tlen*AP->id_rate*aln_mode_high_id_err(AP->aln_mode) && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
 		//  sw-global, disallow cigar like '3S4H50M'
 		if (lcigar) free(lcigar);
 		w = abs(qlen-tlen)+3;
@@ -889,7 +890,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
         *m_cigar_ = rm_cigar;
         free(lcigar); 
         return 0;
-    } else if (abs(qlen-tlen) < AP->split_len && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
+    } else if (abs(qlen-tlen) < AP->split_len+tlen*AP->id_rate*aln_mode_high_id_err(AP->aln_mode) && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
 		// sw-global
 		if (lcigar) free(lcigar); if (rcigar) free(rcigar);
 		w = abs(qlen-tlen)+3;

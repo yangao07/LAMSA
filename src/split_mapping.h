@@ -51,6 +51,8 @@ typedef struct {
 #define HASH_STEP 10
 #define PB_HASH_LEN 8//10
 #define PB_HASH_STEP 4//5
+#define ON_HASH_LEN 8
+#define ON_HASH_STEP 4
 #define NT_N 4	
 
 #define HASH_MIN_LEN 1

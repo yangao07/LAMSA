@@ -385,7 +385,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
 void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, uint8_t **read_rbseq, lamsa_aln_para *AP, kseq_t *seqs)
 {
     aln_reg *re_reg = aln_init_reg(seqs->seq.l); 
-    if (get_remain_reg(a_reg, re_reg, AP, AP->bwt_max_len) == 0) goto End;
+    if (get_remain_reg(a_reg, re_reg, AP, AP->bwt_min_len, AP->bwt_max_len) == 0) goto End;
 
     int i;
     re_res->l_n = 0;

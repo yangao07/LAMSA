@@ -18,6 +18,8 @@
 #define OVLP_RAT 0.7
 #define MAX_SKEL 10
 #define MAX_BWT_REG 300
+#define PB_MIN_BWT_REG 50
+#define ON_MIN_BWT_REG 100
 #define BWT_KMER 19
 
 #define ED_RATE 0.04
@@ -34,9 +36,9 @@
 #define EXT_BAND_W 200
 #define END_BONUS 5
 
-// PacBio(15%,1:12:2) aln para
-#define PB_SEED_LEN 30
-#define PB_SEED_STEP 10
+// PacBio(10%,15%,1:12:2) aln para
+#define PB_SEED_LEN 50
+#define PB_SEED_STEP 25
 
 #define PB_ED_RATE 0.3
 #define PB_ID_RATE 0.3
@@ -44,18 +46,39 @@
 #define PB_MIS_RATE 0.04
 #define PB_MISMATCH_THD 10
 
-#define PB_MAT_SCORE 4
-#define PB_MIS_PEN 5
-#define PB_INS_OPEN_PEN 2
-#define PB_INS_EXT_PEN 5
-#define PB_DEL_OPEN_PEN 5
-#define PB_DEL_EXT_PEN 8
-#define PB_INS_EXT_OPEN_PEN 1
+#define PB_MAT_SCORE 1
+#define PB_MIS_PEN 1
+#define PB_INS_OPEN_PEN 1
+#define PB_INS_EXT_PEN 1
+#define PB_DEL_OPEN_PEN 1
+#define PB_DEL_EXT_PEN 1
+#define PB_INS_EXT_OPEN_PEN 2
 #define PB_INS_EXT_EXT_PEN 1
 #define PB_DEL_EXT_OPEN_PEN 2
-#define PB_DEL_EXT_EXT_PEN 4
+#define PB_DEL_EXT_EXT_PEN 1
 #define PB_END_BONUS 0
 
+// Oxford Nanopore(%20,%30, 3:4:5)
+#define ON_SEED_LEN 50
+#define ON_SEED_STEP 25
+
+#define ON_ED_RATE 0.4 // 0.45
+#define ON_ID_RATE 0.1 
+#define ON_MAT_RATE 0.6
+#define ON_MIS_RATE 0.04
+#define ON_MISMATCH_THD 10 //XXX
+
+#define ON_MAT_SCORE 1
+#define ON_MIS_PEN 1
+#define ON_INS_OPEN_PEN 1
+#define ON_INS_EXT_PEN 1
+#define ON_DEL_OPEN_PEN 1
+#define ON_DEL_EXT_PEN 1
+#define ON_INS_EXT_OPEN_PEN 1
+#define ON_INS_EXT_EXT_PEN 1
+#define ON_DEL_EXT_OPEN_PEN 1
+#define ON_DEL_EXT_EXT_PEN 1
+#define ON_END_BONUS 0
 
 #define RES_MAX_N 10
 #define SPLIT_ALN_LEN 100
@@ -367,7 +390,7 @@ typedef struct {
     int ske_max;
     float ovlp_rat;
 
-    int bwt_seed_len, bwt_max_len;
+    int bwt_seed_len, bwt_max_len, bwt_min_len;
 
     int split_len;  // min length of gap that causes split-alignment
     int split_pen;  // split score penalty
@@ -412,7 +435,7 @@ typedef struct {
 int lamsa_aln(int argc, char* argv[]);
 aln_reg *aln_init_reg(int read_len);
 void aln_free_reg(aln_reg *a_reg);
-int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lamsa_aln_para *AP, int reg_thd);
+int get_remain_reg(aln_reg *a_reg, aln_reg *re_reg, lamsa_aln_para *AP, int reg_min_thd, int reg_max_thd);
 int line_pull_trg(line_node LR);
 
 #endif
