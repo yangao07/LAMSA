@@ -123,7 +123,7 @@ extern "C" {
                         int m, const int8_t *mat, int w, int lh0, int rh0, lamsa_aln_para *AP,
                         cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
     int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
-                      int m, const int8_t *mat, int w, int lh0, int rh0, lamsa_aln_para *AP,
+                      int m, const int8_t *mat, int lh0, int rh0, lamsa_aln_para *AP,
                       cigar32_t **cigar_, int *n_cigar_, int *m_cigar_);
 
 #ifdef __cplusplus

@@ -51,7 +51,7 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -E --ext-pen   [INT(,INT,INT,INT)]\n");
     fprintf(stderr, "                            Gap extension penalty for SW-alignment(end2end-global: insertion, deletion,\n");
     fprintf(stderr, "                            one-end-extend: insertion, deletion). [%d(,%d,%d,%d)]\n", EXT_PEN, EXT_PEN, EXT_PEN, EXT_PEN);
-    fprintf(stderr, "    -w --band-width[INT]    Band width for SW-extension. [%d]\n", EXT_BAND_W);
+    fprintf(stderr, "    -w --band-width[INT]    Band width for banded-SW. [%d]\n", BAND_W);
     fprintf(stderr, "    -b --end-bonus [INT]    Penalty for end-clipping. [%d]\n\n", END_BONUS);
 
 
@@ -64,8 +64,8 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden.\n");
     fprintf(stderr, "                            [0] (0,1,2): \n");
     fprintf(stderr, "                            (0) Illumina moleculo: default setting.\n");
-    fprintf(stderr, "                            (1) PacBio: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
-    fprintf(stderr, "                            (2) Oxford Nanopore: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
+    fprintf(stderr, "                            (1) PacBio: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_BAND_W, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
+    fprintf(stderr, "                            (2) Oxford Nanopore: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_BAND_W, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
 
 
     fprintf(stderr, "Output options:\n\n");
@@ -130,7 +130,7 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "                            Gap extension penalty for SW-alignment(end2end-global: insertion, deletion,\n");
     fprintf(stderr, "                            one-end-extend:insertion, deletion). A gap of length k costs O + k*E.\n");
     fprintf(stderr, "                            (i.e. -O is for opening a zero-length gap) [%d(,%d,%d,%d)]\n", EXT_PEN, EXT_PEN, EXT_PEN, EXT_PEN);
-    fprintf(stderr, "    -w --band-wid  [INT]    Band width for SW-extension. [%d]\n", EXT_BAND_W);
+    fprintf(stderr, "    -w --band-wid  [INT]    Band width for banded-SW. [%d]\n", BAND_W);
     fprintf(stderr, "    -b --end-bonus [INT]    Penalty for end-clipping. [%d]\n\n", END_BONUS);
 
 
@@ -1316,7 +1316,7 @@ void init_aln_para(lamsa_aln_para *AP)
     AP->mat_rate = -1;//MAT_RATE;// read_type
     AP->read_type = 0; // low-error-rate
 
-    AP->ext_band_w = EXT_BAND_W; // XXX Usage
+    AP->band_w = -1; //BAND_W
     AP->end_bonus = -1; //END_BONUS// read_type
     AP->zdrop = 100;
 
@@ -1356,6 +1356,7 @@ void lamsa_set_aln_mode(lamsa_aln_para *AP)
         if (AP->mis_rate < 0) AP->mis_rate = MIS_RATE;
         if (AP->id_rate < 0) AP->id_rate = ID_RATE;
         if (AP->mat_rate < 0) AP->mat_rate = MAT_RATE;
+        if (AP->band_w < 0) AP->band_w = BAND_W;
         if (AP->end_bonus < 0) AP->end_bonus = END_BONUS;
         AP->match_dis = MATCH_DIS;
         AP->mismatch_thd = MISMATCH_THD;
@@ -1379,6 +1380,8 @@ void lamsa_set_aln_mode(lamsa_aln_para *AP)
         if (AP->mis_rate < 0) AP->mis_rate = PB_MIS_RATE;
         if (AP->id_rate < 0) AP->id_rate = PB_ID_RATE;
         if (AP->mat_rate < 0) AP->mat_rate = PB_MAT_RATE;
+
+        if (AP->band_w < 0) AP->band_w = PB_BAND_W;
         if (AP->end_bonus < 0) AP->end_bonus = PB_END_BONUS;
         AP->match_dis = (int)ceilf(AP->seed_step * AP->id_rate);
         AP->mismatch_thd = PB_MISMATCH_THD;
@@ -1403,6 +1406,7 @@ void lamsa_set_aln_mode(lamsa_aln_para *AP)
         if (AP->mis_rate < 0) AP->mis_rate = ON_MIS_RATE;
         if (AP->id_rate < 0) AP->id_rate = ON_ID_RATE;
         if (AP->mat_rate < 0) AP->mat_rate = ON_MAT_RATE;
+        if (AP->band_w < 0) AP->band_w = ON_BAND_W;
         if (AP->end_bonus < 0) AP->end_bonus = ON_END_BONUS;
         AP->match_dis = (int)ceilf(AP->seed_step * AP->id_rate);
         AP->mismatch_thd = ON_MISMATCH_THD;AP->aln_mode |= 0x2;
@@ -1481,10 +1485,10 @@ int lamsa_aln(int argc, char *argv[])
                       if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->del_gape = strtol(p+1, &p, 10); 
                       if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->ins_ext_e = strtol(p+1, &p, 10); 
                       if (*p!=0 && ispunct(*p) && isdigit(p[1])) AP->del_ext_e = strtol(p+1, &p, 10); break;
-            case 'w': AP->ext_band_w = atoi(optarg); break;
+            case 'w': AP->band_w = atoi(optarg); break;
             case 'b': AP->end_bonus = atoi(optarg); break;
 
-            case 'e': AP->ed_rate = atof(optarg); AP->mat_rate = 1.0-AP->ed_rate; break;
+            case 'e': AP->ed_rate = atof(optarg); break; //AP->mat_rate = 1.0-AP->ed_rate; break;
             case 'd': AP->id_rate = atof(optarg); break;
             case 'x': AP->mis_rate = atof(optarg); break;
             case 'T': AP->read_type = atoi(optarg); break;//mol:0, pacbio:1

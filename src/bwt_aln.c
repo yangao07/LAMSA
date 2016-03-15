@@ -246,7 +246,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
 	else _push_cigar1(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), ((extra_beg-1) << 4) | CSOFT_CLIP);
 
     // mid global-sw
-    ksw_global2(qlen, query+(left->read_pos-1+left_eta_len), tlen, target+left->ref_pos-ref_start, 5, AP->sc_mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape,  abs(qlen-tlen)+3, &mid_cigar_n, &mid_cigar);
+    ksw_global2(qlen, query+(left->read_pos-1+left_eta_len), tlen, target+left->ref_pos-ref_start, 5, AP->sc_mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape,  AP->band_w, &mid_cigar_n, &mid_cigar);
 
     cigar32_t *cigar=NULL; int cigar_n, cigar_m;
     if (left->read_pos > 1 || left_eta_len > 0) { // left extend
@@ -258,7 +258,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
         _t = (uint8_t*)malloc(tlen * sizeof(uint8_t));
         for (i = 0; i < tlen; ++i) _t[i] = target[tlen-1-i];
         // ksw_extend
-        ksw_extend_core(qlen, _q, tlen, _t, 5, AP->sc_mat, AP->ext_band_w, AP->bwt_seed_len*AP->match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        ksw_extend_core(qlen, _q, tlen, _t, 5, AP->sc_mat, AP->band_w, AP->bwt_seed_len*AP->match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
             left->read_pos -= _qle;
             left->ref_pos -= _tle;
@@ -278,7 +278,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
     if (right->read_pos < reg_len || right_eta_len > 0) { // right extend
         qlen = reg_len - right->read_pos + right_eta_len;
         tlen = ref_start+ref_len-1-right->ref_pos;
-        ksw_extend_core(qlen, query+right->read_pos+left_eta_len, tlen, target+ref_len-tlen, 5, AP->sc_mat, AP->ext_band_w, AP->bwt_seed_len*AP->match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
+        ksw_extend_core(qlen, query+right->read_pos+left_eta_len, tlen, target+ref_len-tlen, 5, AP->sc_mat, AP->band_w, AP->bwt_seed_len*AP->match, AP, &_qle, &_tle, &cigar, &cigar_n, &cigar_m);
         if (cigar!=NULL) {
             _push_cigar(&(cur_res->cigar), &(cur_res->cigar_len), &(cur_res->c_m), cigar, cigar_n);
             right->read_pos += _qle;

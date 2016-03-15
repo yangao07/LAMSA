@@ -544,9 +544,9 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
                 int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, 
                 int w, int *n_cigar_, cigar32_t **cigar_)
 {
-    //e_del=8, o_del=5, e_ins=5, o_ins=2; XXX
     if (qlen < 0 || tlen < 0) { 
         fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
+    w = (abs(qlen-tlen)+3 < w) ? w : (abs(qlen-tlen)+3);
 #ifdef __DEBUG__
     fprintf(stderr, "[ksw_global] w: %d\n", w);
 #endif
@@ -853,14 +853,14 @@ void sw_mid_fix(cigar32_t **cigar, int *cigar_n, int *cigar_m,
         _push_cigar(cigar, cigar_n, cigar_m, rcigar, rn_cigar);
     } else { // for small 'nS' and 'nH', change into indels
         cigar32_t *g_cigar; int g_clen;
-        ksw_global2(qlen, query, tlen, target, m, mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, abs(tlen-qlen)+3, &g_clen, &g_cigar);
+        ksw_global2(qlen, query, tlen, target, m, mat, AP->del_gapo, AP->del_gape, AP->ins_gapo, AP->ins_gape, AP->band_w, &g_clen, &g_cigar);
         _push_cigar(cigar, cigar_n, cigar_m, g_cigar, g_clen);
         free(g_cigar);
     }
 }
 
 int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, 
-                    const int8_t *mat, int w, int lh0, int rh0, lamsa_aln_para *AP,
+                    const int8_t *mat, int lh0, int rh0, lamsa_aln_para *AP,
                     cigar32_t **cigar_, int *n_cigar_, int *m_cigar_)
 {
     int res;
@@ -869,6 +869,8 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     //left boundary extension
     int lqe, lte, ln_cigar, lm_cigar;
     cigar32_t *lcigar=0;
+
+    int w = (abs(qlen-tlen)+3) > AP->band_w ? (abs(qlen-tlen)+3) : AP->band_w;
     res = ksw_extend_c(qlen, query, tlen, target, m, mat, w, lh0, AP, &lqe, &lte, &lcigar, &ln_cigar, &lm_cigar);
     if (res < 2) { // to-end extension
         *cigar_ = lcigar;
@@ -879,8 +881,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     } else if (abs(qlen-tlen) < AP->split_len+tlen*AP->id_rate*aln_mode_high_id_err(AP->aln_mode) && ((lqe << 1 > qlen) || (lte << 1 > tlen))) {
 		//  sw-global, disallow cigar like '3S4H50M'
 		if (lcigar) free(lcigar);
-		w = abs(qlen-tlen)+3;
-		ksw_global2(qlen, query, tlen, target, m, mat, del_gapo, del_gape, ins_gapo, ins_gape, w, n_cigar_, cigar_);
+		ksw_global2(qlen, query, tlen, target, m, mat, del_gapo, del_gape, ins_gapo, ins_gape, AP->band_w, n_cigar_, cigar_);
 		*m_cigar_ = *n_cigar_;
 		return 0;
 	}
@@ -899,8 +900,7 @@ int ksw_bi_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *targe
     } else if (abs(qlen-tlen) < AP->split_len+tlen*AP->id_rate*aln_mode_high_id_err(AP->aln_mode) && ((rqe << 1 > qlen) || (rte << 1 > tlen))) {
 		// sw-global
 		if (lcigar) free(lcigar); if (rcigar) free(rcigar);
-		w = abs(qlen-tlen)+3;
-		ksw_global2(qlen, query, tlen, target, m, mat, del_gapo, del_gape, ins_gapo, ins_gape, w, n_cigar_, cigar_);
+		ksw_global2(qlen, query, tlen, target, m, mat, del_gapo, del_gape, ins_gapo, ins_gape, AP->band_w, n_cigar_, cigar_);
 		*m_cigar_ = *n_cigar_;
 		return 0;
 	}

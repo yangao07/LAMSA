@@ -33,7 +33,7 @@
 #define MIS_PEN 3
 #define OPEN_PEN 5
 #define EXT_PEN 2
-#define EXT_BAND_W 200
+#define BAND_W 10
 #define END_BONUS 5
 
 // PacBio(10%,15%,1:12:2) aln para
@@ -56,6 +56,7 @@
 #define PB_INS_EXT_EXT_PEN 1
 #define PB_DEL_EXT_OPEN_PEN 2
 #define PB_DEL_EXT_EXT_PEN 1
+#define PB_BAND_W 200
 #define PB_END_BONUS 0
 
 // Oxford Nanopore(%20,%30, 3:4:5)
@@ -78,6 +79,7 @@
 #define ON_INS_EXT_EXT_PEN 1
 #define ON_DEL_EXT_OPEN_PEN 1
 #define ON_DEL_EXT_EXT_PEN 1
+#define ON_BAND_W 100
 #define ON_END_BONUS 0
 
 #define RES_MAX_N 10
@@ -422,7 +424,7 @@ typedef struct {
     int ins_ext_o, ins_ext_e, del_ext_o, del_ext_e; // gap open/extension penalty in sw-extend
     int match, mis;     // score matrix, match and mismatch
     int8_t sc_mat[25];
-    int ext_band_w, end_bonus, zdrop;
+    int band_w, end_bonus, zdrop;
     // read option
     float ed_rate, mis_rate, id_rate, mat_rate;
     int read_type;
