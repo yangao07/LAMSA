@@ -547,6 +547,9 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
     //e_del=8, o_del=5, e_ins=5, o_ins=2; XXX
     if (qlen < 0 || tlen < 0) { 
         fprintf(stderr, "[ksw_global2] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
+#ifdef __DEBUG__
+    fprintf(stderr, "[ksw_global] w: %d\n", w);
+#endif
 	eh_t *eh;
 	int8_t *qp; // query profile
 	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, score, n_col;
@@ -668,6 +671,9 @@ int ksw_extend_core(int qlen, const uint8_t *query, int tlen, const uint8_t *tar
 {
     if (qlen < 0 || tlen < 0) { 
         fprintf(stderr, "[ksw_extend_core] Error: qlen: %d tlen: %d\n", qlen, tlen); exit(-1); }
+#ifdef __DEBUG__
+    fprintf(stderr, "[ksw_extend] w: %d, h0: %d\n", w, h0);
+#endif
 	eh_t *eh; // score array
     uint8_t *z; int n_col; // added for backtrack
 	int8_t *qp; // query profile

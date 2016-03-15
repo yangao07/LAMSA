@@ -149,9 +149,9 @@ int main(int argc, char* argv[])
 	int line_len = LINE_SIZE, aln_len = LINE_SIZE;
 	char *gem_line = (char*)malloc(LINE_SIZE * sizeof(char));
 	char *aln_msg = (char*)malloc(LINE_SIZE * sizeof(char));
-	char name[100]; int msg_len;
+	char name[1024]; int msg_len;
 	char *t, *s; int t_i, _t_i;
-	char chr[10], strand, md[200];
+	char chr[1024], strand, md[1024];
 	long long offset; char os[100];
 	int i;
 
@@ -230,7 +230,7 @@ int gem_map_msg(map_msg *m_msg, int max_n)
     int i;
     char *aln_msg = m_msg->map_str; int msg_len;
 	char *t; int t_i, _t_i;
-	char chr[10], strand, md[200];
+	char chr[1024], strand, md[1024];
 	long long offset; char os[100];
 
 	//sscanf(gem_line, "%*[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", aln_msg);

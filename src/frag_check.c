@@ -460,7 +460,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
             } else {
                 res = split_indel_map(&s_cigar, &s_clen, &s_cm, s_qseq, s_qlen, s_tseq, s_tlen, 0, AP,  hash_num, hash_node);
             }
-        } else if (dis < -match_dis) { 
+        } else if (dis < -match_dis) { //INS
             s_tlen = s_qlen + dis;
             if (s_tlen < 2 * AP->hash_step) {
             //if (s_tlen < 0) { // overlapped ins
