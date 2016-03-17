@@ -63,10 +63,10 @@
 #define ON_SEED_LEN 50
 #define ON_SEED_STEP 25
 
-#define ON_ED_RATE 0.4 // 0.45
+#define ON_ED_RATE 0.25 // 0.45
 #define ON_ID_RATE 0.1 
 #define ON_MAT_RATE 0.6
-#define ON_MIS_RATE 0.04
+#define ON_MIS_RATE 0.06
 #define ON_MISMATCH_THD 10 //XXX
 
 #define ON_MAT_SCORE 1

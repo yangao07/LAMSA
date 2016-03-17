@@ -246,7 +246,8 @@ int split_seed(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
     m_read = s_msg->read_m;
     while (kseq_read(seq) >= 0)
     {
-        seed_all = (1+ (seq->seq.l - seed_len) / seed_step);
+        if (seq->seq.l < seed_len) seed_all = 0;
+        else seed_all = (1+ (seq->seq.l - seed_len) / seed_step);
         seed_seq[seed_len] = '\n';
         if (seed_all > s_msg->seed_max) s_msg->seed_max = seed_all;
         if ((int)seq->seq.l > s_msg->read_max_len) s_msg->read_max_len = seq->seq.l;
