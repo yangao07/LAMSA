@@ -372,8 +372,10 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
 
             bwt_set_bound(*seed_v, line[i], node_n[i], seed_len, reg_len, &left_bound, &right_bound);
             bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, seqs, re_res->la+re_res->l_n);
-            re_res->la[re_res->l_n].line_score = 0;
-            re_res->l_n++;
+            if (readInCigar(re_res->la[re_res->l_n].res[0].cigar, re_res->la[re_res->l_n].res[0].cigar_len) > 1/2 * reg_len) {
+                re_res->la[re_res->l_n].line_score = 0;
+                re_res->l_n++;
+            }
         }
     }
     // free
@@ -391,7 +393,6 @@ void bwt_aln_remain(aln_reg *a_reg, aln_res *re_res, bwt_t *bwt, bntseq_t *bns, 
     re_res->l_n = 0;
     for (i = 0; i < re_reg->reg_n; ++i)
         bwt_aln_core(bwt, bns, pac, read_bseq, read_rbseq, re_reg->reg[i], AP, seqs, re_res);
-
 End:
     aln_free_reg(re_reg);
 }

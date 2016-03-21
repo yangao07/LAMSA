@@ -4,6 +4,7 @@ src/*.o
 # Executables
 lamsa
 gdb_lamsa
+debug_lamsa
 
 # Project files
 .cproject

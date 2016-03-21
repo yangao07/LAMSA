@@ -19,7 +19,7 @@ void printcigar(FILE *outp, cigar32_t *cigar, int cigar_len)
 }
 
 void _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _cigar) {
-	if (_cigar >> 4 == 0) return;
+	if ((_cigar >> 4) == 0) return;
     int i;
     i = *cigar_n;
     if (((i-1) >=0) && (((*cigar)[i-1] & 0xf) == (_cigar & 0xf)))
@@ -28,6 +28,9 @@ void _push_cigar1(cigar32_t **cigar, int *cigar_n, int *cigar_m, cigar32_t _ciga
     {
         if (i == *cigar_m) {
             (*cigar_m) <<= 1;
+#ifdef __DEBUG__
+        fprintf(stderr, "[gem_parse]cigar_m: %d\n", *cigar_m);
+#endif
 			(*cigar) = (cigar32_t*)realloc(*cigar, (*cigar_m) * sizeof (cigar32_t));
 			if ((*cigar) == NULL)	{fprintf(stderr, "\n[frag_check] Memory is not enougy.\n");exit(1);}
         }
@@ -233,14 +236,6 @@ int gem_map_msg(map_msg *m_msg, int max_n)
 	char chr[1024], strand, md[1024];
 	long long offset; char os[100];
 
-	//sscanf(gem_line, "%*[^\t]\t%*[^\t]\t%*[^\t]\t%[^\n]\n", aln_msg);
-	//if (strcmp(aln_msg, "-") == 0) {
-//#ifdef __DEBUG__
-		//fprintf(stderr, "-\n");
-//#endif
-		//goto RET;
-	//}
-
 	msg_len = strlen(aln_msg);
 	t = strtok(aln_msg, ",");
 	t_i = strlen(t)+1;
@@ -251,6 +246,9 @@ int gem_map_msg(map_msg *m_msg, int max_n)
 		}
 		if (m_msg->map_n == m_msg->map_m) {
 			m_msg->map_m <<= 1;
+#ifdef __DEBUG__
+        fprintf(stderr, "[gem_parse]map_m: %d\n", m_msg->map_m);
+#endif
 			m_msg->map = (map_t*)realloc(m_msg->map, m_msg->map_m * sizeof(map_t));
 			if (m_msg->map == NULL) {
 				fprintf(stderr, "[gem_map_read] Error: not enough memory.\n"); exit(0);
@@ -276,8 +274,8 @@ int gem_map_msg(map_msg *m_msg, int max_n)
 		printcigar(stderr, m_msg->map[m_msg->map_n].cigar->cigar, m_msg->map[m_msg->map_n].cigar->cigar_n);
 		fprintf(stderr, "\n");
 #endif
-		if (strcmp(chr, "chrM")!=0)
-			++(m_msg->map_n);
+		///if (strcmp(chr, "chrM")!=0)
+        ++(m_msg->map_n);
 		if (t_i >= msg_len) break;
 		t = strtok(aln_msg+t_i, ",");
 		if (t == NULL) break;

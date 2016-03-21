@@ -687,6 +687,9 @@ int fnode_add_son(frag_dp_node **f_node,
     int son_n = f_node[fa.x][fa.y].son_n;
     if (son_n == f_node[fa.x][fa.y].son_max) {
         f_node[fa.x][fa.y].son_max <<= 1;
+#ifdef __DEBUG__
+        fprintf(stderr, "[dp_con]son_m: %d\n", f_node[fa.x][fa.y].son_max);
+#endif
         f_node[fa.x][fa.y].son = (line_node*)realloc(f_node[fa.x][fa.y].son, f_node[fa.x][fa.y].son_max * sizeof(line_node));
     }
     f_node[fa.x][fa.y].son[son_n] = son;
@@ -1148,8 +1151,7 @@ int frag_mini_dp_line(frag_dp_node **f_node, map_msg *m_msg,
 
 int frag_dp_path(map_msg *m_msg, frag_msg **f_msg,
                  lamsa_aln_para *AP, lamsa_aln_per_para *APP, 
-                 int *l_n, int *line_m,
-                 line_node *line, int *lsl, int *line_rank,
+                 int *l_n, line_node *line, int *lsl, int *line_rank,
                  frag_dp_node ***f_node)
 {
     if (*l_n == 0) return 0;
@@ -1166,21 +1168,18 @@ int frag_dp_path(map_msg *m_msg, frag_msg **f_msg,
         fprintf(stderr, "\n");
     }
 #endif
-
     int frag_num;
     int cur_x , cur_y , pre_x, pre_y;
-
     int left_bound, right_bound;
-
-    if (line_n > (*line_m)) {
-        (*f_msg) = (frag_msg*)realloc(*f_msg, line_n * sizeof(frag_msg));
-        for (i = (*line_m); i < line_n; ++i) {
-            frag_init_msg((*f_msg)+i, (*f_msg)->frag_max); 
-            frag_copy_msg(*f_msg, (*f_msg)+i);
-        }
-        if ((*f_msg) == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enough memory.(line_m: %d)\n", line_n); exit(1); }
-        (*line_m)= line_n;
+#ifdef __DEBUG__
+        fprintf(stderr, "[dp_con]line_m: %d\n", line_n);
+#endif
+    (*f_msg) = (frag_msg*)malloc(line_n * sizeof(frag_msg));
+    for (i = 0; i < line_n; ++i) {
+        frag_init_msg((*f_msg)+i);
+        //frag_copy_msg(*f_msg, (*f_msg)+i);
     }
+    if ((*f_msg) == NULL) { fprintf(stderr, "\n[frag_dp_path] Not enough memory.(line_m: %d)\n", line_n); exit(1); }
 
     if (aln_mode_overlap_seed(AP->aln_mode)) line_filter_overlap(line, lsl, line_rank, line_n, m_msg, *f_node, AP->seed_step, AP->seed_len);
 
@@ -1253,7 +1252,7 @@ int frag_dp_path(map_msg *m_msg, frag_msg **f_msg,
 int frag_line_remain(aln_reg *a_reg, map_msg *m_msg, frag_msg **f_msg,
                      lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
                      line_node *line, int *lsl, int *line_rank, int *line_select_rank,
-                     int *line_m, frag_dp_node ***f_node, 
+                     frag_dp_node ***f_node, 
                      line_node *_line, int *_lsl, int *_line_rank,
                      int line_n_max)
 {
@@ -1298,14 +1297,14 @@ int frag_line_remain(aln_reg *a_reg, map_msg *m_msg, frag_msg **f_msg,
     }
 End:
     aln_free_reg(re_reg);
-    frag_dp_path(m_msg, f_msg, AP, APP, &l_n, line_m, line, lsl, line_rank, f_node);
+    frag_dp_path(m_msg, f_msg, AP, APP, &l_n, line, lsl, line_rank, f_node);
     return l_n;
 }
 
 //new tree-generating and pruning
 int frag_line_BCC(map_msg *m_msg, frag_msg **f_msg,
         lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
-        line_node *line, int *lsl, int *line_rank, int *line_select_rank, int *line_m,
+        line_node *line, int *lsl, int *line_rank, int *line_select_rank, 
         frag_dp_node ***f_node,
         line_node *_line, int line_n_max)
 {
@@ -1440,7 +1439,7 @@ int frag_line_BCC(map_msg *m_msg, frag_msg **f_msg,
 
         line_n = min_l;
 
-        frag_dp_path(m_msg, f_msg, AP, APP, &line_n, line_m, line, lsl, line_rank, f_node);
+        frag_dp_path(m_msg, f_msg, AP, APP, &line_n, line, lsl, line_rank, f_node);
         return line_n;
     }
 }

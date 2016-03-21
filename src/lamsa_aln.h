@@ -6,7 +6,7 @@
 #include "kstring.h"
 
 #define CHUNK_SIZE 10000000
-#define CHUNK_READ_N 512
+#define CHUNK_READ_N 128
 
 #define READ_MAX_NUM 1000
 

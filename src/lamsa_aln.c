@@ -808,8 +808,8 @@ typedef struct {
     int *line_start_len, *line_rank, *line_select_rank;// [start, len][start, len] ... []
     int *_line_start_len, *_line_rank;
 
-    int line_n_max; int line_m;
-    frag_msg **f_msg;     // alignment information of fragments of read
+    int line_n_max;
+    //frag_msg **f_msg;     // alignment information of fragments of read
 
     uint32_t *hash_num;  // hash index
     uint64_t **hash_node;
@@ -826,9 +826,9 @@ int lamsa_main_aln(thread_aux_t *aux)
     line_node *line = aux->line, *_line = aux->_line;
     int *line_start_len = aux->line_start_len; int *_line_start_len = aux->_line_start_len;
     int *line_rank = aux->line_rank; int *_line_rank = aux->_line_rank; int *line_select_rank = aux->line_select_rank;
-    frag_msg **f_msg = aux->f_msg;
+    frag_msg **f_msg = (frag_msg**)malloc(sizeof(frag_msg*));;
     uint32_t *hash_num = aux->hash_num; uint64_t **hash_node = aux->hash_node;
-    int line_n_max = aux->line_n_max, line_m = aux->line_m;
+    int line_n_max = aux->line_n_max;
 
     int i = 0, j;
 
@@ -851,7 +851,7 @@ int lamsa_main_aln(thread_aux_t *aux)
         aln_reset_res(la_seqs->a_res, 3, seqs->seq.l);
         // aln_reg
         aln_reg *a_reg = aln_init_reg(seqs->seq.l);
-        int line_n = frag_line_BCC(la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start_len, line_rank, line_select_rank, &line_m, f_node, _line, line_n_max);
+        int line_n = frag_line_BCC(la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start_len, line_rank, line_select_rank, f_node, _line, line_n_max);
         
         uint8_t *bseq = (uint8_t*)malloc(seqs->seq.l * sizeof(uint8_t));
         for (j = 0; j < (int)seqs->seq.l; ++j) bseq[j] = nst_nt4_table[(int)(seqs->seq.s[j])];
@@ -861,7 +861,7 @@ int lamsa_main_aln(thread_aux_t *aux)
             get_reg(la_seqs->a_res, a_reg);
         }
         // remain region
-        line_n = frag_line_remain(a_reg, la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start_len, line_rank, line_select_rank, &line_m, f_node, _line, _line_start_len, _line_rank, line_n_max);
+        line_n = frag_line_remain(a_reg, la_seqs->m_msg, f_msg, APP, AP, seqs, line, line_start_len, line_rank, line_select_rank, f_node, _line, _line_start_len, _line_rank, line_n_max);
         if (line_n > 0) {
             frag_check(la_seqs->m_msg, f_msg, la_seqs->a_res+1, bns, pac, bseq, &rbseq, APP, AP, seqs, line_n, &hash_num, &hash_node);
             get_reg(la_seqs->a_res+1, a_reg);
@@ -876,14 +876,14 @@ int lamsa_main_aln(thread_aux_t *aux)
 
         aln_free_reg(a_reg); if (rbseq) free(rbseq); free(bseq);
 
-#ifdef __DEBUG__
-        COUNT++; fprintf(stderr, "%16d reads have been aligned.\n", COUNT);
-#else
         COUNT++;
+#ifdef __DEBUG__
+        fprintf(stderr, "%16d reads have been aligned.\n", COUNT);
+#else
         if (COUNT % 100000 == 0) fprintf(stderr, "%16d reads have been aligned.\n", COUNT);
 #endif
     }
-    aux->line_m = line_m;
+    free(f_msg);
     return 0;
 }
 
@@ -914,7 +914,7 @@ lamsa_seq_t *lamsa_seq_init(int chunk_read_n, int seed_m, int x)
     for (i = 0; i < chunk_read_n; ++i) {
         seqs[i].a_res = aln_init_res(1, 3, x); // aln_res, remain_res, bwt_remain_res
         seqs[i].APP = (lamsa_aln_per_para*)malloc(sizeof(lamsa_aln_per_para));
-        seqs[i].m_msg = map_init_msg(seed_m);
+        //seqs[i].m_msg = map_init_msg(seed_m);
     }
     return seqs;
 }
@@ -925,6 +925,8 @@ int lamsa_read_seq(lamsa_seq_t *la_seqs, kseq_t *read_seq_t, FILE *seed_mapfp,
                    char *gem_line, int line_size, seed_msg *s_msg, int chunk_read_n)
 {
     kseq_t *s = read_seq_t;
+    int i;
+
     lamsa_seq_t *p=NULL; int n = 0;
     while (kseq_read(s+n) >= 0)
     {
@@ -933,11 +935,11 @@ int lamsa_read_seq(lamsa_seq_t *la_seqs, kseq_t *read_seq_t, FILE *seed_mapfp,
         // APP, seed_mapfp
         ++(s_msg->read_count);
         init_aln_per_para(p->APP, s_msg, s_msg->read_count);
+        p->m_msg = map_init_msg(p->APP->seed_all);
 
         int seed_all = p->APP->seed_all;
         int seed_n = 0, seed_out = 0;
         while (seed_n < seed_all) {
-            //if ((map_n = gem_map_read(seed_mapfp, p->m_msg+seed_n, AP.per_aln_m)) < 0) { fprintf(stderr, "[lamsa_read_seq] Seeds' GEM map-result do NOT match.\n"); exit(1); }
             if (gem_map_read(seed_mapfp, p->m_msg+seed_out, gem_line, line_size)) {
                 p->m_msg[seed_out].seed_id = seed_n+1;
                 ++seed_out;
@@ -955,7 +957,6 @@ void lamsa_free_read_seq(lamsa_seq_t *seqs, int n_seqs)
     int i;
     for (i = 0; i < n_seqs; ++i) {
         lamsa_seq_t *p = seqs+i;
-        map_free_msg(p->m_msg, p->APP->seed_all);
         free(p->APP); 
         aln_res_free(p->a_res, 3);
     }
@@ -974,11 +975,6 @@ void aux_dp_init(thread_aux_t *aux, seed_msg *s_msg, lamsa_aln_para AP)
     aux->line_select_rank = (int*)malloc(line_m * sizeof(int));
 
     aux->line_n_max = line_m;
-    aux->line_m = 1;
-
-    aux->f_msg = (frag_msg**)malloc(sizeof(frag_msg*));
-    *(aux->f_msg) = (frag_msg*)malloc(sizeof(frag_msg));
-    frag_init_msg(*(aux->f_msg), s_msg->seed_max);
 
     aux->hash_num = (uint32_t*)calloc(pow(NT_N, AP.hash_key_len), sizeof(uint32_t));
     aux->hash_node = (uint64_t**)calloc(pow(NT_N, AP.hash_key_len), sizeof(uint64_t*));
@@ -992,7 +988,7 @@ void aux_dp_free(thread_aux_t *aux, seed_msg *s_msg, lamsa_aln_para *AP)
     int i; 
     for (i = 0; i < pow(NT_N, AP->hash_key_len); ++i) free(aux->hash_node[i]);
     free(aux->hash_node); free(aux->hash_num);
-    frag_free_msg(*(aux->f_msg), aux->line_m); free(aux->f_msg);
+    //frag_free_msg(*(aux->f_msg), aux->line_m); free(aux->f_msg);
 }
 
 //merg_msg: {1, 0} -> NOT merged or ONLY best
@@ -1111,8 +1107,8 @@ void lamsa_aln_output(lamsa_aln_para AP, lamsa_seq_t *lamsa_seqs, kseq_t *seqs, 
 }
 
 #ifdef __DEBUG__
-#define CHUNK_SIZE 1
-#define CHUNK_READ_N 1
+//#define CHUNK_SIZE 1
+//#define CHUNK_READ_N 1
 #endif
 int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg, 
                    bwt_t *bwt, bntseq_t *bns, uint8_t *pac, lamsa_aln_para *AP)
@@ -1164,6 +1160,7 @@ int lamsa_aln_core(const char *read_prefix, char *seed_result, seed_msg *s_msg,
         }
         // output align result 
         lamsa_aln_output(*AP, lamsa_seqs, read_seq_t, n_seqs, bns);
+        for (i = 0; i < n_seqs; ++i) map_free_msg(lamsa_seqs[i].m_msg, lamsa_seqs[i].APP->seed_all);
     }
     // free seqs
     lamsa_free_read_seq(lamsa_seqs, CHUNK_READ_N);

@@ -28,7 +28,7 @@ typedef struct {
 	int flag;
 	int b_f;
 	
-	int seed_num;	//seed number of per frag
+	int seed_max, seed_num;	//seed number of per frag
 	int *seed_i;
 	int *seed_aln_i;
 } frag_aln_msg;
@@ -37,7 +37,6 @@ typedef struct {
 	int frag_max;
 	int frag_num;
 
-	int per_seed_max;
 	frag_aln_msg *fa_msg;
     int line_score;
 	int frag_left_bound;  //read_id of previous line's last seed, if NO pre line, this will be 0
@@ -47,7 +46,7 @@ typedef struct {
 typedef struct {
     uint64_t offset;	//1-based
     int chr;
-    int nstrand;			//1:'+' 0:'-'
+    int8_t nstrand;			//1:'+' 0:'-'
     cigar32_t *cigar;
     int c_m; int cigar_len;
     uint64_t refend; int readend; // for merge_cigar
@@ -201,7 +200,8 @@ static inline int _push_cigar_e(cigar32_t **cigar, int *cigar_n, int *cigar_m, u
 //int _push_cigar1(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t _cigar);
 //int _push_cigar0(cigar32_t **cigar, int *cigar_len, int *cigar_m, cigar32_t _cigar);
 //void _invert_cigar(cigar32_t **cigar, int cigar_n);
-void frag_init_msg(frag_msg *f_msg, int frag_max);
+//void frag_init_msg(frag_msg *f_msg, int frag_max);
+void frag_init_msg(frag_msg *f_msg);
 void frag_free_msg(frag_msg *f_msg, int line_num);
 int frag_set_msg(map_msg *m_msg, int seed_i, int aln_i, int FLAG, frag_msg *f_msg, int frag_i);//FLAG 0: start/1:end / 2:seed
 int frag_copy_msg(frag_msg *ff_msg, frag_msg *tf_msg);
