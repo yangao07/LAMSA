@@ -254,8 +254,6 @@ void merge_cigar(cigar32_t **c1, int *c1_n, int *c1_m, uint64_t *c1_refend, int 
 						len_dif1 += (int)((*c1)[*c1_n-1] >> 4); b += (int)((*c1)[*c1_n-1] >> 4); --(*c1_n); }
 					else { 
                         left = -1; break;
-						//fprintf(stderr, "\n%s\n[merge cigar] Unexpected(1): ", READ_NAME); 
-						//printcigar(stderr, (*c1), (*c1_n)); exit(1);
 					}
 				}
 				len11 = len21 + len_dif1;
@@ -275,8 +273,6 @@ void merge_cigar(cigar32_t **c1, int *c1_n, int *c1_m, uint64_t *c1_refend, int 
 						len_dif2 += (int)(c2[ci] >> 4); b += (int)(c2[ci]>>4); ++ci; }
 					else { 
                         right = -1; break;
-						//fprintf(stderr, "\n%s\n[merge cigar] Unexpected(2): ", READ_NAME); 
-						//printcigar(stderr, c2+ci, c2_n-ci); exit(1);
 					}
 				}
 			}
@@ -386,9 +382,6 @@ int frag_extend(frag_msg *f_msg, map_msg *m_msg, int f_i,
 		}
 	}
     merge_cigar(&(la->res[la->cur_res_n].cigar), &(la->res[la->cur_res_n].cigar_len), &(la->res[la->cur_res_n].c_m), &(la->res[la->cur_res_n].refend), &(la->res[la->cur_res_n].readend), fa_msg->chr, fa_msg->cigar, fa_msg->cigar_len, fa_msg->cigar_ref_end-fa_msg->cigar_ref_start+1, fa_msg->cigar_read_end-fa_msg->cigar_read_start+1, bns, pac, read_bseq, AP);
-#ifdef __DEBUG__
-    printcigar(stderr, la->res[la->cur_res_n].cigar, la->res[la->cur_res_n].cigar_len);
-#endif
 	return 0;
 }
 
@@ -515,13 +508,16 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
                 s_tseq = (uint8_t*)malloc(s_tlen * sizeof(uint8_t));
                 ref_offset = at1.offset + AP->seed_len + at1.len_dif + dis - hash_len;
                 pac2fa_core(bns, pac, at1.nchr, ref_offset-1, &s_tlen, s_tseq);
+                int off_dis;
+                if (s_tlen != s_qlen - dis + 2*hash_len) off_dis = 0;
+                else off_dis = -dis;
 				s_tlen = s_qlen + dis;
                 if (s_tlen < hash_len) {
                     ksw_bi_extend(s_qlen, s_qseq, s_tlen, s_tseq+hash_len-dis, 5, AP->sc_mat, hash_len*AP->match, hash_len*AP->match, AP, &_cigar, &_cigar_n, &_cigar_m);
                     _push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
                     free(_cigar);
                 } else {
-                    res = split_indel_map(&s_cigar, &s_clen, &s_cm, s_qseq, s_qlen, s_tseq+hash_len-dis, s_tlen, -dis, AP, hash_num, hash_node);
+                    res = split_indel_map(&s_cigar, &s_clen, &s_cm, s_qseq, s_qlen, s_tseq+hash_len-dis, s_tlen, off_dis, AP, hash_num, hash_node);
                 }
             }
         } else { //for MIS-MATCH
@@ -529,8 +525,6 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
             s_tseq = (uint8_t*)malloc(s_tlen * sizeof(uint8_t));
             ref_offset = at1.offset + AP->seed_len + at1.len_dif;
             pac2fa_core(bns, pac, at1.nchr, ref_offset-1, &s_tlen, s_tseq);
-            //if (s_tlen < 0)
-                //printf("debug");
 			res = ksw_bi_extend(s_qlen, s_qseq, s_tlen, s_tseq, 5, AP->sc_mat, 100, 100, AP, &_cigar, &_cigar_n, &_cigar_m);
 			_push_cigar(&s_cigar, &s_clen, &s_cm, _cigar, _cigar_n);
 #ifdef __DEBUG__
