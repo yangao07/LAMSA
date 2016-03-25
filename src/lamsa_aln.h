@@ -207,6 +207,7 @@
 #define CIGAR_GEN(l,o) ((int)(l)<<CIGAR_SHIFT|(o)) 
 
 #define cigar32_t int32_t
+#define ref_pos_t int64_t
 
 typedef struct {
     cigar32_t *cigar;
@@ -228,7 +229,7 @@ typedef struct {
 typedef struct {
     char strand; int8_t nstrand;
     char chr[10]; int32_t nchr;
-    int64_t offset;
+    ref_pos_t offset;
     int NM;            // edit distance
 
     cigar_t *cigar;
@@ -246,7 +247,7 @@ typedef struct {
 	int readid;		// qname
 	char nstrand;	// flag
 	int chr;		// tid
-	int64_t offset;	// 1-base
+	ref_pos_t offset;	// 1-base
 
 	kstring_t *cigar_s;
     int NM;
@@ -286,7 +287,7 @@ typedef struct {
 typedef struct {
     int8_t is_rev;
     int chr;
-    int64_t ref_pos;
+    ref_pos_t ref_pos;
 } reg_b;
 
 typedef struct {

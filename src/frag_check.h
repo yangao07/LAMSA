@@ -14,8 +14,8 @@ typedef struct {
 	int chr;
 	int strand;
 
-	uint64_t cigar_ref_start;	//frag's cigar start of ref, 1-based
-	uint64_t cigar_ref_end;		                                    
+	ref_pos_t cigar_ref_start;	//frag's cigar start of ref, 1-based
+	ref_pos_t cigar_ref_end;		                                    
 	int cigar_read_start;	//frag's cigar start of read, 1-based   
 	int cigar_read_end;                                         
 	cigar32_t *cigar;		//frag's cigar
@@ -44,12 +44,12 @@ typedef struct {
 } frag_msg;
 
 typedef struct {
-    uint64_t offset;	//1-based
+    ref_pos_t offset;	//1-based
     int chr;
     int8_t nstrand;			//1:'+' 0:'-'
     cigar32_t *cigar;
     int c_m; int cigar_len;
-    uint64_t refend; int readend; // for merge_cigar
+    ref_pos_t refend; int readend; // for merge_cigar
 
     int score;          // alignment score
     int NM;             // edit distance
@@ -82,6 +82,8 @@ typedef struct {
 // cigar operatios
 //pop_mode: 0 pop_n -> cigar_n
 //          1 pop_n -> base n
+int solid_readInCigar(cigar32_t *cigar, int cigar_len);
+int solid_refInCigar(cigar32_t *cigar, int cigar_len);
 int readInCigar(cigar32_t *cigar, int cigar_len);
 int refInCigar(cigar32_t *cigar, int cigar_len);
 static inline int _pop_cigar(cigar32_t **cigar, int *cigar_n, int pop_mode, int pop_n) {
@@ -181,14 +183,14 @@ static inline int _push_cigar(cigar32_t **cigar, int *cigar_n, int *cigar_m, cig
     return 0;
 }
 
-static inline int _push_cigar_e1(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t _cigar) {
+static inline int _push_cigar_e1(cigar32_t **cigar, int *cigar_n, int *cigar_m, ref_pos_t *refend, int *readend, cigar32_t _cigar) {
     _push_cigar1(cigar, cigar_n, cigar_m, _cigar);
     if (refend) *refend += refInCigar(&_cigar, 1);
     if (readend) *readend += readInCigar(&_cigar, 1);
     return 0;
 }
 
-static inline int _push_cigar_e(cigar32_t **cigar, int *cigar_n, int *cigar_m, uint64_t *refend, int *readend, cigar32_t *_cigar, int _cigar_n) {
+static inline int _push_cigar_e(cigar32_t **cigar, int *cigar_n, int *cigar_m, ref_pos_t *refend, int *readend, cigar32_t *_cigar, int _cigar_n) {
     _push_cigar(cigar, cigar_n, cigar_m, _cigar, _cigar_n);
     if (refend) *refend += refInCigar(_cigar, _cigar_n);
     if (readend) *readend += readInCigar(_cigar, _cigar_n);

@@ -231,7 +231,7 @@ void bwt_aln_res(int ref_id, uint8_t is_rev, bntseq_t *bns, uint8_t *pac, uint8_
             query[i] = read_bseq[extra_beg-1+i];
     }
 
-    uint64_t ref_start = (left->ref_pos - (left->read_pos-1+left_eta_len) - AP->bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos-1+left_eta_len) - AP->bwt_seed_len);
+    ref_pos_t ref_start = (left->ref_pos - (left->read_pos-1+left_eta_len) - AP->bwt_seed_len < 1) ? 1 : (left->ref_pos - (left->read_pos-1+left_eta_len) - AP->bwt_seed_len);
     int ref_len = (int)(right->ref_pos + reg_len-right->read_pos+right_eta_len + AP->bwt_seed_len - ref_start + 1);
     uint8_t *target = (uint8_t*)malloc(ref_len * sizeof(uint8_t));
     pac2fa_core(bns, pac, ref_id+1, ref_start-1, &ref_len, target);
@@ -316,7 +316,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
     for (i = 0; i <= reg_len-seed_len; ++i) {
         (*seed_v)[i].pos = i+1; // 1-base, on reg
         for (j = i; j < i+seed_len; ++j) bwt_seed[j-i] = read_bseq[reg_beg-1+j];
-        uint64_t k = 0, l = bwt->seq_len, m;
+        bwtint_t k = 0, l = bwt->seq_len, m;
 		if (!bwt_match_exact_alt(bwt, seed_len, bwt_seed, &k, &l)) continue;
         if (l-k+1 <= max_hit) { // set_seed directly
             for (m = k; m <=l; ++m) {
@@ -333,7 +333,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
                 bwtint_t ref_pos = bwt_sa(bwt, m);
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
-                uint64_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
+                ref_pos_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
                 reg_hit = 0;
                 for (j = 0; j < reg.beg_n; ++j) {
                     if (ref_id == reg.ref_beg[j].chr-1 && is_rev == reg.ref_beg[j].is_rev
@@ -372,9 +372,12 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
 
             bwt_set_bound(*seed_v, line[i], node_n[i], seed_len, reg_len, &left_bound, &right_bound);
             bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, seqs, re_res->la+re_res->l_n);
-            if (readInCigar(re_res->la[re_res->l_n].res[0].cigar, re_res->la[re_res->l_n].res[0].cigar_len) > 1/2 * reg_len) {
+            if (solid_readInCigar(re_res->la[re_res->l_n].res[0].cigar, re_res->la[re_res->l_n].res[0].cigar_len) > (0.5 * reg_len)) {
                 re_res->la[re_res->l_n].line_score = 0;
                 re_res->l_n++;
+            } else {
+                re_res->la[re_res->l_n].cur_res_n=0;
+                re_res->la[re_res->l_n].res[0].cigar_len=0;
             }
         }
     }

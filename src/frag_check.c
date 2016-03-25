@@ -101,7 +101,7 @@ int get_ref_intv(uint8_t **ref_bseq, int *ref_max_blen,
 				 int seed1_i, int seed1_aln_i, int seed2_i, int seed2_aln_i, 
                  lamsa_aln_para *AP)
 {
-	int64_t start; int32_t len;
+	ref_pos_t start; int32_t len;
     start = m_msg[seed1_i].map[seed1_aln_i].offset + AP->seed_len - 1 + m_msg[seed1_i].map[seed1_aln_i].len_dif;
     len = m_msg[seed2_i].map[seed2_aln_i].offset - 1 - start;
     if (len <= 0) return 0;
@@ -163,7 +163,18 @@ void _free_cigar(cigar_t *ct)
     free(ct->cigar);
     free(ct);
 }
-
+//return 'MI' length in cigar
+int solid_readInCigar(cigar32_t *cigar, int cigar_len) {
+    int i, read_len=0;
+    for (i = 0; i < cigar_len; ++i) {
+        if ((cigar[i] & 0xf) == CMATCH || (cigar[i] & 0xf) == CINS)
+            read_len += (cigar[i]  >> 4);
+        else if ((cigar[i] & 0xf) != CDEL && (cigar[i] & 0xf) != CHARD_CLIP && (cigar[i] & 0xf) != CSOFT_CLIP) {
+            fprintf(stderr, "\n%s\n[solid_readInCigar] Cigar Error.\n", READ_NAME); printcigar(stderr, cigar, cigar_len); exit(1);
+        }
+    }
+    return read_len;
+}
 //return 'MIS' length in cigar
 int readInCigar(cigar32_t *cigar, int cigar_len) {
     int i, read_len=0;
@@ -176,7 +187,20 @@ int readInCigar(cigar32_t *cigar, int cigar_len) {
     }
     return read_len;
 }
-//
+
+//return 'MD' length in cigar
+int solid_refInCigar(cigar32_t *cigar, int cigar_len) {
+    int i, read_len=0;
+    for (i = 0; i < cigar_len; ++i) {
+        if ((cigar[i] & 0xf) == CMATCH || (cigar[i] & 0xf) == CDEL)
+            read_len += (cigar[i]  >> 4);
+        else if ((cigar[i] & 0xf) != CINS && (cigar[i] & 0xf) != CSOFT_CLIP && (cigar[i] & 0xf) != CHARD_CLIP) {
+            fprintf(stderr, "\n%s\n[readInCigar] Cigar Error.\n", READ_NAME); printcigar(stderr, cigar, cigar_len); exit(1);
+        }
+    }
+    return read_len;
+}
+
 //return 'MDH' length in cigar
 int refInCigar(cigar32_t *cigar, int cigar_len) {
     int i, read_len=0;
@@ -224,7 +248,7 @@ void push_res(line_aln_res *la)
 
 //merge interval and seed to frag
 //frag has the first seed's msg already
-void merge_cigar(cigar32_t **c1, int *c1_n, int *c1_m, uint64_t *c1_refend, int *c1_readend, int chr,
+void merge_cigar(cigar32_t **c1, int *c1_n, int *c1_m, ref_pos_t *c1_refend, int *c1_readend, int chr,
                  cigar32_t *_c2, int c2_n, int c2_reflen, int c2_readlen, 
 				 bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, lamsa_aln_para *AP)
 {
@@ -238,7 +262,7 @@ void merge_cigar(cigar32_t **c1, int *c1_n, int *c1_m, uint64_t *c1_refend, int 
 		cigar32_t *c2 = (cigar32_t*)malloc(c2_n * sizeof(cigar32_t));
 		for (i = 0; i < c2_n; ++i) c2[i] = _c2[i];
 		uint8_t *seq1, *seq2;
-        int64_t ref_start; int read_start;
+        ref_pos_t ref_start; int read_start;
 		int md = 5; 
 		while (1) {	//get a right boundary-cigar(without 'I'/'D' on the head or tail)
 			//extend by md-bp
@@ -426,7 +450,7 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 
 	int s_qlen, s_tlen, res;
 	uint8_t *s_qseq, *s_tseq;
-	int64_t ref_offset;
+	ref_pos_t ref_offset;
 	//init value for hash-map
 	int hash_len = AP->hash_len;
 
@@ -438,13 +462,13 @@ void split_mapping(bntseq_t *bns, uint8_t *pac,
 
 	//check SV-type
 	{
-		int64_t exp = at1.offset + at1.len_dif + (m_msg[s2_i].seed_id - m_msg[s1_i].seed_id) * AP->seed_step;	
-		int64_t act = at2.offset;
+		ref_pos_t exp = at1.offset + at1.len_dif + (m_msg[s2_i].seed_id - m_msg[s1_i].seed_id) * AP->seed_step;	
+		ref_pos_t act = at2.offset;
 		int dis = act-exp;
 
         int match_dis = AP->match_dis * (aln_mode_high_id_err(AP->aln_mode) ? (m_msg[s2_i].seed_id-m_msg[s1_i].seed_id) : 1);
 #ifdef __DEBUG__
-		int64_t pos = at1.offset+AP->seed_len-1+at1.len_dif;
+		ref_pos_t pos = at1.offset+AP->seed_len-1+at1.len_dif;
         if (abs(dis) > match_dis) 
 			fprintf(stderr, "%d\t%lld\t%d\t%s\n", at1.chr, (long long)pos, abs(dis), dis>0?"DEL":"INS");
 #endif
@@ -550,7 +574,7 @@ void check_cigar(cigar32_t *cigar, int cigar_len, char *read_name, int read_len)
 }
 
 int frag_head_bound_fix(frag_msg *f_msg, map_msg *m_msg, 
-                        uint64_t *offset, bntseq_t *bns, uint8_t *pac, 
+                        ref_pos_t *offset, bntseq_t *bns, uint8_t *pac, 
                         uint8_t *read_bseq, 
                         lamsa_aln_per_para *APP, lamsa_aln_para *AP, kseq_t *seqs,
                         line_aln_res *la)//aln_res *a_res)
@@ -558,7 +582,7 @@ int frag_head_bound_fix(frag_msg *f_msg, map_msg *m_msg,
     int left_bound = f_msg->frag_left_bound;
     int i, frag_i, seed_x, seed_i, aln_i;
     int read_len, ref_len, read_start/*0-base*/;
-    int64_t ref_start;
+    ref_pos_t ref_start;
     if (f_msg->fa_msg[0].strand == 1) {	//'+' strand
         frag_i = f_msg->frag_num-1;
         seed_x = f_msg->fa_msg[frag_i].seed_num - 1;
@@ -637,7 +661,7 @@ int frag_tail_bound_fix(frag_msg *f_msg, map_msg *m_msg, bntseq_t *bns, uint8_t 
     int right_bound = f_msg->frag_right_bound;
     int i, frag_i, seed_x, seed_i, aln_i;
     int read_len, read_start, ref_len;
-    int64_t ref_start;
+    ref_pos_t ref_start;
 
     if (f_msg->fa_msg[0].strand == 1) {	//'+' strand
         seed_i = f_msg->fa_msg[0].seed_i[0];
@@ -689,7 +713,7 @@ void lamsa_res_split(line_aln_res *la, int read_len, lamsa_aln_para *AP)
 {
     int i, j, res_n;
     int op, len, cigar_len; cigar32_t *cigar=0; 
-    uint64_t offset; int tail_s, head_s, len1; 
+    ref_pos_t offset; int tail_s, head_s, len1; 
 
     cigar_len = la->res[0].cigar_len;
     cigar = (cigar32_t*)realloc(cigar, cigar_len * sizeof(cigar32_t));
@@ -857,7 +881,7 @@ void frag_check(map_msg *m_msg, frag_msg **f_msg, aln_res *a_res,
     }
 
     int res_n;
-    uint64_t offset;
+    ref_pos_t offset;
     // check for every line
     for (j = 0; j < line_n; ++j) {
         line_aln_res *la = a_res->la+j;

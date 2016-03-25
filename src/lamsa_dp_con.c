@@ -613,8 +613,8 @@ void get_fseed_dis(map_msg *m_msg, int pre, int pre_a, int i, int j, int *flag, 
     if (abs(m_msg[pre].seed_id-m_msg[i].seed_id) * seed_step < seed_len) { // for overlapped seeds
         *flag = F_UNCONNECT; return;
     }
-    int64_t exp = m_msg[pre].map[pre_a].offset + m_msg[pre].map[pre_a].nstrand * (m_msg[i].seed_id - m_msg[pre].seed_id) * seed_step;	
-    int64_t act = m_msg[i].map[j].offset;
+    ref_pos_t exp = m_msg[pre].map[pre_a].offset + m_msg[pre].map[pre_a].nstrand * (m_msg[i].seed_id - m_msg[pre].seed_id) * seed_step;	
+    ref_pos_t act = m_msg[i].map[j].offset;
 
     int dis = m_msg[pre].map[pre_a].nstrand * ((m_msg[pre].seed_id < m_msg[i].seed_id)?(act-exp):(exp-act)) - (((m_msg[pre].map[pre_a].nstrand) * (m_msg[pre].seed_id-m_msg[i].seed_id) < 0)?(m_msg[pre].map[pre_a].len_dif):(m_msg[i].map[j].len_dif));
 
