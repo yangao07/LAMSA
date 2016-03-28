@@ -323,7 +323,9 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
                 bwtint_t ref_pos = bwt_sa(bwt, m);
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
-                bwt_set_seed(*seed_v, ref_id, is_rev, pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0), i);
+                int64_t seed_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
+                if (seed_pos+seed_len-1 > bns->anns[ref_id].len || seed_pos < 0) continue;
+                bwt_set_seed(*seed_v, ref_id, is_rev, seed_pos, i);
             }
         } else if (l-k+1 <= 5 * max_hit){ 
 			// select specific seed-results, which are close to the existing result.
@@ -334,6 +336,7 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
                 bwtint_t pos = bns_depos(bns, ref_pos, &is_rev);
                 bns_cnt_ambi(bns, pos, seed_len, &ref_id);
                 ref_pos_t abs_pos = pos-bns->anns[ref_id].offset+1-(is_rev?(seed_len-1):0);
+                if (abs_pos+seed_len-1 > bns->anns[ref_id].len || abs_pos < 0) continue;
                 reg_hit = 0;
                 for (j = 0; j < reg.beg_n; ++j) {
                     if (ref_id == reg.ref_beg[j].chr-1 && is_rev == reg.ref_beg[j].is_rev
