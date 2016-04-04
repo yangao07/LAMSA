@@ -1085,7 +1085,7 @@ void aln_res_output(lamsa_aln_para AP, aln_res *res, int res_n, char *name, char
         }
     }
     if (all == 0) { // unmap
-        ksprintf(&sam_str, "%s\t%d\t*\t*\t%d\t*\t*\t0\t0\t", name, 4, 0);
+        ksprintf(&sam_str, "%s\t%d\t*\t%lld\t%d\t*\t*\t0\t0\t", name, 4, 0, 0);
         kputs(seq, &sam_str);
         kputc('\t', &sam_str);
         if (qual) kputs(qual, &sam_str);
