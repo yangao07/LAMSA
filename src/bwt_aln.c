@@ -375,12 +375,17 @@ int bwt_aln_core(bwt_t *bwt, bntseq_t *bns, uint8_t *pac, uint8_t *read_bseq, ui
 
             bwt_set_bound(*seed_v, line[i], node_n[i], seed_len, reg_len, &left_bound, &right_bound);
             bwt_aln_res((*seed_v)[line[i][0].x].loc[line[i][0].y].ref_id, (*seed_v)[line[i][0].x].loc[line[i][0].y].is_rev, bns, pac, read_bseq, read_rbseq, reg_beg, reg_len, &left_bound, &right_bound, AP, seqs, re_res->la+re_res->l_n);
-            if (solid_readInCigar(re_res->la[re_res->l_n].res[0].cigar, re_res->la[re_res->l_n].res[0].cigar_len) > (0.5 * reg_len)) {
+            if (AP->read_type > 0) {
+                if (solid_readInCigar(re_res->la[re_res->l_n].res[0].cigar, re_res->la[re_res->l_n].res[0].cigar_len) > (0.5 * reg_len)) {
+                    re_res->la[re_res->l_n].line_score = 0;
+                    re_res->l_n++;
+                } else {
+                    re_res->la[re_res->l_n].cur_res_n=0;
+                    re_res->la[re_res->l_n].res[0].cigar_len=0;
+                }
+            } else {
                 re_res->la[re_res->l_n].line_score = 0;
                 re_res->l_n++;
-            } else {
-                re_res->la[re_res->l_n].cur_res_n=0;
-                re_res->la[re_res->l_n].res[0].cigar_len=0;
             }
         }
     }

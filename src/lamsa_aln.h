@@ -395,6 +395,7 @@ typedef struct {
     float ovlp_rat;
 
     int bwt_seed_len, bwt_max_len, bwt_min_len;
+    int fastest;
 
     int split_len;  // min length of gap that causes split-alignment
     int split_pen;  // split score penalty

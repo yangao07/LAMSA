@@ -39,7 +39,8 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster. [%d]\n", MAX_SKEL);
     fprintf(stderr, "    -R --max-reg   [INT]    Maximum allowed length of unaligned read part to trigger a bwt-based query.\n");
     fprintf(stderr, "                            [%d]\n", MAX_BWT_REG);
-    fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. [%d]\n\n", BWT_KMER);
+    fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. [%d]\n", BWT_KMER);
+    fprintf(stderr, "    -f --fastest            Use GEM-mapper's fastest mode(--fast-mapping=0). [false]\n\n");
     
     fprintf(stderr, "Scoring options:\n\n");
 
@@ -61,11 +62,10 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -d --diff-rate [FLOAT]  Maximum length difference ratio between read and reference. [%.2f]\n", ID_RATE);
     fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
     
-    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden.\n");
-    fprintf(stderr, "                            [0] (0,1,2): \n");
-    fprintf(stderr, "                            (0) Illumina moleculo: default setting.\n");
-    fprintf(stderr, "                            (1) PacBio: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_BAND_W, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
-    fprintf(stderr, "                            (2) Oxford Nanopore: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_BAND_W, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
+    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple paramethers unless overriden.\n");
+    fprintf(stderr, "                            [null] (Illumina Moleculo)\n");
+    fprintf(stderr, "                            pacbio (PacBio SMRT): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_BAND_W, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
+    fprintf(stderr, "                            ont2d (Oxford Nanopore): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_BAND_W, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
 
 
     fprintf(stderr, "Output options:\n\n");
@@ -97,27 +97,31 @@ int lamsa_aln_de_usage(void)
 	fprintf(stderr, "    -l --seed-len  [INT]    Length of seeding fragments. Moreover, LAMSA splits the read into a\n");
     fprintf(stderr, "                            series of -l bp long fragments, and employs NGS aligner to generate the\n");
     fprintf(stderr, "                            approximate matches of the fragments. [50]\n");
-	fprintf(stderr, "    -i --seed-inv  [INT]    Distance between neighboring seeding fragments, LAMSA extracts seeding\n");
+	fprintf(stderr, "    -i --seed-inv  [INT]    Distance between neighboring seeding fragments. LAMSA extracts seeding\n");
     fprintf(stderr, "                            fragments starting at every -i bp of the read. [%d]\n", SEED_STEP);
 	fprintf(stderr, "    -p --max-loci  [INT]    Maximum allowed number of hits. If a seeding fragment has more than -p\n");
     fprintf(stderr, "                            approximate matches, LAMSA would consider the seed is too repetitive, and\n");
     fprintf(stderr, "                            discard all the matches. [%d]\n", SEED_PER_LOCI);
     fprintf(stderr, "    -V --SV-len    [INT]    Expected maximum length of SV. If the genomic distance of two seeding\n");
-    fprintf(stderr, "                            fragment is longer than -V bp, they cannot be connected to build a legal\n");
+    fprintf(stderr, "                            fragments is longer than -V bp, they cannot be connected to build a legal\n");
     fprintf(stderr, "                            edge in the sparse dynamic programming process. [%d]\n", SV_MAX_LEN);
     fprintf(stderr, "    -v --ovlp-rat  [FLOAT]  Minimum overlapping ratio to cluster two skeletons or alignment records.\n");
     fprintf(stderr, "                            (0~1) [%.1f]\n", OVLP_RAT);
     fprintf(stderr, "    -s --max-skel  [INT]    Maximum number of skeletons that are reserved in a cluster for a specific\n");
     fprintf(stderr, "                            read region. For a specific region of read, LAMSA reserves the top -s\n");
     fprintf(stderr, "                            skeletons. These skeletons are used to generate best and alternative\n");
-    fprintf(stderr, "                            alignment records. [%d] \n", MAX_SKEL);
+    fprintf(stderr, "                            alignment records. [%d]\n", MAX_SKEL);
     fprintf(stderr, "    -R --max-reg   [INT]    Maximum allowed length of unaligned read part to trigger a bwt-based query.\n");
     fprintf(stderr, "                            For a read part being unaligned after all the sparse dynamic programming\n");
     fprintf(stderr, "                            process-based split alignment, if it is longer than -R bp, LAMSA will not\n");
     fprintf(stderr, "                            further process it; otherwise, LAMSA will query the exact matches of the\n");
-    fprintf(stderr, "                            kmers of the unaligned part as hits to further align the read part. [%d]\n", MAX_BWT_REG);
+    fprintf(stderr, "                            k-mers of the unaligned part as hits to further align the read part. [%d]\n", MAX_BWT_REG);
     fprintf(stderr, "    -k --bwt-kmer  [INT]    Length of BWT-seed. For the unaligned read part shorter than -R bp, LAMSA\n");
-    fprintf(stderr, "                            will extract all its -k bp tokens and query their exact match as hits. [%d]\n\n", BWT_KMER);
+    fprintf(stderr, "                            will extract all its -k bp tokens and query their exact matches as hits. [%d]\n", BWT_KMER);
+    fprintf(stderr, "    -f --fastest            Use GEM-mapper's fastest mode(--fast-mapping=0). LAMSA uses GEM-mapper's\n");
+    fprintf(stderr, "                            fast mode(--fast-mapping) in default. Fastest mode will significantly\n");
+    fprintf(stderr, "                            improve the speed of LAMSA while the sensitivity and accuracy of alignments\n");
+    fprintf(stderr, "                            will drop a little. [false]\n\n");
 
     fprintf(stderr, "Scoring options:\n\n");
 
@@ -140,18 +144,17 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "    -d --diff-rate [FLOAT]  Maximum length difference ratio between read and reference. [%.2f]\n", ID_RATE);
     fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
     
-    fprintf(stderr, "    -T --read-type [INT]    Specifiy the type of reads and set multiple paramethers unless overriden.\n");
-    fprintf(stderr, "                            [0] (0,1,2):\n");
-    fprintf(stderr, "                            (0) Illumina moleculo: default setting.\n");
-    fprintf(stderr, "                            (1) PacBio: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
-    fprintf(stderr, "                            (2) Oxford Nanopore: -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
+    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple paramethers unless overriden.\n");
+    fprintf(stderr, "                            [null] (Illumina Moleculo):\n");
+    fprintf(stderr, "                            pacbio (PacBio SMRT): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
+    fprintf(stderr, "                            ont2d (Oxford Nanopore): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
 
 
     fprintf(stderr, "Output options:\n\n");
     fprintf(stderr, "    -r --max-out   [INT]    Maximum number of output records for a specific split read region. For a\n");
     fprintf(stderr, "                            specific region, LAMSA reserves the top -r alignment records. The record\n");
     fprintf(stderr, "                            with highest alignment score is considered as best alignment, others are\n");
-    fprintf(stderr, "                            considered as alternative alignments. If the score of an alternative\n");
+    fprintf(stderr, "                            considered as alternative alignments. Moreover, if the score of an alternative\n");
     fprintf(stderr, "                            alignment is less than half of the best alignment, it will not be output.\n");
     fprintf(stderr, "                            [%d]\n", RES_MAX_N);
     fprintf(stderr, "    -g --gap-split [INT]    Minimum length of gap that causes a split-alignment. To avoid generating\n");
@@ -240,7 +243,7 @@ int split_seed(const char *prefix, lamsa_aln_para AP, seed_msg *s_msg)
         fprintf(stderr, "[lamsa_aln] Can't open seed info file %s\n", seed_info); exit(1);
     }
 
-    fprintf(stderr, "[lamsa_aln] Spliting seed ... ");
+    fprintf(stderr, "[lamsa_aln] Generating seed ... ");
 
     int seed_len=AP.seed_len, seed_step=AP.seed_step;
     m_read = s_msg->read_m;
@@ -1177,8 +1180,11 @@ int lamsa_gem(const char *ref_prefix, const char *read_prefix, char *bin_dir, la
 {
     int per_loci = AP->per_aln_m, n_thread = AP->n_thread;
     float mis_rate = AP->mis_rate, ed_rate = AP->ed_rate, min_match_rate = AP->mat_rate;
-    char cmd[1024];
-    sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %f %f %f %d %d", bin_dir, ref_prefix, read_prefix, mis_rate, ed_rate, min_match_rate, per_loci, n_thread);
+    char cmd[1024], fast[1024];
+
+    if (AP->fastest) strcpy(fast, "--fast-mapping=0");
+    else strcpy(fast, "--fast-mapping");
+    sprintf(cmd, "bash %s/gem/gem_map.sh %s %s.seed %f %f %f %d %d %s", bin_dir, ref_prefix, read_prefix, mis_rate, ed_rate, min_match_rate, per_loci, n_thread, fast);
     fprintf(stderr, "[lamsa_aln] Executing gem-mapper ... \n");
     //fprintf(stderr, "[lamsa_aln] Time consumption of gem-mapper:");
     if (system(cmd) != 0) { fprintf(stderr, "[lamsa_aln] Seeding undone, gem-mapper exit abnormally.\n"); exit(1); }
@@ -1296,6 +1302,7 @@ void init_aln_para(lamsa_aln_para *AP)
     
     AP->bwt_seed_len = BWT_KMER;
     AP->bwt_max_len = MAX_BWT_REG;
+    AP->fastest = 0;
 
     AP->supp_soft = 0;
     AP->comm = 0;
@@ -1424,6 +1431,7 @@ const struct option long_opt [] = {
     { "max-skel", 1, NULL, 's' },
     { "max-reg", 1, NULL, 'R' },
     { "bwt-kmer", 1, NULL, 'k' },
+    { "fastest", 0, NULL, 'f' },
 
     { "ed-rate", 1, NULL, 'e' },
     { "diff-rate", 1, NULL, 'd' },
@@ -1458,7 +1466,7 @@ int lamsa_aln(int argc, char *argv[])
     int no_seed_aln=0, seed_info=0, seed_program=0; 
     char seed_result_f[1024]="";
 
-    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:m:M:O:E:w:b:e:d:x:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
+    while ((c =getopt_long(argc, argv, "t:l:i:p:V:v:s:R:k:fm:M:O:E:w:b:e:d:x:T:r:g:SCo:hHNI", long_opt, NULL)) >= 0)
     {
         switch (c)
         {
@@ -1472,6 +1480,7 @@ int lamsa_aln(int argc, char *argv[])
             case 's': AP->ske_max = atoi(optarg); break;
             case 'R': AP->bwt_max_len = atoi(optarg); break;
             case 'k': AP->bwt_seed_len = atoi(optarg); break;
+            case 'f': AP->fastest = 1; break;
 
             case 'm': AP->match = atoi(optarg); break;
             case 'M': AP->mis = atoi(optarg); break;
@@ -1489,7 +1498,12 @@ int lamsa_aln(int argc, char *argv[])
             case 'e': AP->ed_rate = atof(optarg); break; //AP->mat_rate = 1.0-AP->ed_rate; break;
             case 'd': AP->id_rate = atof(optarg); break;
             case 'x': AP->mis_rate = atof(optarg); break;
-            case 'T': AP->read_type = atoi(optarg); break;//mol:0, pacbio:1
+            case 'T': if (strcmp(optarg, "pacbio") == 0) AP->read_type = 1;//mol:0, pacbio:1, ont2d:2
+                      else if (strcmp(optarg, "ont2d") == 0) AP->read_type = 2;
+                      else { 
+                          fprintf(stderr, "[lamsa_aln] Unkown parameter: %s\n", optarg); 
+                          return lamsa_aln_usage();
+                      } break;
 
             case 'r': AP->res_mul_max = atoi(optarg); break;
             case 'g': AP->split_len = atoi(optarg);
