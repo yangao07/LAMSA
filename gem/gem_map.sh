@@ -12,10 +12,10 @@
 CMD_PATH=`dirname $0`
 GEM_DIR=$CMD_PATH
 
-#if [ $# -ne 7 ]
+#if [ $# -ne 8 ]
 #then
 #	echo -e usage:
-#	echo -e $0 ref.fa read.fa mis_rate edit_distance min_match_bases max_matches_per_read thread_n
+#	echo -e $0 ref.fa read.fa mis_rate edit_distance min_match_bases max_matches_per_read thread_n fast-mapping
 #	exit 1
 #fi
 
@@ -25,7 +25,6 @@ mismatch=$3
 edit_distance=$4
 indel_length=3
 min_match_bases=$5
-#max_matches=200
 max_matches=$6
 min_strata=0
 thread_n=$7
