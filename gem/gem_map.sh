@@ -7,6 +7,7 @@
 #      $5: min_match_bases
 #      $6: max_match_per_read
 #      $7: thread_n
+#      $8: fast-mapping
 
 CMD_PATH=`dirname $0`
 GEM_DIR=$CMD_PATH
