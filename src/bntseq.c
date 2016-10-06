@@ -90,9 +90,9 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 		err_fprintf(fp, "%lld %d %u\n", (long long)bns->l_pac, bns->n_seqs, bns->seed);
 		for (i = 0; i != bns->n_seqs; ++i) {
 			bntann1_t *p = bns->anns + i;
-			err_fprintf(fp, "%d %s", p->gi, p->name);
-			if (p->anno[0]) err_fprintf(fp, " %s\n", p->anno);
-			else err_fprintf(fp, "\n");
+			err_fprintf(fp, "%d %s\n", p->gi, p->name);
+			//if (p->anno[0]) err_fprintf(fp, " %s\n", p->anno);
+			//else err_fprintf(fp, "\n");
 			err_fprintf(fp, "%lld %d %d\n", (long long)p->offset, p->len, p->n_ambs);
 		}
 		err_fflush(fp);
@@ -132,9 +132,9 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 			char *q = str;
 			int c;
 			// read gi and sequence name
-			scanres = fscanf(fp, "%u%s", &p->gi, str);
-			if (scanres != 2) goto badread;
-			p->name = strdup(str);
+			scanres = fscanf(fp, "%u", &p->gi);
+			if (scanres != 1) goto badread;
+			//p->name = strdup(str);
 			// read fasta comments 
 			while (q - str < sizeof(str) - 1 && (c = fgetc(fp)) != '\n' && c != EOF) *q++ = c;
 			while (c != '\n' && c != EOF) c = fgetc(fp);
@@ -143,8 +143,8 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 				goto badread;
 			}
 			*q = 0;
-			if (q - str > 1 && strcmp(str, " (null)") != 0) p->anno = strdup(str + 1); // skip leading space
-			else p->anno = strdup("");
+			if (q - str > 1 && strcmp(str, " (null)") != 0) p->name = strdup(str + 1); // skip leading space
+            else goto badread;
 			// read the rest
 			scanres = fscanf(fp, "%lld%d%d", &xx, &p->len, &p->n_ambs);
 			if (scanres != 3) goto badread;
