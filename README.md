@@ -132,7 +132,7 @@ We simulated a series of datasets from an in silico donor human genome. More pre
 
 
 ## Reference
-LAMSA: fast split read alignment with long approximate matches. Manuscript submitted.
+LAMSA: fast split read alignment with long approximate matches. Bioinformatics (2016): btw594. (Published Online)
 
 ## Contact
 For advising, bug reporting and requiring help, please contact ydwang@hit.edu.cn or yangao07@hit.edu.cn
