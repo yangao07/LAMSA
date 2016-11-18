@@ -24,7 +24,7 @@ The memory usage of LAMSA can fit the configurations of most modern PCs. Its pea
 ## Installation
 Current version of LAMSA needs to be run on Linux operating system.  
 The source code is written in C, and can be directly download from: https://github.com/hitbc/LAMSA
-A mirror is also in: https://github.com/gaoyan07/LAMSA  
+A mirror is also in: https://github.com/yangao07/LAMSA  
 Moreover, in current version of LAMSA, we employed the GEM mapper (http://gemlibrary.sourceforge.net/) for generating the approximate matches of the fragments of reads. To be more user-friendly, we have built the source code of GEM mapper (version core_i3-20130406-045632) into that of LAMSA. In both of the genome indexing and read alignment, LAMSA will call the corresponding functions of GEM mapper automatically.
 The makefile of LAMSA is attached. Use the make command for generating the executable file.  
 
