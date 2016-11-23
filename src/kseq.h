@@ -39,7 +39,8 @@
 #define KS_SEP_SPACE 0 // isspace(): \t, \n, \v, \f, \r
 #define KS_SEP_TAB   1 // isspace() && !' '
 #define KS_SEP_LINE  2 // line separator: "\n" (Unix) or "\r\n" (Windows)
-#define KS_SEP_MAX   2
+#define KS_SEP_REF   3 // "\n", "\r\n", "::
+#define KS_SEP_MAX   3
 
 #define __KS_TYPE(type_t)						\
 	typedef struct __kstream_t {				\
@@ -118,7 +119,10 @@ typedef struct __kstring_t {
 			} else if (delimiter == KS_SEP_TAB) {						\
 				for (i = ks->begin; i < ks->end; ++i)					\
 					if (isspace(ks->buf[i]) && ks->buf[i] != ' ') break; \
-			} else i = 0; /* never come to here! */						\
+			} else if (delimiter == KS_SEP_REF) {                       \
+                for (i = ks->begin; i < ks->end; ++i)                   \
+                    if (ks->buf[i] == '\n' || ks->buf[i] == ':') break; \
+            } else i = 0; /* never come to here! */						\
 			if (str->m - str->l < (size_t)(i - ks->begin + 1)) {		\
 				str->m = str->l + (i - ks->begin) + 1;					\
 				kroundup32(str->m);										\
@@ -183,7 +187,7 @@ typedef struct __kstring_t {
 			ks->last_char = c; \
 		} /* else: the first header char has been read in the previous call */ \
 		seq->comment.l = seq->seq.l = seq->qual.l = 0; /* reset all members */ \
-		if (ks_getuntil(ks, KS_SEP_LINE, &seq->name, &c) < 0) return -1; /* normal exit: EOF */ /*XXX get unitil \n*/\
+		if (ks_getuntil(ks, KS_SEP_REF, &seq->name, &c) < 0) return -1; /* normal exit: EOF */ /*XXX get unitil '\n', ':'*/\
 		if (c != '\n') ks_getuntil(ks, KS_SEP_LINE, &seq->comment, 0); /* read FASTA/Q comment */ \
 		if (seq->seq.s == 0) { /* we can do this in the loop below, but that is slower */ \
 			seq->seq.m = 256; \
