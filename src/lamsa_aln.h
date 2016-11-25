@@ -229,7 +229,7 @@ typedef struct {
 
 typedef struct {
     char strand; int8_t nstrand;
-    char chr[10]; int32_t nchr;
+    char chr[1024]; int32_t nchr;
     ref_pos_t offset;
     int NM;            // edit distance
 

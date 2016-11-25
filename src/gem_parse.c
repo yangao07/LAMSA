@@ -274,7 +274,6 @@ int gem_map_msg(map_msg *m_msg, int max_n)
 		printcigar(stderr, m_msg->map[m_msg->map_n].cigar->cigar, m_msg->map[m_msg->map_n].cigar->cigar_n);
 		fprintf(stderr, "\n");
 #endif
-		///if (strcmp(chr, "chrM")!=0)
         ++(m_msg->map_n);
 		if (t_i >= msg_len) break;
 		t = strtok(aln_msg+t_i, ",");
