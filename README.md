@@ -103,7 +103,7 @@ Read options:
     -d --diff-rate [FLOAT]  Maximum length difference ratio between read and reference. [0.04]
     -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [0.04]
 
-    -T --read-type [STR]    Specifiy the type of reads and set multiple paramethers unless overriden.
+    -T --read-type [STR]    Specifiy the type of reads and set multiple parameters unless overriden.
                             [null] (Illumina Moleculo):
                             pacbio (PacBio SMRT): -i25 -l50 -m1 -M1 -O1,1,2,2 -E1,1,1,1 -b0 -e0.30 -d0.30
                             ont2d (Oxford Nanopore): -i25 -l50 -m1 -M1 -O1,1,1,1 -E1,1,1,1 -b0 -e0.25 -d0.10
