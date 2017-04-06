@@ -78,7 +78,6 @@ void bwt_index(char *prefix)
         strcpy(str, prefix); strcat(str, ".pac");
         strcpy(str2, prefix); strcat(str2, ".bwt");
         bwt_bwtgen2(str, str2, block_size);
-
     }
     { // update .bwt
         bwt_t *bwt;

@@ -62,7 +62,7 @@ int lamsa_aln_usage(void)
     fprintf(stderr, "    -d --diff-rate [FLOAT]  Maximum length difference ratio between read and reference. [%.2f]\n", ID_RATE);
     fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
     
-    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple paramethers unless overriden.\n");
+    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple parameters unless overriden.\n");
     fprintf(stderr, "                            [null] (Illumina Moleculo)\n");
     fprintf(stderr, "                            pacbio (PacBio SMRT): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_BAND_W, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
     fprintf(stderr, "                            ont2d (Oxford Nanopore): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -w%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_BAND_W, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
@@ -144,7 +144,7 @@ int lamsa_aln_de_usage(void)
     fprintf(stderr, "    -d --diff-rate [FLOAT]  Maximum length difference ratio between read and reference. [%.2f]\n", ID_RATE);
     fprintf(stderr, "    -x --mis-rate  [FLOAT]  Maximum error rate of mismatch within reads. [%.2f]\n\n", MIS_RATE);
     
-    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple paramethers unless overriden.\n");
+    fprintf(stderr, "    -T --read-type [STR]    Specifiy the type of reads and set multiple parameters unless overriden.\n");
     fprintf(stderr, "                            [null] (Illumina Moleculo):\n");
     fprintf(stderr, "                            pacbio (PacBio SMRT): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n", PB_SEED_STEP, PB_SEED_LEN, PB_MAT_SCORE, PB_MIS_PEN, PB_INS_OPEN_PEN, PB_DEL_OPEN_PEN, PB_INS_EXT_OPEN_PEN, PB_DEL_EXT_OPEN_PEN, PB_INS_EXT_PEN, PB_DEL_EXT_PEN, PB_INS_EXT_EXT_PEN, PB_DEL_EXT_EXT_PEN, PB_END_BONUS, PB_ED_RATE, PB_ID_RATE);
     fprintf(stderr, "                            ont2d (Oxford Nanopore): -i%d -l%d -m%d -M%d -O%d,%d,%d,%d -E%d,%d,%d,%d -b%d -e%.2f -d%.2f\n\n", ON_SEED_STEP, ON_SEED_LEN, ON_MAT_SCORE, ON_MIS_PEN, ON_INS_OPEN_PEN, ON_DEL_OPEN_PEN, ON_INS_EXT_OPEN_PEN, ON_DEL_EXT_OPEN_PEN, ON_INS_EXT_PEN, ON_DEL_EXT_PEN, ON_INS_EXT_EXT_PEN, ON_DEL_EXT_EXT_PEN, ON_END_BONUS, ON_ED_RATE, ON_ID_RATE);
